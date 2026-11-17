@@ -52,30 +52,33 @@ interface Observed {
 }
 
 function observe(parser: AnyParser): Observed {
-  const result = parser.parse(createParserContext({
-    buffer: [],
-    state: parser.initialState,
-    optionsTerminated: false,
-  }, exec(parser, "parse")));
+  const result = parser.parse(
+    createParserContext(
+      {
+        buffer: [],
+        state: parser.initialState,
+        optionsTerminated: false,
+      },
+      exec(parser, "parse"),
+    ),
+  );
   const step = !result.success
     ? "failure"
     : result.provisional
-    ? "provisional"
-    : "success";
+      ? "provisional"
+      : "success";
   return {
     step,
     ...(result.success
       ? {
-        afterStep: parser.complete(
-          result.next.state,
-          exec(parser, "complete"),
-        ).success,
-      }
+          afterStep: parser.complete(
+            result.next.state,
+            exec(parser, "complete"),
+          ).success,
+        }
       : {}),
-    fromInitial: parser.complete(
-      parser.initialState,
-      exec(parser, "complete"),
-    ).success,
+    fromInitial: parser.complete(parser.initialState, exec(parser, "complete"))
+      .success,
     root: parse(parser, []).success,
   };
 }
@@ -178,19 +181,28 @@ describe("empty-input facts", () => {
       () => multiple(tuple([optional(FILE())]), { min: 1 }),
     ],
     ["multiple(argument, max)", () => multiple(FILE(), { max: 2 })],
-    ["multiple(object resembling a bound CLI state, 1)", () =>
-      multiple(
-        object({ hasCliValue: constant(false), x: optional(constant("x")) }),
-        { min: 1 },
-      )],
-    ["or(multiple(object resembling a bound CLI state, 1), argument)", () =>
-      or(
+    [
+      "multiple(object resembling a bound CLI state, 1)",
+      () =>
         multiple(
           object({ hasCliValue: constant(false), x: optional(constant("x")) }),
           { min: 1 },
         ),
-        FILE(),
-      )],
+    ],
+    [
+      "or(multiple(object resembling a bound CLI state, 1), argument)",
+      () =>
+        or(
+          multiple(
+            object({
+              hasCliValue: constant(false),
+              x: optional(constant("x")),
+            }),
+            { min: 1 },
+          ),
+          FILE(),
+        ),
+    ],
     [
       "or(multiple(constant null, fractional min), argument)",
       () => or(multiple(constant(null), { min: 0.5 }), FILE()),
@@ -235,10 +247,13 @@ describe("empty-input facts", () => {
       "object(or(constant, constant))",
       () => object({ v: or(constant(1), constant(2)) }),
     ],
-    ["object(longestMatch(optional(option), argument))", () =>
-      object({
-        v: longestMatch(optional(option("--x", string())), FILE()),
-      })],
+    [
+      "object(longestMatch(optional(option), argument))",
+      () =>
+        object({
+          v: longestMatch(optional(option("--x", string())), FILE()),
+        }),
+    ],
     ["tuple(argument)", () => tuple([FILE()])],
     [
       "tuple(optional, optional)",
@@ -249,11 +264,14 @@ describe("empty-input facts", () => {
       () => tuple([or(constant(1), constant(2))]),
     ],
     ["issue example 1", () => or(optional(FILE()), optional(DIR()))],
-    ["issue example 2", () =>
-      or(
-        multiple(tuple([optional(fail()), constant("x")]), { min: 1 }),
-        FILE(),
-      )],
+    [
+      "issue example 2",
+      () =>
+        or(
+          multiple(tuple([optional(fail()), constant("x")]), { min: 1 }),
+          FILE(),
+        ),
+    ],
   ];
 
   for (const [label, create] of cases) {
@@ -318,30 +336,30 @@ describe("empty-input facts", () => {
 type Spec =
   | { readonly kind: "constant"; readonly value: unknown }
   | {
-    readonly kind:
-      | "fail"
-      | "argument"
-      | "option"
-      | "booleanOption"
-      | "flag"
-      | "command"
-      | "passThrough";
-  }
+      readonly kind:
+        | "fail"
+        | "argument"
+        | "option"
+        | "booleanOption"
+        | "flag"
+        | "command"
+        | "passThrough";
+    }
   | {
-    readonly kind:
-      | "optional"
-      | "withDefault"
-      | "withDefaultThunk"
-      | "map"
-      | "nonEmpty"
-      | "group";
-    readonly child: Spec;
-  }
+      readonly kind:
+        | "optional"
+        | "withDefault"
+        | "withDefaultThunk"
+        | "map"
+        | "nonEmpty"
+        | "group";
+      readonly child: Spec;
+    }
   | { readonly kind: "multiple"; readonly child: Spec; readonly min: number }
   | {
-    readonly kind: "or" | "longestMatch" | "tuple" | "object";
-    readonly children: readonly Spec[];
-  };
+      readonly kind: "or" | "longestMatch" | "tuple" | "object";
+      readonly children: readonly Spec[];
+    };
 
 const specArbitrary: fc.Arbitrary<Spec> = fc.letrec<{ spec: Spec }>((tie) => ({
   spec: fc.oneof(

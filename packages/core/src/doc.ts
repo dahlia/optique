@@ -165,8 +165,8 @@ export interface DocPage {
  * Fragments are building blocks used to construct documentation pages.
  */
 export type DocFragment =
-  | { readonly type: "entry" } & DocEntry
-  | { readonly type: "section" } & DocSection;
+  | ({ readonly type: "entry" } & DocEntry)
+  | ({ readonly type: "section" } & DocSection);
 
 /**
  * A collection of documentation fragments with an optional description.
@@ -422,8 +422,10 @@ export interface ShowEnvironmentOptions {
  */
 export function deriveEnvironmentSection(
   page: DocPage,
-  options: { readonly title?: string; readonly onlyUnreferenced?: boolean } =
-    {},
+  options: {
+    readonly title?: string;
+    readonly onlyUnreferenced?: boolean;
+  } = {},
 ): DocSection | undefined {
   const bindings = new Map<string, Map<string, Message>>();
   const purposes = new Map<string, Map<string, Message>>();
@@ -433,16 +435,19 @@ export function deriveEnvironmentSection(
       const rendered = formatUsageTerm(entry.term, { context: "doc" });
       if (rendered.trim() === "") continue;
       const term = entry.term;
-      const reference: Message = term.type === "option"
-        ? [
-          optionNames(term.names),
-          ...(term.metavar == null ? [] : [text(" "), metavar(term.metavar)]),
-        ]
-        : term.type === "argument"
-        ? [metavar(term.metavar)]
-        : term.type === "command"
-        ? [commandLine(term.name)]
-        : [text(rendered)];
+      const reference: Message =
+        term.type === "option"
+          ? [
+              optionNames(term.names),
+              ...(term.metavar == null
+                ? []
+                : [text(" "), metavar(term.metavar)]),
+            ]
+          : term.type === "argument"
+            ? [metavar(term.metavar)]
+            : term.type === "command"
+              ? [commandLine(term.name)]
+              : [text(rendered)];
       for (const name of entry.envVars ?? []) {
         if (name === "") continue;
         let references = bindings.get(name);
@@ -466,34 +471,36 @@ export function deriveEnvironmentSection(
     }
     // Compare only documented fields. Structurally compatible user terms may
     // carry unrelated metadata, including objects that cannot be serialized.
-    const key = JSON.stringify(description.map((term) => {
-      switch (term.type) {
-        case "text":
-          return [term.type, term.text];
-        case "optionName":
-          return [term.type, term.optionName];
-        case "optionNames":
-          return [term.type, term.optionNames];
-        case "metavar":
-          return [term.type, term.metavar];
-        case "value":
-          return [term.type, term.value];
-        case "values":
-          return [term.type, term.values];
-        case "envVar":
-          return [term.type, term.envVar];
-        case "commandLine":
-          return [term.type, term.commandLine];
-        case "lineBreak":
-          return [term.type];
-        case "url":
-          return [term.type, term.url.href];
-      }
-    }));
+    const key = JSON.stringify(
+      description.map((term) => {
+        switch (term.type) {
+          case "text":
+            return [term.type, term.text];
+          case "optionName":
+            return [term.type, term.optionName];
+          case "optionNames":
+            return [term.type, term.optionNames];
+          case "metavar":
+            return [term.type, term.metavar];
+          case "value":
+            return [term.type, term.value];
+          case "values":
+            return [term.type, term.values];
+          case "envVar":
+            return [term.type, term.envVar];
+          case "commandLine":
+            return [term.type, term.commandLine];
+          case "lineBreak":
+            return [term.type];
+          case "url":
+            return [term.type, term.url.href];
+        }
+      }),
+    );
     descriptions.set(key, description);
   }
-  const collected = Array.from(bindings).filter(([, references]) =>
-    !options.onlyUnreferenced || references.size === 0
+  const collected = Array.from(bindings).filter(
+    ([, references]) => !options.onlyUnreferenced || references.size === 0,
   );
   if (collected.length === 0) return undefined;
   const title = options.title ?? "Environment";
@@ -501,18 +508,20 @@ export function deriveEnvironmentSection(
   return {
     title,
     entries: collected.map(([name, references]) => {
-      const purpose: Message = Array.from(purposes.get(name)?.values() ?? [])
-        .flatMap((description, i) =>
-          i === 0 ? description : [{ type: "lineBreak" }, ...description]
-        );
-      const refs: Message = Array.from(references.values()).flatMap((ref, i) =>
-        i === 0 ? ref : [text(", "), ...ref]
+      const purpose: Message = Array.from(
+        purposes.get(name)?.values() ?? [],
+      ).flatMap((description, i) =>
+        i === 0 ? description : [{ type: "lineBreak" }, ...description],
       );
-      const description: Message = purpose.length === 0
-        ? refs
-        : refs.length === 0
-        ? purpose
-        : [...purpose, { type: "lineBreak" }, text("CLI: "), ...refs];
+      const refs: Message = Array.from(references.values()).flatMap((ref, i) =>
+        i === 0 ? ref : [text(", "), ...ref],
+      );
+      const description: Message =
+        purpose.length === 0
+          ? refs
+          : refs.length === 0
+            ? purpose
+            : [...purpose, { type: "lineBreak" }, text("CLI: "), ...refs];
       return {
         term: { type: "literal", value: name },
         ...(description.length > 0 && { description }),
@@ -848,39 +857,47 @@ export function formatDocPage(
 ): string {
   options = { ...options, theme: cacheTerminalTheme(options.theme) };
   const formatMessage = resolveMessageFormatter(options);
-  const opaqueFormatter = options.messageFormatter != null &&
+  const opaqueFormatter =
+    options.messageFormatter != null &&
     !messageRenderers.has(options.messageFormatter);
-  const defaultAmbient = options.theme?.annotationStyles?.default ??
-    { dim: true };
-  const choicesAmbient = options.theme?.annotationStyles?.choices ??
-    { dim: true };
-  const environmentAmbient = options.theme?.annotationStyles?.environment ??
-    { dim: true };
+  const defaultAmbient = options.theme?.annotationStyles?.default ?? {
+    dim: true,
+  };
+  const choicesAmbient = options.theme?.annotationStyles?.choices ?? {
+    dim: true,
+  };
+  const environmentAmbient = options.theme?.annotationStyles?.environment ?? {
+    dim: true,
+  };
   const environmentStyle = styleCode(environmentAmbient);
-  const aliasesAmbient = options.theme?.annotationStyles?.aliases ??
-    { dim: true };
+  const aliasesAmbient = options.theme?.annotationStyles?.aliases ?? {
+    dim: true,
+  };
   const aliasesStyle = styleCode(aliasesAmbient);
-  const showAliasesByDefault = options.showAliases != null &&
-    options.showAliases !== false;
+  const showAliasesByDefault =
+    options.showAliases != null && options.showAliases !== false;
   const aliasesContent = (entry: DocEntry): Message => {
     if (entry.term.type !== "command") return [];
     if (!(entry.showAliases ?? showAliasesByDefault)) return [];
-    return (entry.term.aliases ?? []).filter((alias) => alias !== "")
+    return (entry.term.aliases ?? [])
+      .filter((alias) => alias !== "")
       .flatMap((alias, i) =>
-        i === 0 ? [text(alias)] : [text(", "), text(alias)]
+        i === 0 ? [text(alias)] : [text(", "), text(alias)],
       );
   };
-  const environmentPlacement = typeof options.showEnvironment === "object"
-    ? options.showEnvironment.placement ?? "inline"
-    : options.showEnvironment
-    ? "inline"
-    : undefined;
-  const showInlineEnvironment = environmentPlacement === "inline" ||
-    environmentPlacement === "both";
+  const environmentPlacement =
+    typeof options.showEnvironment === "object"
+      ? (options.showEnvironment.placement ?? "inline")
+      : options.showEnvironment
+        ? "inline"
+        : undefined;
+  const showInlineEnvironment =
+    environmentPlacement === "inline" || environmentPlacement === "both";
   const environmentContent = (entry: DocEntry): Message =>
-    [...new Set(entry.envVars ?? [])].filter((name) => name !== "")
+    [...new Set(entry.envVars ?? [])]
+      .filter((name) => name !== "")
       .flatMap((name, i) =>
-        i === 0 ? [envVar(name)] : [text(", "), envVar(name)]
+        i === 0 ? [envVar(name)] : [text(", "), envVar(name)],
       );
   const labelCache = new Map<string, string>();
   const label = (label: string, kind: LabelTerm["kind"]) => {
@@ -895,8 +912,8 @@ export function formatDocPage(
         kind === "choices"
           ? choicesAmbient
           : kind === "aliases"
-          ? aliasesAmbient
-          : undefined,
+            ? aliasesAmbient
+            : undefined,
       );
       labelCache.set(key, rendered);
     }
@@ -918,19 +935,20 @@ export function formatDocPage(
         kind.startsWith("default")
           ? defaultAmbient
           : kind.startsWith("choices")
-          ? choicesAmbient
-          : kind.startsWith("aliases")
-          ? aliasesAmbient
-          : undefined,
+            ? choicesAmbient
+            : kind.startsWith("aliases")
+              ? aliasesAmbient
+              : undefined,
       );
       punctuationCache.set(key, rendered);
     }
     return rendered;
   };
   const showUsage = options.showUsage ?? page.showUsage ?? true;
-  const usageLabel = page.usage != null && showUsage
-    ? spaceAfterLabel(label("Usage:", "usage"))
-    : "";
+  const usageLabel =
+    page.usage != null && showUsage
+      ? spaceAfterLabel(label("Usage:", "usage"))
+      : "";
   const usageLabelWidth = measureText(usageLabel).lastLineWidth;
   const defaultStyle = styleCode(
     options.theme?.annotationStyles?.default ?? { dim: true },
@@ -960,21 +978,27 @@ export function formatDocPage(
       return rendered.trim() !== "";
     }),
   }));
-  const environmentSection = environmentPlacement != null
-    ? deriveEnvironmentSection({ ...page, sections: filteredSections }, {
-      onlyUnreferenced: environmentPlacement === "inline",
-      title: typeof options.showEnvironment === "object"
-        ? options.showEnvironment.sectionTitle
-        : undefined,
-    })
-    : undefined;
+  const environmentSection =
+    environmentPlacement != null
+      ? deriveEnvironmentSection(
+          { ...page, sections: filteredSections },
+          {
+            onlyUnreferenced: environmentPlacement === "inline",
+            title:
+              typeof options.showEnvironment === "object"
+                ? options.showEnvironment.sectionTitle
+                : undefined,
+          },
+        )
+      : undefined;
   // Include the derived entries in all layout measurements, but keep their
   // section out of the user-supplied comparator below.
   page = {
     ...page,
-    sections: environmentSection == null
-      ? filteredSections
-      : [...filteredSections, environmentSection],
+    sections:
+      environmentSection == null
+        ? filteredSections
+        : [...filteredSections, environmentSection],
   };
 
   // Validate showChoices.maxItems before any per-entry rendering.
@@ -1001,11 +1025,13 @@ export function formatDocPage(
     Array.isArray(msg) && msg.length > 0;
   const needsDescriptionColumn = (entry: DocEntry): boolean =>
     hasContent(entry.description) ||
-    (options.showDefault === true || typeof options.showDefault === "object") &&
-      hasContent(entry.default) ||
-    (options.showChoices === true || typeof options.showChoices === "object") &&
-      hasContent(entry.choices) ||
-    showInlineEnvironment && hasContent(environmentContent(entry)) ||
+    ((options.showDefault === true ||
+      typeof options.showDefault === "object") &&
+      hasContent(entry.default)) ||
+    ((options.showChoices === true ||
+      typeof options.showChoices === "object") &&
+      hasContent(entry.choices)) ||
+    (showInlineEnvironment && hasContent(environmentContent(entry))) ||
     hasContent(aliasesContent(entry));
   const annotations = new Map<
     "default" | "choices" | "environment" | "aliases",
@@ -1022,9 +1048,8 @@ export function formatDocPage(
       return layout;
     }
     if (kind === "aliases") {
-      const config = typeof options.showAliases === "object"
-        ? options.showAliases
-        : {};
+      const config =
+        typeof options.showAliases === "object" ? options.showAliases : {};
       const layout = measureAnnotation(
         punctuation(config.prefix ?? " (", "aliasesPrefix") +
           label(config.label ?? "aliases: ", "aliases"),
@@ -1033,33 +1058,33 @@ export function formatDocPage(
       annotations.set(kind, layout);
       return layout;
     }
-    const config = kind === "default"
-      ? options.showDefault
-      : options.showChoices;
+    const config =
+      kind === "default" ? options.showDefault : options.showChoices;
     const prefix = punctuation(
       typeof config === "object"
-        ? config.prefix ?? (kind === "default" ? " [" : " (")
+        ? (config.prefix ?? (kind === "default" ? " [" : " ("))
         : kind === "default"
-        ? " ["
-        : " (",
+          ? " ["
+          : " (",
       kind === "default" ? "defaultPrefix" : "choicesPrefix",
     );
     const suffix = punctuation(
       typeof config === "object"
-        ? config.suffix ?? (kind === "default" ? "]" : ")")
+        ? (config.suffix ?? (kind === "default" ? "]" : ")"))
         : kind === "default"
-        ? "]"
-        : ")",
+          ? "]"
+          : ")",
       kind === "default" ? "defaultSuffix" : "choicesSuffix",
     );
-    const choicesLabel = kind === "choices"
-      ? label(
-        typeof options.showChoices === "object"
-          ? options.showChoices.label ?? "choices: "
-          : "choices: ",
-        "choices",
-      )
-      : "";
+    const choicesLabel =
+      kind === "choices"
+        ? label(
+            typeof options.showChoices === "object"
+              ? (options.showChoices.label ?? "choices: ")
+              : "choices: ",
+            "choices",
+          )
+        : "";
     const layout = measureAnnotation(prefix + choicesLabel, suffix);
     annotations.set(kind, layout);
     return layout;
@@ -1081,11 +1106,13 @@ export function formatDocPage(
     }
     return widest;
   };
-  const termWidth = options.termWidth === "auto"
-    ? automaticTermWidth() ?? 26
-    : options.termWidth ?? 26;
+  const termWidth =
+    options.termWidth === "auto"
+      ? (automaticTermWidth() ?? 26)
+      : (options.termWidth ?? 26);
   const hasEntries = page.sections.some((s) => s.entries.length > 0);
-  const needsDescColumn = hasEntries &&
+  const needsDescColumn =
+    hasEntries &&
     page.sections.some((s) => s.entries.some(needsDescriptionColumn));
   // When maxWidth constrains the layout, shrink the term column so that
   // the description column gets a reasonable share of the available width.
@@ -1103,11 +1130,12 @@ export function formatDocPage(
       1,
       Math.floor(availableForColumns / 2),
     );
-    effectiveTermWidth = options.termWidth === "auto" && needsDescColumn
-      ? Math.min(termWidth, evenlySplitTermWidth)
-      : availableForColumns >= termWidth + 1
-      ? termWidth
-      : evenlySplitTermWidth;
+    effectiveTermWidth =
+      options.termWidth === "auto" && needsDescColumn
+        ? Math.min(termWidth, evenlySplitTermWidth)
+        : availableForColumns >= termWidth + 1
+          ? termWidth
+          : evenlySplitTermWidth;
   }
   if (options.maxWidth != null) {
     // Validate the exact fixed text that rendering will use. Content arrays
@@ -1115,16 +1143,20 @@ export function formatDocPage(
     // reserved from the content budget; later suffix lines stand alone.
     let minDescWidth = 1;
     if (needsDescColumn) {
-      for (
-        const kind of ["default", "choices", "environment", "aliases"] as const
-      ) {
-        const enabled = kind === "default"
-          ? options.showDefault
-          : kind === "choices"
-          ? options.showChoices
-          : kind === "environment"
-          ? showInlineEnvironment
-          : true;
+      for (const kind of [
+        "default",
+        "choices",
+        "environment",
+        "aliases",
+      ] as const) {
+        const enabled =
+          kind === "default"
+            ? options.showDefault
+            : kind === "choices"
+              ? options.showChoices
+              : kind === "environment"
+                ? showInlineEnvironment
+                : true;
         if (
           enabled &&
           page.sections.some((section) =>
@@ -1133,10 +1165,10 @@ export function formatDocPage(
                 kind === "environment"
                   ? environmentContent(entry)
                   : kind === "aliases"
-                  ? aliasesContent(entry)
-                  : entry[kind],
-              )
-            )
+                    ? aliasesContent(entry)
+                    : entry[kind],
+              ),
+            ),
           )
         ) {
           minDescWidth = Math.max(minDescWidth, annotation(kind).minWidth);
@@ -1158,27 +1190,29 @@ export function formatDocPage(
     const entryMin = needsDescColumn
       ? Math.min(splitEntryMin, fixedEntryMin)
       : hasEntries
-      ? termIndent + 1
-      : 1;
+        ? termIndent + 1
+        : 1;
     // The first line needs "Usage: " (7) + programName.  Continuation
     // lines are indented by 7 chars and need enough room for the widest
     // atomic term segment.  To avoid over-restricting for intentionally
     // long terms, the term width is capped at programNameWidth + 7;
     // the 7 matches the continuation indent, so terms fitting within
     // the first line's total width are guaranteed not to overflow.
-    const usageMin = page.usage != null && showUsage
-      ? minimumUsageWidth(programName, page.usage, usageLabel, options.theme)
-      : 1;
+    const usageMin =
+      page.usage != null && showUsage
+        ? minimumUsageWidth(programName, page.usage, usageLabel, options.theme)
+        : 1;
     // Fixed labels cannot wrap. Examples/Author/Bugs also need two
     // indentation columns and at least one column for their content.
     let sectionMin = 1;
     for (const kind of ["examples", "author", "bugs"] as const) {
       if (!hasContent(page[kind])) continue;
-      const title = kind === "examples"
-        ? "Examples:"
-        : kind === "author"
-        ? "Author:"
-        : "Bugs:";
+      const title =
+        kind === "examples"
+          ? "Examples:"
+          : kind === "author"
+            ? "Author:"
+            : "Bugs:";
       sectionMin = Math.max(
         sectionMin,
         3,
@@ -1230,9 +1264,10 @@ export function formatDocPage(
       formatUsage(programName, page.usage, {
         colors: options.colors,
         theme: options.theme,
-        maxWidth: options.maxWidth == null
-          ? undefined
-          : options.maxWidth - usageLabelWidth,
+        maxWidth:
+          options.maxWidth == null
+            ? undefined
+            : options.maxWidth - usageLabelWidth,
         expandCommands: true,
       }),
       usageLabelWidth,
@@ -1289,16 +1324,18 @@ export function formatDocPage(
       // The page's theme cache avoids invoking callbacks again for layout.
       const unwrappedTerm = formatUsageTerm(entry.term, termOptions);
       const multilineReplacement = measureText(unwrappedTerm).lineCount > 1;
-      const term = options.maxWidth == null
-        ? unwrappedTerm
-        : formatUsageTerm(entry.term, {
-          ...termOptions,
-          maxWidth: options.maxWidth - termIndent,
-        });
+      const term =
+        options.maxWidth == null
+          ? unwrappedTerm
+          : formatUsageTerm(entry.term, {
+              ...termOptions,
+              maxWidth: options.maxWidth - termIndent,
+            });
 
-      const descColumnWidth = options.maxWidth == null
-        ? undefined
-        : options.maxWidth - termIndent - effectiveTermWidth - 2;
+      const descColumnWidth =
+        options.maxWidth == null
+          ? undefined
+          : options.maxWidth - termIndent - effectiveTermWidth - 2;
 
       // When the rendered term is physically wider than termWidth, the
       // description column starts further right on the first output line,
@@ -1306,9 +1343,10 @@ export function formatDocPage(
       // surplus so we can pass it as initialWidth to formatMessage, making
       // word-wrapping account for the narrower first-line space.
       const termVisibleWidth = measureText(term).lastLineWidth;
-      const extraTermOffset = descColumnWidth != null
-        ? Math.max(0, termVisibleWidth - effectiveTermWidth)
-        : 0;
+      const extraTermOffset =
+        descColumnWidth != null
+          ? Math.max(0, termVisibleWidth - effectiveTermWidth)
+          : 0;
 
       const descFormatOptions: MessageFormatOptions = {
         colors: options.colors,
@@ -1316,9 +1354,10 @@ export function formatDocPage(
         maxWidth: descColumnWidth,
         initialWidth: extraTermOffset > 0 ? extraTermOffset : undefined,
       };
-      let description = entry.description == null
-        ? ""
-        : formatMessage(entry.description, descFormatOptions);
+      let description =
+        entry.description == null
+          ? ""
+          : formatMessage(entry.description, descFormatOptions);
 
       let cursor = placeText(description, {
         line: "",
@@ -1335,8 +1374,9 @@ export function formatDocPage(
         let prefix = placeText(prefixText, cursor, descColumnWidth, 1);
         if (
           prefix.text !== layout.prefix ||
-          descColumnWidth != null && cursor.column === 0 &&
-            layout.prefixMetrics.firstLineWidth > descColumnWidth
+          (descColumnWidth != null &&
+            cursor.column === 0 &&
+            layout.prefixMetrics.firstLineWidth > descColumnWidth)
         ) {
           // Keep a layout-inserted break outside the ambient style, as before.
           // At column zero the heading can start here, even if placeText did
@@ -1347,17 +1387,22 @@ export function formatDocPage(
           prefixText = trimLeadingSpace(layout.prefix);
           prefix = placeText(prefixText, { line: "", column: 0 });
         }
-        const rendered = formatMessage(content, {
-          colors: options.colors ? { resetSuffix: style } : false,
-          quotes,
-          maxWidth: descColumnWidth == null
-            ? undefined
-            : descColumnWidth - layout.suffixMetrics.firstLineWidth,
-          initialWidth: descColumnWidth != null ||
-              layout.prefixMetrics.lineCount > 1
-            ? prefix.cursor.column
-            : undefined,
-        }, ambient);
+        const rendered = formatMessage(
+          content,
+          {
+            colors: options.colors ? { resetSuffix: style } : false,
+            quotes,
+            maxWidth:
+              descColumnWidth == null
+                ? undefined
+                : descColumnWidth - layout.suffixMetrics.firstLineWidth,
+            initialWidth:
+              descColumnWidth != null || layout.prefixMetrics.lineCount > 1
+                ? prefix.cursor.column
+                : undefined,
+          },
+          ambient,
+        );
         // Content can be empty or an opaque formatter's unbreakable output.
         // Place the suffix at its boundary without reflowing that output.
         const suffix = placeText(
@@ -1397,9 +1442,10 @@ export function formatDocPage(
 
       // Append choices if showChoices is enabled and choices exist
       if (options.showChoices && hasContent(entry.choices)) {
-        const maxItems = typeof options.showChoices === "object"
-          ? options.showChoices.maxItems ?? 8
-          : 8;
+        const maxItems =
+          typeof options.showChoices === "object"
+            ? (options.showChoices.maxItems ?? 8)
+            : 8;
         // Truncate at the Message level by counting value terms
         const terms = Array.isArray(entry.choices) ? entry.choices : [];
         let truncatedTerms: readonly MessageTerm[] = terms;
@@ -1419,10 +1465,7 @@ export function formatDocPage(
             }
           }
           if (truncated) {
-            truncatedTerms = [
-              ...terms.slice(0, cutIndex),
-              text(", ..."),
-            ];
+            truncatedTerms = [...terms.slice(0, cutIndex), text(", ...")];
           }
         }
         appendAnnotation(
@@ -1451,12 +1494,9 @@ export function formatDocPage(
       output += `${" ".repeat(termIndent)}${
         multilineReplacement ? indentLines(paddedTerm, termIndent) : paddedTerm
       }${
-        description === "" ? "" : `  ${
-          indentLines(
-            description,
-            termIndent + effectiveTermWidth + 2,
-          )
-        }`
+        description === ""
+          ? ""
+          : `  ${indentLines(description, termIndent + effectiveTermWidth + 2)}`
       }\n`;
     }
   }

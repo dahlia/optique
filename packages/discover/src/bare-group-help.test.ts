@@ -19,13 +19,15 @@ import {
 
 describe("runProgram() bare group help", () => {
   it("should show root and implicit namespace help with successful exits", async () => {
-    const commands = [defineCommand({
-      path: ["tagging", "changes"],
-      parser: object({}),
-      handler() {
-        assert.fail("Help must not run the handler.");
-      },
-    })];
+    const commands = [
+      defineCommand({
+        path: ["tagging", "changes"],
+        parser: object({}),
+        handler() {
+          assert.fail("Help must not run the handler.");
+        },
+      }),
+    ];
     for (const args of [[], ["tagging"]]) {
       const result = await capture({
         commands,
@@ -99,11 +101,15 @@ describe("runProgram() bare group help", () => {
         },
       }),
     ];
-    for (
-      const help of [undefined, false, "both", { bareGroup: "never" }, {
+    for (const help of [
+      undefined,
+      false,
+      "both",
+      { bareGroup: "never" },
+      {
         bareGroup: "namespace",
-      }] as const
-    ) {
+      },
+    ] as const) {
       const result = await capture({ commands, args: ["tagging"], help });
       assert.equal(result.exitCode, 0);
       assert.equal(result.stdout, "");
@@ -136,12 +142,12 @@ describe("runProgram() bare group help", () => {
         },
       }),
     ];
-    for (
-      const args of [["tagging", "changes"], ["unknown"], [
-        "tagging",
-        "unknown",
-      ], ["tagging", "--bad"]]
-    ) {
+    for (const args of [
+      ["tagging", "changes"],
+      ["unknown"],
+      ["tagging", "unknown"],
+      ["tagging", "--bad"],
+    ]) {
       const result = await capture({
         commands,
         args,
@@ -150,14 +156,11 @@ describe("runProgram() bare group help", () => {
       assert.equal(result.exitCode, 1);
       assert.equal(result.stdout, "");
     }
-    for (
-      const args of [["tagging", "--verbose"], ["tagging", "--"], [
-        "tagging",
-        "changes",
-        "--json",
-        "{}",
-      ]]
-    ) {
+    for (const args of [
+      ["tagging", "--verbose"],
+      ["tagging", "--"],
+      ["tagging", "changes", "--json", "{}"],
+    ]) {
       assert.equal(
         (await capture({ commands, args, help: { bareGroup: "always" } }))
           .exitCode,
@@ -169,13 +172,15 @@ describe("runProgram() bare group help", () => {
 
   it("should execute a root leaf even with always", async () => {
     let calls = 0;
-    const commands = [defineCommand({
-      path: [],
-      parser: object({}),
-      handler() {
-        calls++;
-      },
-    })];
+    const commands = [
+      defineCommand({
+        path: [],
+        parser: object({}),
+        handler() {
+          calls++;
+        },
+      }),
+    ];
     assert.equal(
       (await capture({ commands, args: [], help: { bareGroup: "always" } }))
         .stdout,
@@ -260,13 +265,14 @@ describe("runProgram() bare group help", () => {
         },
       }),
     ];
-    for (
-      const help of [{ bareGroup: "never" }, {
+    for (const help of [
+      { bareGroup: "never" },
+      {
         command: undefined,
         option: undefined,
         bareGroup: "never",
-      }] as const
-    ) {
+      },
+    ] as const) {
       const root = await capture({ commands, args: ["--help"], help });
       assert.equal(root.exitCode, 0);
       assert.match(root.stdout, /help\s+Show help/);
@@ -434,15 +440,17 @@ describe("runProgram() bare group help", () => {
     const dir = await mkdtemp(join(tmpdir(), "optique-bare-help-"));
     try {
       const moduleUrl = new URL("./command.ts", import.meta.url).href;
-      const constructsUrl =
-        new URL("../../core/src/constructs.ts", import.meta.url).href;
+      const constructsUrl = new URL(
+        "../../core/src/constructs.ts",
+        import.meta.url,
+      ).href;
       await writeFile(
         join(dir, "child.ts"),
-        `import { defineCommand } from ${
-          JSON.stringify(moduleUrl)
-        };\nimport { object } from ${
-          JSON.stringify(constructsUrl)
-        };\nexport default defineCommand({ parser: object({}), handler() { throw new Error("Unexpected handler."); } });\n`,
+        `import { defineCommand } from ${JSON.stringify(
+          moduleUrl,
+        )};\nimport { object } from ${JSON.stringify(
+          constructsUrl,
+        )};\nexport default defineCommand({ parser: object({}), handler() { throw new Error("Unexpected handler."); } });\n`,
       );
       const result = await capture({
         dir,
@@ -459,13 +467,11 @@ describe("runProgram() bare group help", () => {
   it("should reject invalid policies before importing command modules", async () => {
     await assert.rejects(
       () =>
-        runProgram(
-          {
-            dir: "/does-not-exist",
-            metadata: { name: "tool" },
-            help: { bareGroup: "invalid" },
-          } as never,
-        ),
+        runProgram({
+          dir: "/does-not-exist",
+          metadata: { name: "tool" },
+          help: { bareGroup: "invalid" },
+        } as never),
       { name: "TypeError", message: "Invalid bareGroup help policy: invalid" },
     );
   });

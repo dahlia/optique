@@ -54,10 +54,10 @@ export function loadWorkspace(root: string): readonly Member[] {
     }
     const directories = pattern.endsWith("/*")
       ? readdirSync(resolve(root, pattern.slice(0, -2)), {
-        withFileTypes: true,
-      })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => resolve(root, pattern.slice(0, -2), entry.name))
+          withFileTypes: true,
+        })
+          .filter((entry) => entry.isDirectory())
+          .map((entry) => resolve(root, pattern.slice(0, -2), entry.name))
       : [resolve(root, pattern)];
     for (const directory of directories) {
       if (!existsSync(join(directory, "deno.json"))) continue;
@@ -65,9 +65,10 @@ export function loadWorkspace(root: string): readonly Member[] {
       members.push({
         directory,
         name: typeof data.name === "string" ? data.name : "",
-        exports: typeof data.exports === "string"
-          ? new Map([[".", data.exports]])
-          : stringEntries(data.exports),
+        exports:
+          typeof data.exports === "string"
+            ? new Map([[".", data.exports]])
+            : stringEntries(data.exports),
         imports: stringEntries(data.imports),
       });
     }
@@ -88,8 +89,10 @@ function withoutSuffix(specifier: string): string {
 
 function usesDeno(source: ts.SourceFile): boolean {
   function visit(node: ts.Node): boolean {
-    return (ts.isIdentifier(node) && node.text === "Deno") ||
-      (ts.forEachChild(node, visit) ?? false);
+    return (
+      (ts.isIdentifier(node) && node.text === "Deno") ||
+      (ts.forEachChild(node, visit) ?? false)
+    );
   }
   return visit(source);
 }
@@ -128,11 +131,12 @@ function sourceTarget(
   }
   for (const member of members) {
     if (!member.name) continue;
-    const subpath = specifier === member.name
-      ? "."
-      : specifier.startsWith(`${member.name}/`)
-      ? `.${specifier.slice(member.name.length)}`
-      : undefined;
+    const subpath =
+      specifier === member.name
+        ? "."
+        : specifier.startsWith(`${member.name}/`)
+          ? `.${specifier.slice(member.name.length)}`
+          : undefined;
     if (subpath === undefined) continue;
     const target = member.exports.get(subpath);
     // Do not fall back to a built npm export for an unexported workspace path.
@@ -158,7 +162,7 @@ export function createCheckProgram(
   const host = ts.createCompilerHost(options);
   const cache = ts.createModuleResolutionCache(
     process.cwd(),
-    (file) => ts.sys.useCaseSensitiveFileNames ? file : file.toLowerCase(),
+    (file) => (ts.sys.useCaseSensitiveFileNames ? file : file.toLowerCase()),
     options,
   );
   host.resolveModuleNameLiterals = (
@@ -170,8 +174,8 @@ export function createCheckProgram(
   ) =>
     literals.map((literal) => {
       const specifier = withoutSuffix(literal.text);
-      const target = sourceTarget(specifier, containingFile, members) ??
-        specifier;
+      const target =
+        sourceTarget(specifier, containingFile, members) ?? specifier;
       return ts.resolveModuleName(
         target,
         containingFile,
@@ -267,14 +271,19 @@ export function main(
   const temporalTypes = join(root, "scripts/types/temporal.d.ts");
   for (const [directory, roots] of groups) {
     let program = createCheckProgram(roots, config.options, members);
-    const needsDeno = program.getSourceFiles().some((file) =>
-      within(root, file.fileName) &&
-      !file.fileName.includes(`${sep}node_modules${sep}`) &&
-      usesDeno(file)
-    );
-    const needsTemporal = program.getSourceFiles().some((file) =>
-      within(join(root, "packages/temporal/src"), file.fileName)
-    );
+    const needsDeno = program
+      .getSourceFiles()
+      .some(
+        (file) =>
+          within(root, file.fileName) &&
+          !file.fileName.includes(`${sep}node_modules${sep}`) &&
+          usesDeno(file),
+      );
+    const needsTemporal = program
+      .getSourceFiles()
+      .some((file) =>
+        within(join(root, "packages/temporal/src"), file.fileName),
+      );
     if (needsDeno || needsTemporal) {
       program = createCheckProgram(
         needsTemporal ? [...roots, temporalTypes] : roots,
@@ -295,20 +304,25 @@ export function main(
     console.log(`Checked ${label} (${roots.length} roots).`);
   }
   // Core's public implementation must also compile without Node ambient types.
-  const neutralRoots = owned.filter((file) =>
-    file.startsWith(join(root, "packages/core/src") + sep) &&
-    !file.endsWith(".test.ts")
+  const neutralRoots = owned.filter(
+    (file) =>
+      file.startsWith(join(root, "packages/core/src") + sep) &&
+      !file.endsWith(".test.ts"),
   );
   if (neutralRoots.length) {
-    const neutral = createCheckProgram(neutralRoots, {
-      ...config.options,
-      types: [],
-      lib: ["lib.esnext.d.ts", "lib.dom.d.ts", "lib.dom.iterable.d.ts"],
-    }, members);
+    const neutral = createCheckProgram(
+      neutralRoots,
+      {
+        ...config.options,
+        types: [],
+        lib: ["lib.esnext.d.ts", "lib.dom.d.ts", "lib.dom.iterable.d.ts"],
+      },
+      members,
+    );
     if (
-      neutral.getSourceFiles().some((file) =>
-        /[/\\]@types[/\\]node[/\\]/.test(file.fileName)
-      )
+      neutral
+        .getSourceFiles()
+        .some((file) => /[/\\]@types[/\\]node[/\\]/.test(file.fileName))
     ) {
       throw new Error("Neutral core loaded Node ambient types.");
     }
@@ -318,21 +332,28 @@ export function main(
     );
   }
   verifyInventory(owned, checked);
-  const unique = [...new Map(diagnostics.map((diagnostic) => [
-    `${diagnostic.file?.fileName}:${diagnostic.start}:${diagnostic.code}:${
-      ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")
-    }`,
-    diagnostic,
-  ])).values()];
+  const unique = [
+    ...new Map(
+      diagnostics.map((diagnostic) => [
+        `${diagnostic.file?.fileName}:${diagnostic.start}:${diagnostic.code}:${ts.flattenDiagnosticMessageText(
+          diagnostic.messageText,
+          "\n",
+        )}`,
+        diagnostic,
+      ]),
+    ).values(),
+  ];
   console.log(
     `Inventory: ${owned.length} owned TypeScript files checked; docs checked separately.`,
   );
   if (unique.length) {
-    console.error(ts.formatDiagnosticsWithColorAndContext(unique, {
-      getCanonicalFileName: (file) => file,
-      getCurrentDirectory: () => root,
-      getNewLine: () => "\n",
-    }));
+    console.error(
+      ts.formatDiagnosticsWithColorAndContext(unique, {
+        getCanonicalFileName: (file) => file,
+        getCurrentDirectory: () => root,
+        getNewLine: () => "\n",
+      }),
+    );
   }
   console.log(`${unique.length} diagnostics.`);
   return unique.some((d) => d.category === ts.DiagnosticCategory.Error) ? 1 : 0;

@@ -83,7 +83,10 @@ describe("runProgram() root command precedence", () => {
       assert.match(failure.stderr, /integer/i);
       assert.match(failure.stderr, /SOURCE/);
     }
-    assert.deepEqual(calls, [["build", 1], ["build", 1]]);
+    assert.deepEqual(calls, [
+      ["build", 1],
+      ["build", 1],
+    ]);
   });
 
   it("keeps registered meta names and aliases final, including parse errors", async () => {
@@ -114,7 +117,10 @@ describe("runProgram() root command precedence", () => {
       assert.match(failure.stderr, /integer/i);
       assert.equal(failure.stdout, "");
     }
-    assert.deepEqual(calls, [["help", 2], ["help", 2]]);
+    assert.deepEqual(calls, [
+      ["help", 2],
+      ["help", 2],
+    ]);
   });
 
   it("recognizes enabled custom meta names and every alias", async () => {
@@ -173,17 +179,20 @@ describe("runProgram() root command precedence", () => {
       assert.equal(result.exitCode, 0);
       assert.equal(result.stdout, "");
     }
-    assert.deepEqual(calls, cases.map(({ args }) => ["root", args]));
+    assert.deepEqual(
+      calls,
+      cases.map(({ args }) => ["root", args]),
+    );
   });
 
   it("only reserves the first token before the option terminator", async () => {
     const { root, build, calls } = fixture();
-    for (
-      const args of [["--", "help"], ["./help"], ["--verbose", "help"], [
-        "file.ts",
-        "build",
-      ]]
-    ) {
+    for (const args of [
+      ["--", "help"],
+      ["./help"],
+      ["--verbose", "help"],
+      ["file.ts", "build"],
+    ]) {
       const result = await captureProgramRun({
         ...presentation,
         commands: [root, build],
@@ -282,16 +291,18 @@ describe("runProgram() root command precedence", () => {
     const text = string();
     const root = defineCommand({
       path: [],
-      parser: multiple(argument({
-        metavar: text.metavar,
-        format: text.format,
-        placeholder: "",
-        mode: "async",
-        parse(value) {
-          calls.push(["parse", value]);
-          return Promise.resolve(text.parse(value));
-        },
-      })),
+      parser: multiple(
+        argument({
+          metavar: text.metavar,
+          format: text.format,
+          placeholder: "",
+          mode: "async",
+          parse(value) {
+            calls.push(["parse", value]);
+            return Promise.resolve(text.parse(value));
+          },
+        }),
+      ),
       handler(value) {
         calls.push(["root", value]);
       },
@@ -331,13 +342,15 @@ describe("runProgram() root command precedence", () => {
       path: [],
       parser: object({
         mode: withDefault(option("--mode", mode), "prod"),
-        source: argument(mode.derive({
-          metavar: "SOURCE",
-          mode: "sync",
-          defaultValue: () => "prod",
-          factory: (value) =>
-            choice(value === "prod" ? ["release"] : ["debug"]),
-        })),
+        source: argument(
+          mode.derive({
+            metavar: "SOURCE",
+            mode: "sync",
+            defaultValue: () => "prod",
+            factory: (value) =>
+              choice(value === "prod" ? ["release"] : ["debug"]),
+          }),
+        ),
       }),
       handler() {
         assert.fail("Completion must not run a handler.");

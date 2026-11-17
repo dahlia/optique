@@ -32,17 +32,22 @@ describe("cleanupCliProcess", () => {
     }, 1200);
 
     // Act
-    await clock.run(cleanupCliProcess({
-      child,
-      mode: "tree",
-      getState,
-      waiter,
-      recordError: (error) => errors.push(error),
-    }, {
-      platform: "win32",
-      systemRoot: () => "C:\\Windows",
-      spawnHelper: () => helper,
-    }));
+    await clock.run(
+      cleanupCliProcess(
+        {
+          child,
+          mode: "tree",
+          getState,
+          waiter,
+          recordError: (error) => errors.push(error),
+        },
+        {
+          platform: "win32",
+          systemRoot: () => "C:\\Windows",
+          spawnHelper: () => helper,
+        },
+      ),
+    );
     waiter.dispose();
 
     // Assert
@@ -61,17 +66,22 @@ describe("cleanupCliProcess", () => {
     const cause = new Error("Helper failed.");
     clock.schedule(() => helper.emit("error", cause), 100);
 
-    await clock.run(cleanupCliProcess({
-      child,
-      mode: "tree",
-      getState,
-      waiter,
-      recordError: (error) => errors.push(error),
-    }, {
-      platform: "win32",
-      systemRoot: () => "C:\\Windows",
-      spawnHelper: () => helper,
-    }));
+    await clock.run(
+      cleanupCliProcess(
+        {
+          child,
+          mode: "tree",
+          getState,
+          waiter,
+          recordError: (error) => errors.push(error),
+        },
+        {
+          platform: "win32",
+          systemRoot: () => "C:\\Windows",
+          spawnHelper: () => helper,
+        },
+      ),
+    );
     waiter.dispose();
 
     assert.ok(
@@ -88,17 +98,20 @@ describe("cleanupCliProcess", () => {
     const helper = new TestProcess(102);
     const errors: unknown[] = [];
     await clock.run(
-      cleanupCliProcess({
-        child,
-        mode: "tree",
-        getState: observe(child, waiter.notify),
-        waiter,
-        recordError: (error) => errors.push(error),
-      }, {
-        platform: "win32",
-        systemRoot: () => "C:\\Windows",
-        spawnHelper: () => helper,
-      }),
+      cleanupCliProcess(
+        {
+          child,
+          mode: "tree",
+          getState: observe(child, waiter.notify),
+          waiter,
+          recordError: (error) => errors.push(error),
+        },
+        {
+          platform: "win32",
+          systemRoot: () => "C:\\Windows",
+          spawnHelper: () => helper,
+        },
+      ),
     );
     waiter.dispose();
     assert.equal(clock.now(), 2000);
@@ -125,17 +138,20 @@ describe("cleanupCliProcess", () => {
     };
     const errors: unknown[] = [];
     await clock.run(
-      cleanupCliProcess({
-        child,
-        mode: "tree",
-        getState: observe(child, waiter.notify),
-        waiter,
-        recordError: (error) => errors.push(error),
-      }, {
-        platform: "win32",
-        systemRoot: () => "C:\\Windows",
-        spawnHelper: () => helper,
-      }),
+      cleanupCliProcess(
+        {
+          child,
+          mode: "tree",
+          getState: observe(child, waiter.notify),
+          waiter,
+          recordError: (error) => errors.push(error),
+        },
+        {
+          platform: "win32",
+          systemRoot: () => "C:\\Windows",
+          spawnHelper: () => helper,
+        },
+      ),
     );
     waiter.dispose();
     assert.equal(clock.now(), 2000);
@@ -158,17 +174,20 @@ describe("cleanupCliProcess", () => {
       helper.finish();
     }, 1200);
     await clock.run(
-      cleanupCliProcess({
-        child,
-        mode: "tree",
-        getState: observe(child, waiter.notify),
-        waiter,
-        recordError: (error) => errors.push(error),
-      }, {
-        platform: "win32",
-        systemRoot: () => "C:\\Windows",
-        spawnHelper: () => helper,
-      }),
+      cleanupCliProcess(
+        {
+          child,
+          mode: "tree",
+          getState: observe(child, waiter.notify),
+          waiter,
+          recordError: (error) => errors.push(error),
+        },
+        {
+          platform: "win32",
+          systemRoot: () => "C:\\Windows",
+          spawnHelper: () => helper,
+        },
+      ),
     );
     waiter.dispose();
     assert.equal(clock.now(), 1200);
@@ -190,17 +209,20 @@ describe("cleanupCliProcess", () => {
       helper.finish(5);
     }, 100);
     await clock.run(
-      cleanupCliProcess({
-        child,
-        mode: "tree",
-        getState: observe(child, waiter.notify),
-        waiter,
-        recordError: (error) => errors.push(error),
-      }, {
-        platform: "win32",
-        systemRoot: () => "C:\\Windows",
-        spawnHelper: () => helper,
-      }),
+      cleanupCliProcess(
+        {
+          child,
+          mode: "tree",
+          getState: observe(child, waiter.notify),
+          waiter,
+          recordError: (error) => errors.push(error),
+        },
+        {
+          platform: "win32",
+          systemRoot: () => "C:\\Windows",
+          spawnHelper: () => helper,
+        },
+      ),
     );
     waiter.dispose();
     assert.equal(clock.now(), 100);
@@ -216,18 +238,21 @@ describe("cleanupCliProcess", () => {
     child.finish();
     const errors: unknown[] = [];
     await clock.run(
-      cleanupCliProcess({
-        child,
-        mode: "tree",
-        getState,
-        waiter,
-        recordError: (error) => errors.push(error),
-      }, {
-        platform: "win32",
-        spawnHelper: () => {
-          assert.fail("Stale PID used.");
+      cleanupCliProcess(
+        {
+          child,
+          mode: "tree",
+          getState,
+          waiter,
+          recordError: (error) => errors.push(error),
         },
-      }),
+        {
+          platform: "win32",
+          spawnHelper: () => {
+            assert.fail("Stale PID used.");
+          },
+        },
+      ),
     );
     waiter.dispose();
     assert.match(String(errors[0]), /after its root exits/);
@@ -249,17 +274,20 @@ describe("cleanupCliProcess", () => {
       throw destroyError;
     };
     await clock.run(
-      cleanupCliProcess({
-        child,
-        mode: "tree",
-        getState: observe(child, waiter.notify),
-        waiter,
-        recordError: (error) => errors.push(error),
-      }, {
-        platform: "win32",
-        systemRoot: () => "C:\\Windows",
-        spawnHelper: () => helper,
-      }),
+      cleanupCliProcess(
+        {
+          child,
+          mode: "tree",
+          getState: observe(child, waiter.notify),
+          waiter,
+          recordError: (error) => errors.push(error),
+        },
+        {
+          platform: "win32",
+          systemRoot: () => "C:\\Windows",
+          spawnHelper: () => helper,
+        },
+      ),
     );
     waiter.dispose();
     assert.equal(clock.now(), 2000);
@@ -267,13 +295,13 @@ describe("cleanupCliProcess", () => {
     assert.ok(helper.stdin.destroyed && helper.stderr.destroyed);
     assert.ok(child.unreferenced && helper.unreferenced);
     assert.ok(
-      errors.some((error) =>
-        error instanceof Error && error.cause === killError
+      errors.some(
+        (error) => error instanceof Error && error.cause === killError,
       ),
     );
     assert.ok(
-      errors.some((error) =>
-        error instanceof Error && error.cause === destroyError
+      errors.some(
+        (error) => error instanceof Error && error.cause === destroyError,
       ),
     );
     PassThrough.prototype.destroy.call(helper.stdout);
@@ -290,13 +318,16 @@ describe("cleanupCliProcess", () => {
     };
     const errors: unknown[] = [];
     await clock.run(
-      cleanupCliProcess({
-        child,
-        mode: "child",
-        getState: observe(child, waiter.notify),
-        waiter,
-        recordError: (error) => errors.push(error),
-      }, { platform: "linux" }),
+      cleanupCliProcess(
+        {
+          child,
+          mode: "child",
+          getState: observe(child, waiter.notify),
+          waiter,
+          recordError: (error) => errors.push(error),
+        },
+        { platform: "linux" },
+      ),
     );
     waiter.dispose();
     assert.equal(clock.now(), 1000);
@@ -306,108 +337,132 @@ describe("cleanupCliProcess", () => {
 });
 
 describe("Windows tree cleanup integration", () => {
-  it("should let a delayed real taskkill terminate descendants", {
-    timeout: 20_000,
-    skip: process.platform !== "win32",
-  }, async () => {
-    if (process.platform !== "win32") return;
-    const root = process.env.SystemRoot ?? process.env.windir;
-    assert.ok(root !== undefined);
-    const taskkill = win32.join(root, "System32", "taskkill.exe");
-    const temporary = fileURLToPath(new URL("../../../tmp/", import.meta.url));
-    mkdirSync(temporary, { recursive: true });
-    const directory = mkdtempSync(resolve(temporary, "delayed-taskkill-"));
-    const ready = resolve(directory, "ready");
-    const prefix = "Deno" in globalThis ? ["run", "-A"] : [];
-    const env: Record<string, string> = {};
-    for (const [key, value] of Object.entries(process.env)) {
-      if (value !== undefined) env[key] = value;
-    }
-    const child = spawnCliProcess(process.execPath, [
-      ...prefix,
-      fileURLToPath(new URL("./fixtures/cli/program.mjs", import.meta.url)),
-      "tree",
-      ready,
-      "hang",
-    ], { cwd: process.cwd(), env, detached: false });
-    const waiter = createCleanupWaiter();
-    const getState = observe(child, waiter.notify);
-    const errors: unknown[] = [];
-    child.on("error", (error: unknown) => errors.push(error));
-    child.stdin.on("error", () => {});
-    child.stdout.on("error", (error: unknown) => errors.push(error));
-    child.stderr.on("error", (error: unknown) => errors.push(error));
-    child.stdout.resume();
-    child.stderr.resume();
-    let descendant: number | undefined;
-    try {
-      const deadline = performance.now() + 5000;
-      while (descendant === undefined && performance.now() < deadline) {
-        try {
-          const pid = Number(readFileSync(ready, "utf8"));
-          if (Number.isSafeInteger(pid) && pid > 0) descendant = pid;
-        } catch (error) {
-          if (
-            !(error instanceof Error) || !("code" in error) ||
-            error.code !== "ENOENT"
-          ) throw error;
-        }
-        if (descendant === undefined) await delay(10);
-      }
-      assert.ok(
-        descendant !== undefined,
-        "The descendant must report readiness.",
+  it(
+    "should let a delayed real taskkill terminate descendants",
+    {
+      timeout: 20_000,
+      skip: process.platform !== "win32",
+    },
+    async () => {
+      if (process.platform !== "win32") return;
+      const root = process.env.SystemRoot ?? process.env.windir;
+      assert.ok(root !== undefined);
+      const taskkill = win32.join(root, "System32", "taskkill.exe");
+      const temporary = fileURLToPath(
+        new URL("../../../tmp/", import.meta.url),
       );
-      const started = performance.now();
-      await cleanupCliProcess({
-        child,
-        mode: "tree",
-        getState,
-        waiter,
-        recordError: (error) => errors.push(error),
-      }, {
-        budget: 4000,
-        spawnHelper: (command, args) =>
-          spawn(process.execPath, [
-            ...prefix,
-            fileURLToPath(
-              new URL("./fixtures/cli/delayed-taskkill.mjs", import.meta.url),
-            ),
-            command,
-            ...args,
-          ], { windowsHide: true, stdio: "pipe" }),
-      });
-      assert.deepEqual(errors, [], inspect(errors, { depth: null }));
-      assert.ok(performance.now() - started >= 1200);
-      assert.ok(getState().closed);
-      const descendantPid = descendant;
-      assert.throws(() => process.kill(descendantPid, 0), { code: "ESRCH" });
-    } finally {
-      waiter.dispose();
-      for (const pid of [child.pid, descendant]) {
-        if (pid === undefined) continue;
-        try {
-          process.kill(pid, 0);
-          execFileSync(taskkill, ["/PID", String(pid), "/T", "/F"], {
-            stdio: "ignore",
-            timeout: 4000,
-          });
-        } catch { /* Already stopped or bounded by the fixture watchdog. */ }
+      mkdirSync(temporary, { recursive: true });
+      const directory = mkdtempSync(resolve(temporary, "delayed-taskkill-"));
+      const ready = resolve(directory, "ready");
+      const prefix = "Deno" in globalThis ? ["run", "-A"] : [];
+      const env: Record<string, string> = {};
+      for (const [key, value] of Object.entries(process.env)) {
+        if (value !== undefined) env[key] = value;
       }
-      child.stdin.destroy();
-      child.stdout.destroy();
-      child.stderr.destroy();
-      rmSync(directory, { recursive: true, force: true });
-    }
-  });
+      const child = spawnCliProcess(
+        process.execPath,
+        [
+          ...prefix,
+          fileURLToPath(new URL("./fixtures/cli/program.mjs", import.meta.url)),
+          "tree",
+          ready,
+          "hang",
+        ],
+        { cwd: process.cwd(), env, detached: false },
+      );
+      const waiter = createCleanupWaiter();
+      const getState = observe(child, waiter.notify);
+      const errors: unknown[] = [];
+      child.on("error", (error: unknown) => errors.push(error));
+      child.stdin.on("error", () => {});
+      child.stdout.on("error", (error: unknown) => errors.push(error));
+      child.stderr.on("error", (error: unknown) => errors.push(error));
+      child.stdout.resume();
+      child.stderr.resume();
+      let descendant: number | undefined;
+      try {
+        const deadline = performance.now() + 5000;
+        while (descendant === undefined && performance.now() < deadline) {
+          try {
+            const pid = Number(readFileSync(ready, "utf8"));
+            if (Number.isSafeInteger(pid) && pid > 0) descendant = pid;
+          } catch (error) {
+            if (
+              !(error instanceof Error) ||
+              !("code" in error) ||
+              error.code !== "ENOENT"
+            )
+              throw error;
+          }
+          if (descendant === undefined) await delay(10);
+        }
+        assert.ok(
+          descendant !== undefined,
+          "The descendant must report readiness.",
+        );
+        const started = performance.now();
+        await cleanupCliProcess(
+          {
+            child,
+            mode: "tree",
+            getState,
+            waiter,
+            recordError: (error) => errors.push(error),
+          },
+          {
+            budget: 4000,
+            spawnHelper: (command, args) =>
+              spawn(
+                process.execPath,
+                [
+                  ...prefix,
+                  fileURLToPath(
+                    new URL(
+                      "./fixtures/cli/delayed-taskkill.mjs",
+                      import.meta.url,
+                    ),
+                  ),
+                  command,
+                  ...args,
+                ],
+                { windowsHide: true, stdio: "pipe" },
+              ),
+          },
+        );
+        assert.deepEqual(errors, [], inspect(errors, { depth: null }));
+        assert.ok(performance.now() - started >= 1200);
+        assert.ok(getState().closed);
+        const descendantPid = descendant;
+        assert.throws(() => process.kill(descendantPid, 0), { code: "ESRCH" });
+      } finally {
+        waiter.dispose();
+        for (const pid of [child.pid, descendant]) {
+          if (pid === undefined) continue;
+          try {
+            process.kill(pid, 0);
+            execFileSync(taskkill, ["/PID", String(pid), "/T", "/F"], {
+              stdio: "ignore",
+              timeout: 4000,
+            });
+          } catch {
+            /* Already stopped or bounded by the fixture watchdog. */
+          }
+        }
+        child.stdin.destroy();
+        child.stdout.destroy();
+        child.stderr.destroy();
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 });
 
 describe("createCleanupWaiter", () => {
   it("should avoid scheduling ordinary waits at or beyond the deadline", async () => {
     const clock = new VirtualClock();
     const waiter = createCleanupWaiter(clock);
-    assert.ok(!await waiter.waitFor(() => false, 0));
-    assert.ok(!await waiter.waitFor(() => false, -1));
+    assert.ok(!(await waiter.waitFor(() => false, 0)));
+    assert.ok(!(await waiter.waitFor(() => false, -1)));
     assert.ok(await waiter.waitFor(() => true, 0));
     assert.equal(clock.pendingCount, 0);
     waiter.dispose();
@@ -424,7 +479,7 @@ describe("createCleanupWaiter", () => {
     assert.equal(clock.pendingCount, 0);
     const disposed = waiter.waitFor(() => false, 1000);
     waiter.dispose();
-    assert.ok(!await disposed);
+    assert.ok(!(await disposed));
     assert.equal(clock.pendingCount, 0);
   });
 
@@ -446,10 +501,13 @@ describe("createCleanupWaiter", () => {
 class VirtualClock implements CleanupClock {
   time = 0;
   private sequence = 0;
-  private readonly tasks = new Map<number, {
-    readonly at: number;
-    readonly callback: () => void;
-  }>();
+  private readonly tasks = new Map<
+    number,
+    {
+      readonly at: number;
+      readonly callback: () => void;
+    }
+  >();
 
   get pendingCount(): number {
     return this.tasks.size;
@@ -457,7 +515,7 @@ class VirtualClock implements CleanupClock {
 
   now = (): number => this.time;
 
-  schedule = (callback: () => void, delay: number): () => void => {
+  schedule = (callback: () => void, delay: number): (() => void) => {
     const id = this.sequence++;
     this.tasks.set(id, { at: this.time + delay, callback });
     return () => {
@@ -467,15 +525,18 @@ class VirtualClock implements CleanupClock {
 
   async run<T>(promise: Promise<T>): Promise<T> {
     let settled = false;
-    promise.then(() => settled = true, () => settled = true);
+    promise.then(
+      () => (settled = true),
+      () => (settled = true),
+    );
     for (let steps = 0; !settled; steps++) {
       assert.ok(steps < 100, "Cleanup must settle after bounded scheduling.");
       // Flush real stream callbacks and promise continuations without advancing
       // the injected cleanup clock.
       await nextTurn();
       if (settled) break;
-      const next = [...this.tasks.entries()].sort((a, b) =>
-        a[1].at - b[1].at || a[0] - b[0]
+      const next = [...this.tasks.entries()].sort(
+        (a, b) => a[1].at - b[1].at || a[0] - b[0],
       )[0];
       assert.ok(next, "Cleanup must not wait without a notification or timer.");
       const [id, task] = next;
@@ -520,10 +581,7 @@ class TestProcess extends EventEmitter implements CliProcess {
   }
 }
 
-function observe(
-  child: CliProcess,
-  notify: () => void,
-): () => CleanupState {
+function observe(child: CliProcess, notify: () => void): () => CleanupState {
   let exited = false;
   let closed = false;
   let stdinClosed = false;

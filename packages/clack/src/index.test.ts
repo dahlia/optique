@@ -80,27 +80,26 @@ describe("prompt()", () => {
               return Promise.resolve("prompted");
             },
           };
-          const name = wrapper === "bare"
-            ? prompt(option("--name", string()), config)
-            : wrapper === "optional"
-            ? prompt(optional(option("--name", string())), config)
-            : prompt(
-              withDefault(option("--name", string()), "default"),
-              config,
-            );
+          const name =
+            wrapper === "bare"
+              ? prompt(option("--name", string()), config)
+              : wrapper === "optional"
+                ? prompt(optional(option("--name", string())), config)
+                : prompt(
+                    withDefault(option("--name", string()), "default"),
+                    config,
+                  );
           const tags = multiple(option("--tag", string()));
-          const parser = construct === "tuple"
-            ? tuple([tags, name])
-            : concat(tuple([tags]), tuple([name]));
+          const parser =
+            construct === "tuple"
+              ? tuple([tags, name])
+              : concat(tuple([tags]), tuple([name]));
           const annotations = { [Symbol.for("@test/issue-960")]: "present" };
-          const result = await parseAsync(parser, [
-            "--name",
-            "original",
-            "--tag",
-            "a",
-            "--tag",
-            "b",
-          ], { annotations });
+          const result = await parseAsync(
+            parser,
+            ["--name", "original", "--tag", "a", "--tag", "b"],
+            { annotations },
+          );
           assert.deepEqual(calls, []);
           assert.deepEqual(result, {
             success: true,
@@ -195,17 +194,20 @@ describe("prompt()", () => {
 
   it("should skip the prompt when the runtime condition is false", async () => {
     let promptCalled = false;
-    const parser = prompt(flag("--gh").map((): boolean => true), {
-      type: "confirm",
-      message: "Use GitHub CLI?",
-      initialValue: true,
-      when: () => false,
-      otherwise: false,
-      prompter: () => {
-        promptCalled = true;
-        return Promise.resolve(true);
+    const parser = prompt(
+      flag("--gh").map((): boolean => true),
+      {
+        type: "confirm",
+        message: "Use GitHub CLI?",
+        initialValue: true,
+        when: () => false,
+        otherwise: false,
+        prompter: () => {
+          promptCalled = true;
+          return Promise.resolve(true);
+        },
       },
-    });
+    );
 
     const result = await parseAsync(parser, []);
 
@@ -324,27 +326,34 @@ describe("prompt()", () => {
 
   it("rejects missing required multiselect prompt values", async () => {
     let validationCalls = 0;
-    await withPromptFunctionsOverride({
-      multiselect: () => Promise.resolve(undefined),
-    }, async () => {
-      const parser = prompt(multiple(option("--tag", string())), {
-        type: "multiselect",
-        message: "Tags:",
-        options: ["a", "b", "c"],
-        required: true,
-      }, {
-        validate() {
-          validationCalls++;
-          return undefined;
-        },
-      });
+    await withPromptFunctionsOverride(
+      {
+        multiselect: () => Promise.resolve(undefined),
+      },
+      async () => {
+        const parser = prompt(
+          multiple(option("--tag", string())),
+          {
+            type: "multiselect",
+            message: "Tags:",
+            options: ["a", "b", "c"],
+            required: true,
+          },
+          {
+            validate() {
+              validationCalls++;
+              return undefined;
+            },
+          },
+        );
 
-      const result = await parseAsync(parser, []);
+        const result = await parseAsync(parser, []);
 
-      assert.ok(!result.success);
-      assert.deepEqual(result.error, message`No option selected.`);
-      assert.equal(validationCalls, 0);
-    });
+        assert.ok(!result.success);
+        assert.deepEqual(result.error, message`No option selected.`);
+        assert.equal(validationCalls, 0);
+      },
+    );
   });
 
   it("retries shared select validation with execution context", async () => {
@@ -364,52 +373,63 @@ describe("prompt()", () => {
       validate: validator,
     } satisfies PromptOptions<string>;
 
-    await withPromptFunctionsOverride({
-      logError: () => {
-        logCalls++;
-      },
-    }, async () => {
-      const parser = prompt(option("--env", string()), {
-        type: "select",
-        message: "Environment:",
-        options: ["dev", "prod"],
-        prompter(context) {
-          contexts.push(context);
-          return Promise.resolve(answers[context.attempt - 1]);
+    await withPromptFunctionsOverride(
+      {
+        logError: () => {
+          logCalls++;
         },
-      }, options);
+      },
+      async () => {
+        const parser = prompt(
+          option("--env", string()),
+          {
+            type: "select",
+            message: "Environment:",
+            options: ["dev", "prod"],
+            prompter(context) {
+              contexts.push(context);
+              return Promise.resolve(answers[context.attempt - 1]);
+            },
+          },
+          options,
+        );
 
-      const result = await parseAsync(parser, []);
+        const result = await parseAsync(parser, []);
 
-      assert.ok(result.success);
-      assert.equal(result.value, "prod");
-      assert.deepEqual(validated, ["dev", "prod"]);
-      assert.equal(contexts.length, 2);
-      assert.equal(contexts[0].attempt, 1);
-      assert.equal(contexts[0].previousValidationMessage, undefined);
-      assert.equal(contexts[0].signal, controller.signal);
-      assert.equal(contexts[1].attempt, 2);
-      assert.equal(contexts[1].previousValidationMessage, verdict);
-      assert.equal(contexts[1].signal, controller.signal);
-      assert.equal(logCalls, 0);
-    });
+        assert.ok(result.success);
+        assert.equal(result.value, "prod");
+        assert.deepEqual(validated, ["dev", "prod"]);
+        assert.equal(contexts.length, 2);
+        assert.equal(contexts[0].attempt, 1);
+        assert.equal(contexts[0].previousValidationMessage, undefined);
+        assert.equal(contexts[0].signal, controller.signal);
+        assert.equal(contexts[1].attempt, 2);
+        assert.equal(contexts[1].previousValidationMessage, verdict);
+        assert.equal(contexts[1].signal, controller.signal);
+        assert.equal(logCalls, 0);
+      },
+    );
   });
 
   it("retries shared multiselect validation", async () => {
     const answers = [["api"], ["api", "web"]] as const;
     const attempts: number[] = [];
-    const parser = prompt(multiple(option("--tag", string())), {
-      type: "multiselect",
-      message: "Tags:",
-      options: ["api", "web"],
-      prompter(context) {
-        attempts.push(context.attempt);
-        return Promise.resolve(answers[context.attempt - 1]);
+    const parser = prompt(
+      multiple(option("--tag", string())),
+      {
+        type: "multiselect",
+        message: "Tags:",
+        options: ["api", "web"],
+        prompter(context) {
+          attempts.push(context.attempt);
+          return Promise.resolve(answers[context.attempt - 1]);
+        },
       },
-    }, {
-      validate: (values) =>
-        values.length > 1 ? undefined : message`Select another tag.`,
-    });
+      {
+        validate: (values) =>
+          values.length > 1 ? undefined : message`Select another tag.`,
+      },
+    );
 
     const result = await parseAsync(parser, []);
 
@@ -421,17 +441,21 @@ describe("prompt()", () => {
   it("returns the last shared validation message at the attempt limit", async () => {
     const verdicts = [message`Try another name.`, message`Still unavailable.`];
     let promptCalls = 0;
-    const parser = prompt(option("--name", string()), {
-      type: "text",
-      message: "Name:",
-      prompter: () => {
-        promptCalls++;
-        return Promise.resolve("taken");
+    const parser = prompt(
+      option("--name", string()),
+      {
+        type: "text",
+        message: "Name:",
+        prompter: () => {
+          promptCalls++;
+          return Promise.resolve("taken");
+        },
       },
-    }, {
-      maxAttempts: 2,
-      validate: () => verdicts[promptCalls - 1],
-    });
+      {
+        maxAttempts: 2,
+        validate: () => verdicts[promptCalls - 1],
+      },
+    );
 
     const result = await parseAsync(parser, []);
 
@@ -443,10 +467,14 @@ describe("prompt()", () => {
   it("rejects invalid shared attempt limits at construction", () => {
     assert.throws(
       () =>
-        prompt(option("--name", string()), {
-          type: "text",
-          message: "Name:",
-        }, { maxAttempts: 0 }),
+        prompt(
+          option("--name", string()),
+          {
+            type: "text",
+            message: "Name:",
+          },
+          { maxAttempts: 0 },
+        ),
       {
         name: "RangeError",
         message: "maxAttempts must be an integer greater than or equal to 1.",
@@ -459,32 +487,39 @@ describe("prompt()", () => {
     const answers = ["a", "alice"];
     const order: string[] = [];
 
-    await withPromptFunctionsOverride({
-      text: () => {
-        order.push("prompt");
-        return Promise.resolve(answers.shift());
+    await withPromptFunctionsOverride(
+      {
+        text: () => {
+          order.push("prompt");
+          return Promise.resolve(answers.shift());
+        },
+        logError: (value: string) => {
+          order.push(`error:${value}`);
+        },
       },
-      logError: (value: string) => {
-        order.push(`error:${value}`);
+      async () => {
+        const parser = prompt(
+          option("--name", string()),
+          {
+            type: "text",
+            message: "Name:",
+          },
+          {
+            validate: (value) => (value.length > 1 ? undefined : verdict),
+          },
+        );
+
+        const result = await parseAsync(parser, []);
+
+        assert.ok(result.success);
+        assert.equal(result.value, "alice");
+        assert.deepEqual(order, [
+          "prompt",
+          `error:${formatMessage(verdict)}`,
+          "prompt",
+        ]);
       },
-    }, async () => {
-      const parser = prompt(option("--name", string()), {
-        type: "text",
-        message: "Name:",
-      }, {
-        validate: (value) => value.length > 1 ? undefined : verdict,
-      });
-
-      const result = await parseAsync(parser, []);
-
-      assert.ok(result.success);
-      assert.equal(result.value, "alice");
-      assert.deepEqual(order, [
-        "prompt",
-        `error:${formatMessage(verdict)}`,
-        "prompt",
-      ]);
-    });
+    );
   });
 
   it("forwards shared signals through every real Clack prompt", async () => {
@@ -497,188 +532,222 @@ describe("prompt()", () => {
       value.length > 0 ? undefined : "Required.";
     const numberNativeValues: number[] = [];
 
-    await withPromptFunctionsOverride({
-      text: async (config: {
-        readonly message: string;
-        readonly signal?: AbortSignal;
-        readonly validate?: (
-          value: string,
-        ) => string | void | Promise<string | void>;
-      }) => {
-        receivedSignals.push(config.signal);
-        if (config.message === "Port:") {
-          assert.notEqual(config.validate, textNativeValidate);
-          assert.equal(await config.validate?.("42"), undefined);
-          return "42";
+    await withPromptFunctionsOverride(
+      {
+        text: async (config: {
+          readonly message: string;
+          readonly signal?: AbortSignal;
+          readonly validate?: (
+            value: string,
+          ) => string | void | Promise<string | void>;
+        }) => {
+          receivedSignals.push(config.signal);
+          if (config.message === "Port:") {
+            assert.notEqual(config.validate, textNativeValidate);
+            assert.equal(await config.validate?.("42"), undefined);
+            return "42";
+          }
+          assert.equal(config.validate, textNativeValidate);
+          return "Alice";
+        },
+        password: (config: {
+          readonly signal?: AbortSignal;
+          readonly validate?: (
+            value: string,
+          ) => string | void | Promise<string | void>;
+        }) => {
+          receivedSignals.push(config.signal);
+          assert.equal(config.validate, passwordNativeValidate);
+          return Promise.resolve("secret");
+        },
+        confirm: (config: { readonly signal?: AbortSignal }) => {
+          receivedSignals.push(config.signal);
+          return Promise.resolve(true);
+        },
+        select: (config: { readonly signal?: AbortSignal }) => {
+          receivedSignals.push(config.signal);
+          return Promise.resolve("prod");
+        },
+        multiselect: (config: {
+          readonly signal?: AbortSignal;
+          readonly required?: boolean;
+        }) => {
+          receivedSignals.push(config.signal);
+          assert.ok(config.required);
+          return Promise.resolve(["api"]);
+        },
+      },
+      async () => {
+        const parser = object({
+          name: prompt(
+            option("--name", string()),
+            {
+              type: "text",
+              message: "Name:",
+              validate: textNativeValidate,
+            },
+            {
+              signal: controller.signal,
+              validate: (value) => {
+                validated.push(value);
+                return undefined;
+              },
+            },
+          ),
+          password: prompt(
+            option("--password", string()),
+            {
+              type: "password",
+              message: "Password:",
+              validate: passwordNativeValidate,
+            },
+            {
+              signal: controller.signal,
+              validate: (value) => {
+                validated.push(value);
+                return undefined;
+              },
+            },
+          ),
+          confirmed: prompt(
+            flag("--confirm"),
+            {
+              type: "confirm",
+              message: "Confirm?",
+            },
+            {
+              signal: controller.signal,
+              validate: (value) => {
+                validated.push(value);
+                return undefined;
+              },
+            },
+          ),
+          port: prompt(
+            option("--port", integer()),
+            {
+              type: "number",
+              message: "Port:",
+              validate: (value) => {
+                numberNativeValues.push(value);
+                return undefined;
+              },
+            },
+            {
+              signal: controller.signal,
+              validate: (value) => {
+                validated.push(value);
+                return undefined;
+              },
+            },
+          ),
+          environment: prompt(
+            option("--environment", string()),
+            {
+              type: "select",
+              message: "Environment:",
+              options: ["dev", "prod"],
+            },
+            {
+              signal: controller.signal,
+              validate: (value) => {
+                validated.push(value);
+                return undefined;
+              },
+            },
+          ),
+          tags: prompt(
+            multiple(option("--tag", string())),
+            {
+              type: "multiselect",
+              message: "Tags:",
+              options: ["api", "web"],
+              required: true,
+            },
+            {
+              signal: controller.signal,
+              validate: (value) => {
+                validated.push(value);
+                return undefined;
+              },
+            },
+          ),
+        });
+
+        const result = await parseAsync(parser, []);
+
+        assert.ok(result.success);
+        assert.deepEqual(result.value, {
+          name: "Alice",
+          password: "secret",
+          confirmed: true,
+          port: 42,
+          environment: "prod",
+          tags: ["api"],
+        });
+        assert.equal(receivedSignals.length, 6);
+        for (let index = 0; index < receivedSignals.length; index++) {
+          const signal = receivedSignals[index];
+          assert.ok(signal instanceof AbortSignal);
+          assert.notEqual(signal, controller.signal);
+          assert.ok(!signal.aborted);
+          assert.ok(!receivedSignals.slice(0, index).includes(signal));
         }
-        assert.equal(config.validate, textNativeValidate);
-        return "Alice";
+        assert.equal(getEventListeners(controller.signal, "abort").length, 0);
+        assert.deepEqual(numberNativeValues, [42]);
+        assert.deepEqual(validated, [
+          "Alice",
+          "secret",
+          true,
+          42,
+          "prod",
+          ["api"],
+        ]);
       },
-      password: (config: {
-        readonly signal?: AbortSignal;
-        readonly validate?: (
-          value: string,
-        ) => string | void | Promise<string | void>;
-      }) => {
-        receivedSignals.push(config.signal);
-        assert.equal(config.validate, passwordNativeValidate);
-        return Promise.resolve("secret");
-      },
-      confirm: (config: { readonly signal?: AbortSignal }) => {
-        receivedSignals.push(config.signal);
-        return Promise.resolve(true);
-      },
-      select: (config: { readonly signal?: AbortSignal }) => {
-        receivedSignals.push(config.signal);
-        return Promise.resolve("prod");
-      },
-      multiselect: (config: {
-        readonly signal?: AbortSignal;
-        readonly required?: boolean;
-      }) => {
-        receivedSignals.push(config.signal);
-        assert.ok(config.required);
-        return Promise.resolve(["api"]);
-      },
-    }, async () => {
-      const parser = object({
-        name: prompt(option("--name", string()), {
-          type: "text",
-          message: "Name:",
-          validate: textNativeValidate,
-        }, {
-          signal: controller.signal,
-          validate: (value) => {
-            validated.push(value);
-            return undefined;
-          },
-        }),
-        password: prompt(option("--password", string()), {
-          type: "password",
-          message: "Password:",
-          validate: passwordNativeValidate,
-        }, {
-          signal: controller.signal,
-          validate: (value) => {
-            validated.push(value);
-            return undefined;
-          },
-        }),
-        confirmed: prompt(flag("--confirm"), {
-          type: "confirm",
-          message: "Confirm?",
-        }, {
-          signal: controller.signal,
-          validate: (value) => {
-            validated.push(value);
-            return undefined;
-          },
-        }),
-        port: prompt(option("--port", integer()), {
-          type: "number",
-          message: "Port:",
-          validate: (value) => {
-            numberNativeValues.push(value);
-            return undefined;
-          },
-        }, {
-          signal: controller.signal,
-          validate: (value) => {
-            validated.push(value);
-            return undefined;
-          },
-        }),
-        environment: prompt(option("--environment", string()), {
-          type: "select",
-          message: "Environment:",
-          options: ["dev", "prod"],
-        }, {
-          signal: controller.signal,
-          validate: (value) => {
-            validated.push(value);
-            return undefined;
-          },
-        }),
-        tags: prompt(multiple(option("--tag", string())), {
-          type: "multiselect",
-          message: "Tags:",
-          options: ["api", "web"],
-          required: true,
-        }, {
-          signal: controller.signal,
-          validate: (value) => {
-            validated.push(value);
-            return undefined;
-          },
-        }),
-      });
-
-      const result = await parseAsync(parser, []);
-
-      assert.ok(result.success);
-      assert.deepEqual(result.value, {
-        name: "Alice",
-        password: "secret",
-        confirmed: true,
-        port: 42,
-        environment: "prod",
-        tags: ["api"],
-      });
-      assert.equal(receivedSignals.length, 6);
-      for (let index = 0; index < receivedSignals.length; index++) {
-        const signal = receivedSignals[index];
-        assert.ok(signal instanceof AbortSignal);
-        assert.notEqual(signal, controller.signal);
-        assert.ok(!signal.aborted);
-        assert.ok(!receivedSignals.slice(0, index).includes(signal));
-      }
-      assert.equal(getEventListeners(controller.signal, "abort").length, 0);
-      assert.deepEqual(numberNativeValues, [42]);
-      assert.deepEqual(validated, [
-        "Alice",
-        "secret",
-        true,
-        42,
-        "prod",
-        ["api"],
-      ]);
-    });
+    );
   });
 
   it("keeps native number retries inside one shared attempt", async () => {
     const order: string[] = [];
 
-    await withPromptFunctionsOverride({
-      text: async (config: {
-        readonly validate?: (
-          value: string,
-        ) => string | void | Promise<string | void>;
-      }) => {
-        order.push("native");
-        assert.equal(await config.validate?.("3"), "Must be at least 4.");
-        order.push("native");
-        assert.equal(await config.validate?.("5"), undefined);
-        return "5";
-      },
-    }, async () => {
-      const parser = prompt(option("--port", integer()), {
-        type: "number",
-        message: "Port:",
-        min: 4,
-      }, {
-        validate: (value) => {
-          order.push("shared");
-          assert.equal(value, 5);
-          return undefined;
+    await withPromptFunctionsOverride(
+      {
+        text: async (config: {
+          readonly validate?: (
+            value: string,
+          ) => string | void | Promise<string | void>;
+        }) => {
+          order.push("native");
+          assert.equal(await config.validate?.("3"), "Must be at least 4.");
+          order.push("native");
+          assert.equal(await config.validate?.("5"), undefined);
+          return "5";
         },
-      });
+      },
+      async () => {
+        const parser = prompt(
+          option("--port", integer()),
+          {
+            type: "number",
+            message: "Port:",
+            min: 4,
+          },
+          {
+            validate: (value) => {
+              order.push("shared");
+              assert.equal(value, 5);
+              return undefined;
+            },
+          },
+        );
 
-      const result = await parseAsync(parser, []);
+        const result = await parseAsync(parser, []);
 
-      assert.ok(result.success);
-      assert.equal(result.value, 5);
-      assert.deepEqual(order, ["native", "native", "shared"]);
-    });
+        assert.ok(result.success);
+        assert.equal(result.value, 5);
+        assert.deepEqual(order, ["native", "native", "shared"]);
+      },
+    );
   });
 
   it("propagates a pre-aborted shared signal without starting work", async () => {
@@ -689,34 +758,41 @@ describe("prompt()", () => {
     let validationCalls = 0;
     let logCalls = 0;
 
-    await withPromptFunctionsOverride({
-      text: () => {
-        promptCalls++;
-        return Promise.resolve("Alice");
-      },
-      logError: () => {
-        logCalls++;
-      },
-    }, async () => {
-      const parser = prompt(option("--name", string()), {
-        type: "text",
-        message: "Name:",
-      }, {
-        signal: controller.signal,
-        validate: () => {
-          validationCalls++;
-          return undefined;
+    await withPromptFunctionsOverride(
+      {
+        text: () => {
+          promptCalls++;
+          return Promise.resolve("Alice");
         },
-      });
+        logError: () => {
+          logCalls++;
+        },
+      },
+      async () => {
+        const parser = prompt(
+          option("--name", string()),
+          {
+            type: "text",
+            message: "Name:",
+          },
+          {
+            signal: controller.signal,
+            validate: () => {
+              validationCalls++;
+              return undefined;
+            },
+          },
+        );
 
-      await assert.rejects(
-        () => parseAsync(parser, []),
-        (error: unknown) => error === reason,
-      );
-      assert.equal(promptCalls, 0);
-      assert.equal(validationCalls, 0);
-      assert.equal(logCalls, 0);
-    });
+        await assert.rejects(
+          () => parseAsync(parser, []),
+          (error: unknown) => error === reason,
+        );
+        assert.equal(promptCalls, 0);
+        assert.equal(validationCalls, 0);
+        assert.equal(logCalls, 0);
+      },
+    );
   });
 
   it("propagates the abort reason when an active Clack prompt cancels", async () => {
@@ -725,51 +801,62 @@ describe("prompt()", () => {
     const started = deferred<void>();
     const cancel = Symbol.for("clack:cancel");
 
-    await withPromptFunctionsOverride({
-      text: (config: { readonly signal?: AbortSignal }) => {
-        assert.ok(config.signal instanceof AbortSignal);
-        assert.notEqual(config.signal, controller.signal);
-        started.resolve();
-        return new Promise((resolve) => {
-          config.signal?.addEventListener("abort", () => resolve(cancel), {
-            once: true,
+    await withPromptFunctionsOverride(
+      {
+        text: (config: { readonly signal?: AbortSignal }) => {
+          assert.ok(config.signal instanceof AbortSignal);
+          assert.notEqual(config.signal, controller.signal);
+          started.resolve();
+          return new Promise((resolve) => {
+            config.signal?.addEventListener("abort", () => resolve(cancel), {
+              once: true,
+            });
           });
-        });
+        },
+        isCancel: (value: unknown) => value === cancel,
       },
-      isCancel: (value: unknown) => value === cancel,
-    }, async () => {
-      const parser = prompt(option("--name", string()), {
-        type: "text",
-        message: "Name:",
-      }, { signal: controller.signal });
+      async () => {
+        const parser = prompt(
+          option("--name", string()),
+          {
+            type: "text",
+            message: "Name:",
+          },
+          { signal: controller.signal },
+        );
 
-      const parsing = parseAsync(parser, []);
-      await started.promise;
-      controller.abort(reason);
+        const parsing = parseAsync(parser, []);
+        await started.promise;
+        controller.abort(reason);
 
-      await assert.rejects(
-        () => parsing,
-        (error: unknown) => error === reason,
-      );
-    });
+        await assert.rejects(
+          () => parsing,
+          (error: unknown) => error === reason,
+        );
+      },
+    );
   });
 
   it("propagates a prompter error during a shared retry", async () => {
     const error = new Error("Prompt failed.");
     let validationCalls = 0;
-    const parser = prompt(option("--name", string()), {
-      type: "text",
-      message: "Name:",
-      prompter(context) {
-        if (context.attempt > 1) return Promise.reject(error);
-        return Promise.resolve("taken");
+    const parser = prompt(
+      option("--name", string()),
+      {
+        type: "text",
+        message: "Name:",
+        prompter(context) {
+          if (context.attempt > 1) return Promise.reject(error);
+          return Promise.resolve("taken");
+        },
       },
-    }, {
-      validate: () => {
-        validationCalls++;
-        return message`Try another name.`;
+      {
+        validate: () => {
+          validationCalls++;
+          return message`Try another name.`;
+        },
       },
-    });
+    );
 
     await assert.rejects(
       () => parseAsync(parser, []),
@@ -850,41 +937,51 @@ describe("prompt()", () => {
 
   it("converts Clack cancellation with an active signal into a parse failure", async () => {
     const controller = new AbortController();
-    await withPromptFunctionsOverride({
-      text: (config: { readonly signal?: AbortSignal }) => {
-        assert.ok(config.signal instanceof AbortSignal);
-        assert.ok(!config.signal.aborted);
-        return Promise.resolve(Symbol.for("clack:cancel"));
+    await withPromptFunctionsOverride(
+      {
+        text: (config: { readonly signal?: AbortSignal }) => {
+          assert.ok(config.signal instanceof AbortSignal);
+          assert.ok(!config.signal.aborted);
+          return Promise.resolve(Symbol.for("clack:cancel"));
+        },
+        isCancel: (value: unknown) => value === Symbol.for("clack:cancel"),
       },
-      isCancel: (value: unknown) => value === Symbol.for("clack:cancel"),
-    }, async () => {
-      const parser = prompt(option("--name", string()), {
-        type: "text",
-        message: "Name:",
-      }, { signal: controller.signal });
+      async () => {
+        const parser = prompt(
+          option("--name", string()),
+          {
+            type: "text",
+            message: "Name:",
+          },
+          { signal: controller.signal },
+        );
 
-      const result = await parseAsync(parser, []);
+        const result = await parseAsync(parser, []);
 
-      assert.ok(!result.success);
-      assert.deepEqual(result.error, message`Prompt cancelled.`);
-    });
+        assert.ok(!result.success);
+        assert.deepEqual(result.error, message`Prompt cancelled.`);
+      },
+    );
   });
 
   it("converts custom prompter cancellation into a parse failure", async () => {
-    await withPromptFunctionsOverride({
-      isCancel: (value: unknown) => value === Symbol.for("clack:cancel"),
-    }, async () => {
-      const parser = prompt(option("--name", string()), {
-        type: "text",
-        message: "Name:",
-        prompter: () => Promise.resolve(Symbol.for("clack:cancel") as never),
-      });
+    await withPromptFunctionsOverride(
+      {
+        isCancel: (value: unknown) => value === Symbol.for("clack:cancel"),
+      },
+      async () => {
+        const parser = prompt(option("--name", string()), {
+          type: "text",
+          message: "Name:",
+          prompter: () => Promise.resolve(Symbol.for("clack:cancel") as never),
+        });
 
-      const result = await parseAsync(parser, []);
+        const result = await parseAsync(parser, []);
 
-      assert.ok(!result.success);
-      assert.deepEqual(result.error, message`Prompt cancelled.`);
-    });
+        assert.ok(!result.success);
+        assert.deepEqual(result.error, message`Prompt cancelled.`);
+      },
+    );
   });
 
   it("rejects unsupported prompt types at runtime", async () => {
@@ -975,9 +1072,10 @@ describe("prompt() with derived configurations", () => {
       packageManager: prompt(
         option("--package-manager", packageManager),
         derivePromptConfig(framework, (value) => {
-          const choices = value === "fresh"
-            ? (["deno"] as const)
-            : (["npm", "pnpm"] as const);
+          const choices =
+            value === "fresh"
+              ? (["deno"] as const)
+              : (["npm", "pnpm"] as const);
           resolvedOptions.push(choices);
           return {
             type: "select",
@@ -1012,8 +1110,9 @@ describe("prompt() with derived configurations", () => {
           return {
             type: "select",
             message: "Package manager:",
-            options: (value === "fresh" ? ["deno"] : ["npm", "pnpm"])
-              .map((choice) => ({ value: choice })),
+            options: (value === "fresh" ? ["deno"] : ["npm", "pnpm"]).map(
+              (choice) => ({ value: choice }),
+            ),
             prompter: () =>
               Promise.reject(new Error("Prompt should not be called")),
           };
@@ -1054,19 +1153,24 @@ describe("prompt() with zero-dependency derived configurations", () => {
       }),
     );
 
-    const result = await withPromptFunctionsOverride({
-      select(config: { readonly options: readonly unknown[] }) {
-        selectOptions.push(config.options);
-        return Promise.resolve("b.txt");
+    const result = await withPromptFunctionsOverride(
+      {
+        select(config: { readonly options: readonly unknown[] }) {
+          selectOptions.push(config.options);
+          return Promise.resolve("b.txt");
+        },
       },
-    }, () => parseAsync(parser, []));
+      () => parseAsync(parser, []),
+    );
 
     assert.ok(result.success);
     assert.equal(result.value, "b.txt");
-    assert.deepEqual(selectOptions, [[
-      { value: "a.txt", label: "a.txt" },
-      { value: "b.txt", label: "b.txt" },
-    ]]);
+    assert.deepEqual(selectOptions, [
+      [
+        { value: "a.txt", label: "a.txt" },
+        { value: "b.txt", label: "b.txt" },
+      ],
+    ]);
   });
 
   it("type-checks a separately declared configuration", async () => {
@@ -1105,31 +1209,34 @@ describe("derived prompt pending indicators", () => {
   for (const pendingMessage of ["Loading objects", ""]) {
     it(`should finish the requested indicator before prompting (${JSON.stringify(pendingMessage)})`, async () => {
       const events: string[] = [];
-      await withPromptFunctionsOverride({
-        spinner: recordingSpinner(events),
-        select: () => {
-          events.push("select");
-          return Promise.resolve("object");
+      await withPromptFunctionsOverride(
+        {
+          spinner: recordingSpinner(events),
+          select: () => {
+            events.push("select");
+            return Promise.resolve("object");
+          },
         },
-      }, async () => {
-        const parser = prompt(
-          option("--key", string()),
-          derivePromptConfig(() => ({
-            type: "select",
-            message: "Pick an object",
-            options: ["object"],
-          })),
-          { pendingMessage },
-        );
-        assert.deepEqual(await parseAsync(parser, []), {
-          success: true,
-          value: "object",
-        });
-        assert.deepEqual(await parseAsync(parser, []), {
-          success: true,
-          value: "object",
-        });
-      });
+        async () => {
+          const parser = prompt(
+            option("--key", string()),
+            derivePromptConfig(() => ({
+              type: "select",
+              message: "Pick an object",
+              options: ["object"],
+            })),
+            { pendingMessage },
+          );
+          assert.deepEqual(await parseAsync(parser, []), {
+            success: true,
+            value: "object",
+          });
+          assert.deepEqual(await parseAsync(parser, []), {
+            success: true,
+            value: "object",
+          });
+        },
+      );
       assert.deepEqual(events, [
         `start:${pendingMessage}`,
         `stop:${pendingMessage}`,
@@ -1150,7 +1257,7 @@ describe("derived prompt pending indicators", () => {
           prompt(
             option("--key", string()),
             derivePromptConfig(() =>
-              Promise.reject(new Error("Fetch failed."))
+              Promise.reject(new Error("Fetch failed.")),
             ),
             { pendingMessage: "Loading objects" },
           ),
@@ -1221,31 +1328,37 @@ describe("derived prompt pending indicators", () => {
   }
 
   it("should stay silent without opting in, including custom prompters", async () => {
-    await withPromptFunctionsOverride({
-      spinner: () => assert.fail("No indicator requested."),
-    }, async () => {
-      const config = {
-        type: "text" as const,
-        message: "Key",
-        prompter: () => Promise.resolve("object"),
-      };
-      assert.deepEqual(
-        await parseAsync(
-          prompt(option("--key", string()), derivePromptConfig(() => config)),
-          [],
-        ),
-        { success: true, value: "object" },
-      );
-      assert.deepEqual(
-        await parseAsync(
-          prompt(option("--key", string()), config, {
-            pendingMessage: "Ignored for static config",
-          }),
-          [],
-        ),
-        { success: true, value: "object" },
-      );
-    });
+    await withPromptFunctionsOverride(
+      {
+        spinner: () => assert.fail("No indicator requested."),
+      },
+      async () => {
+        const config = {
+          type: "text" as const,
+          message: "Key",
+          prompter: () => Promise.resolve("object"),
+        };
+        assert.deepEqual(
+          await parseAsync(
+            prompt(
+              option("--key", string()),
+              derivePromptConfig(() => config),
+            ),
+            [],
+          ),
+          { success: true, value: "object" },
+        );
+        assert.deepEqual(
+          await parseAsync(
+            prompt(option("--key", string()), config, {
+              pendingMessage: "Ignored for static config",
+            }),
+            [],
+          ),
+          { success: true, value: "object" },
+        );
+      },
+    );
   });
 
   it("should honor explicit opt-in with a custom prompter", async () => {
@@ -1281,84 +1394,90 @@ describe("derived prompt pending indicators", () => {
   });
 
   it("should not start an indicator for CLI values, skipped or pre-aborted prompts", async () => {
-    await withPromptFunctionsOverride({
-      spinner: () => assert.fail("Resolution not needed."),
-    }, async () => {
-      const inner = option("--key", string());
-      const config = derivePromptConfig(() => ({
-        type: "text" as const,
-        message: "Key",
-      }));
-      assert.deepEqual(
-        await parseAsync(prompt(inner, config, { pendingMessage: "Loading" }), [
-          "--key",
-          "cli",
-        ]),
-        { success: true, value: "cli" },
-      );
-      assert.deepEqual(
-        await parseAsync(
-          prompt(
-            inner,
-            derivePromptConfig(() => ({ type: "text", message: "Key" }), {
-              when: () => false,
-              otherwise: "skipped",
-            }),
-            { pendingMessage: "Loading" },
+    await withPromptFunctionsOverride(
+      {
+        spinner: () => assert.fail("Resolution not needed."),
+      },
+      async () => {
+        const inner = option("--key", string());
+        const config = derivePromptConfig(() => ({
+          type: "text" as const,
+          message: "Key",
+        }));
+        assert.deepEqual(
+          await parseAsync(
+            prompt(inner, config, { pendingMessage: "Loading" }),
+            ["--key", "cli"],
           ),
-          [],
-        ),
-        { success: true, value: "skipped" },
-      );
-      const controller = new AbortController();
-      controller.abort("cancelled");
-      await assert.rejects(
-        parseAsync(
-          prompt(inner, config, {
-            pendingMessage: "Loading",
-            signal: controller.signal,
-          }),
-          [],
-        ),
-        (error) => error === "cancelled",
-      );
-    });
+          { success: true, value: "cli" },
+        );
+        assert.deepEqual(
+          await parseAsync(
+            prompt(
+              inner,
+              derivePromptConfig(() => ({ type: "text", message: "Key" }), {
+                when: () => false,
+                otherwise: "skipped",
+              }),
+              { pendingMessage: "Loading" },
+            ),
+            [],
+          ),
+          { success: true, value: "skipped" },
+        );
+        const controller = new AbortController();
+        controller.abort("cancelled");
+        await assert.rejects(
+          parseAsync(
+            prompt(inner, config, {
+              pendingMessage: "Loading",
+              signal: controller.signal,
+            }),
+            [],
+          ),
+          (error) => error === "cancelled",
+        );
+      },
+    );
   });
 
   it("should preserve a successful indicator if abort happens before the prompt opens", async () => {
     const events: string[] = [];
     const controller = new AbortController();
     const reason = new Error("Stop before prompting.");
-    await withPromptFunctionsOverride({
-      spinner: () => ({
-        start: () => events.push("start"),
-        stop: () => {
-          events.push("stop");
-          controller.abort(reason);
-        },
-        cancel: () => events.push("cancel"),
-        error: () => events.push("error"),
-      }),
-    }, async () => {
-      await assert.rejects(
-        parseAsync(
-          prompt(
-            option("--key", string()),
-            derivePromptConfig(() => ({
-              type: "text",
-              message: "Key",
-              prompter: () => {
-                events.push("prompter");
-                return Promise.resolve("object");
-              },
-            })),
-            { pendingMessage: "Loading", signal: controller.signal },
+    await withPromptFunctionsOverride(
+      {
+        spinner: () => ({
+          start: () => events.push("start"),
+          stop: () => {
+            events.push("stop");
+            controller.abort(reason);
+          },
+          cancel: () => events.push("cancel"),
+          error: () => events.push("error"),
+        }),
+      },
+      async () => {
+        await assert.rejects(
+          parseAsync(
+            prompt(
+              option("--key", string()),
+              derivePromptConfig(() => ({
+                type: "text",
+                message: "Key",
+                prompter: () => {
+                  events.push("prompter");
+                  return Promise.resolve("object");
+                },
+              })),
+              { pendingMessage: "Loading", signal: controller.signal },
+            ),
+            [],
           ),
-          [],
-        ),
-        (error) => error === reason,
-      );
-    });
+          (error) => error === reason,
+        );
+      },
+    );
     assert.deepEqual(events, ["start", "stop"]);
     assert.deepEqual(getEventListeners(controller.signal, "abort"), []);
   });
@@ -1367,11 +1486,14 @@ describe("derived prompt pending indicators", () => {
 describe("native pending spinner cancellation", () => {
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     for (const settlement of ["stalled", "resolve", "reject"] as const) {
-      it(`should stop waiting after ${signal} with ${settlement} work`, {
-        skip: process.platform === "win32",
-      }, async () => {
-        if (process.platform === "win32") return;
-        const script = `
+      it(
+        `should stop waiting after ${signal} with ${settlement} work`,
+        {
+          skip: process.platform === "win32",
+        },
+        async () => {
+          if (process.platform === "win32") return;
+          const script = `
           import { prompt, derivePromptConfig } from "@optique/clack";
           import { parseAsync } from "@optique/core/parser";
           import { option } from "@optique/core/primitives";
@@ -1410,98 +1532,171 @@ describe("native pending spinner cancellation", () => {
             console.log("LATE_SETTLED");
           }
         `;
-        const args = process.versions.deno != null
-          ? ["eval", script]
-          : process.versions.bun != null
-          ? ["--eval", script]
-          : ["--input-type=module", "--eval", script];
-        const child = spawn(process.execPath, args, {
-          cwd: fileURLToPath(new URL("../", import.meta.url)),
-          stdio: ["pipe", "pipe", "pipe"],
-        });
-        let output = "";
-        let errors = "";
-        let sent = false;
-        let released = false;
-        child.stdout.on("data", (chunk) => {
-          output += String(chunk);
-          if (!sent && output.includes("READY")) {
-            sent = true;
-            child.kill(signal);
-          }
-          if (
-            settlement !== "stalled" && !released &&
-            output.includes("CANCELLED")
-          ) {
-            released = true;
-            child.stdin.end("settle");
-          }
-        });
-        child.stderr.on("data", (chunk) => {
-          errors += String(chunk);
-        });
-        // A broken cancellation path must fail rather than leave the test hung.
-        const timeout = setTimeout(() => child.kill("SIGKILL"), 10000);
-        try {
-          const code = await new Promise<number | null>((resolve, reject) => {
-            child.once("error", reject);
-            child.once("close", resolve);
+          const args =
+            process.versions.deno != null
+              ? ["eval", script]
+              : process.versions.bun != null
+                ? ["--eval", script]
+                : ["--input-type=module", "--eval", script];
+          const child = spawn(process.execPath, args, {
+            cwd: fileURLToPath(new URL("../", import.meta.url)),
+            stdio: ["pipe", "pipe", "pipe"],
           });
-          assert.equal(code, 0, errors + output);
-          assert.ok(sent, errors + output);
-          assert.match(output, /CANCELLED/);
-          assert.ok(!output.includes("UNEXPECTED_SUCCESS"));
-          assert.ok(!output.includes("PROMPTED"));
-          if (settlement !== "stalled") assert.match(output, /LATE_SETTLED/);
-        } finally {
-          clearTimeout(timeout);
-          if (child.exitCode == null && child.signalCode == null) {
-            child.kill("SIGKILL");
+          let output = "";
+          let errors = "";
+          let sent = false;
+          let released = false;
+          child.stdout.on("data", (chunk) => {
+            output += String(chunk);
+            if (!sent && output.includes("READY")) {
+              sent = true;
+              child.kill(signal);
+            }
+            if (
+              settlement !== "stalled" &&
+              !released &&
+              output.includes("CANCELLED")
+            ) {
+              released = true;
+              child.stdin.end("settle");
+            }
+          });
+          child.stderr.on("data", (chunk) => {
+            errors += String(chunk);
+          });
+          // A broken cancellation path must fail rather than leave the test hung.
+          const timeout = setTimeout(() => child.kill("SIGKILL"), 10000);
+          try {
+            const code = await new Promise<number | null>((resolve, reject) => {
+              child.once("error", reject);
+              child.once("close", resolve);
+            });
+            assert.equal(code, 0, errors + output);
+            assert.ok(sent, errors + output);
+            assert.match(output, /CANCELLED/);
+            assert.ok(!output.includes("UNEXPECTED_SUCCESS"));
+            assert.ok(!output.includes("PROMPTED"));
+            if (settlement !== "stalled") assert.match(output, /LATE_SETTLED/);
+          } finally {
+            clearTimeout(timeout);
+            if (child.exitCode == null && child.signalCode == null) {
+              child.kill("SIGKILL");
+            }
           }
-        }
-      });
+        },
+      );
     }
   }
 });
 
 describe("autocomplete prompts", () => {
-  for (
-    const options of [
-      [{ value: "shared", disabled: true }, "shared"],
-      ["shared", { value: "shared", disabled: "Unavailable" }],
-    ] as const
-  ) {
+  for (const options of [
+    [{ value: "shared", disabled: true }, "shared"],
+    ["shared", { value: "shared", disabled: "Unavailable" }],
+  ] as const) {
     it(`should allow an enabled duplicate in autocomplete (${typeof options[0]})`, async () => {
-      await withPromptFunctionsOverride({
+      await withPromptFunctionsOverride(
+        {
+          autocomplete: (config: {
+            readonly validate: (value: unknown) => string | undefined;
+          }) => {
+            assert.equal(config.validate("shared"), undefined);
+            return Promise.resolve("shared");
+          },
+        },
+        async () => {
+          assert.deepEqual(
+            await parseAsync(
+              prompt(option("--region", string()), {
+                type: "autocomplete",
+                message: "Region",
+                options,
+              }),
+              [],
+            ),
+            { success: true, value: "shared" },
+          );
+        },
+      );
+    });
+
+    it(`should retain an enabled duplicate in multiselect (${typeof options[0]})`, async () => {
+      let calls = 0;
+      await withPromptFunctionsOverride(
+        {
+          autocompleteMultiselect: () => {
+            assert.equal(++calls, 1);
+            return Promise.resolve(["shared"]);
+          },
+        },
+        async () => {
+          assert.deepEqual(
+            await parseAsync(
+              prompt(multiple(option("--region", string())), {
+                type: "autocomplete-multiselect",
+                message: "Regions",
+                options,
+                required: true,
+              }),
+              [],
+            ),
+            { success: true, value: ["shared"] },
+          );
+        },
+      );
+    });
+  }
+
+  it("should reject disabled autocomplete values before user validation", async () => {
+    let validationCalls = 0;
+    await withPromptFunctionsOverride(
+      {
         autocomplete: (config: {
           readonly validate: (value: unknown) => string | undefined;
         }) => {
-          assert.equal(config.validate("shared"), undefined);
-          return Promise.resolve("shared");
+          assert.equal(config.validate("locked"), "Option is unavailable.");
+          assert.equal(
+            config.validate("unavailable"),
+            "Option is unavailable.",
+          );
+          assert.equal(validationCalls, 0);
+          assert.equal(config.validate("open"), undefined);
+          assert.equal(config.validate("empty-reason"), undefined);
+          return Promise.resolve("open");
         },
-      }, async () => {
+      },
+      async () => {
         assert.deepEqual(
           await parseAsync(
             prompt(option("--region", string()), {
               type: "autocomplete",
               message: "Region",
-              options,
+              options: [
+                { value: "locked", disabled: true },
+                { value: "unavailable", disabled: "Locked" },
+                { value: "open", disabled: false },
+                { value: "empty-reason", disabled: "" },
+              ],
+              validate: () => {
+                validationCalls++;
+              },
             }),
             [],
           ),
-          { success: true, value: "shared" },
+          { success: true, value: "open" },
         );
-      });
-    });
+        assert.equal(validationCalls, 2);
+      },
+    );
+  });
 
-    it(`should retain an enabled duplicate in multiselect (${typeof options[0]})`, async () => {
-      let calls = 0;
-      await withPromptFunctionsOverride({
-        autocompleteMultiselect: () => {
-          assert.equal(++calls, 1);
-          return Promise.resolve(["shared"]);
-        },
-      }, async () => {
+  it("should remove disabled native multiselections and retry required selections", async () => {
+    await withPromptFunctionsOverride(
+      {
+        autocompleteMultiselect: () => Promise.resolve(["locked", "open"]),
+      },
+      async () => {
+        const options = [{ value: "locked", disabled: true }, "open"];
         assert.deepEqual(
           await parseAsync(
             prompt(multiple(option("--region", string())), {
@@ -1512,111 +1707,60 @@ describe("autocomplete prompts", () => {
             }),
             [],
           ),
-          { success: true, value: ["shared"] },
+          { success: true, value: ["open"] },
         );
-      });
-    });
-  }
-
-  it("should reject disabled autocomplete values before user validation", async () => {
-    let validationCalls = 0;
-    await withPromptFunctionsOverride({
-      autocomplete: (config: {
-        readonly validate: (value: unknown) => string | undefined;
-      }) => {
-        assert.equal(config.validate("locked"), "Option is unavailable.");
-        assert.equal(config.validate("unavailable"), "Option is unavailable.");
-        assert.equal(validationCalls, 0);
-        assert.equal(config.validate("open"), undefined);
-        assert.equal(config.validate("empty-reason"), undefined);
-        return Promise.resolve("open");
       },
-    }, async () => {
-      assert.deepEqual(
-        await parseAsync(
-          prompt(option("--region", string()), {
-            type: "autocomplete",
-            message: "Region",
-            options: [
-              { value: "locked", disabled: true },
-              { value: "unavailable", disabled: "Locked" },
-              { value: "open", disabled: false },
-              { value: "empty-reason", disabled: "" },
-            ],
-            validate: () => {
-              validationCalls++;
-            },
-          }),
-          [],
-        ),
-        { success: true, value: "open" },
-      );
-      assert.equal(validationCalls, 2);
-    });
-  });
-
-  it("should remove disabled native multiselections and retry required selections", async () => {
-    await withPromptFunctionsOverride({
-      autocompleteMultiselect: () => Promise.resolve(["locked", "open"]),
-    }, async () => {
-      const options = [{ value: "locked", disabled: true }, "open"];
-      assert.deepEqual(
-        await parseAsync(
+    );
+    let calls = 0;
+    const messages: string[] = [];
+    await withPromptFunctionsOverride(
+      {
+        autocompleteMultiselect: () =>
+          Promise.resolve(++calls === 1 ? ["locked"] : ["open"]),
+        logError: (text: string) => messages.push(text),
+      },
+      async () => {
+        const result = await parseAsync(
           prompt(multiple(option("--region", string())), {
             type: "autocomplete-multiselect",
             message: "Regions",
-            options,
+            options: [{ value: "locked", disabled: "Unavailable" }, "open"],
             required: true,
           }),
           [],
-        ),
-        { success: true, value: ["open"] },
-      );
-    });
-    let calls = 0;
-    const messages: string[] = [];
-    await withPromptFunctionsOverride({
-      autocompleteMultiselect: () =>
-        Promise.resolve(++calls === 1 ? ["locked"] : ["open"]),
-      logError: (text: string) => messages.push(text),
-    }, async () => {
-      const result = await parseAsync(
-        prompt(multiple(option("--region", string())), {
-          type: "autocomplete-multiselect",
-          message: "Regions",
-          options: [{ value: "locked", disabled: "Unavailable" }, "open"],
-          required: true,
-        }),
-        [],
-      );
-      assert.deepEqual(result, { success: true, value: ["open"] });
-      assert.equal(calls, 2);
-      assert.deepEqual(messages, ["No option selected."]);
-    });
+        );
+        assert.deepEqual(result, { success: true, value: ["open"] });
+        assert.equal(calls, 2);
+        assert.deepEqual(messages, ["No option selected."]);
+      },
+    );
   });
 
   it("should preserve cancellation after a disabled multiselection retry", async () => {
     const cancel = Symbol("cancel");
     let calls = 0;
-    await withPromptFunctionsOverride({
-      autocompleteMultiselect: () =>
-        Promise.resolve(++calls === 1 ? ["locked"] : cancel),
-      isCancel: (value: unknown) => value === cancel,
-      logError: () => {},
-    }, async () => {
-      const result = await parseAsync(
-        prompt(multiple(option("--region", string())), {
-          type: "autocomplete-multiselect",
-          message: "Regions",
-          options: [{ value: "locked", disabled: true }, "open"],
-          required: true,
-        }),
-        [],
-      );
-      assert.ok(!result.success);
-      assert.equal(formatMessage(result.error), "Prompt cancelled.");
-      assert.equal(calls, 2);
-    });
+    await withPromptFunctionsOverride(
+      {
+        autocompleteMultiselect: () =>
+          Promise.resolve(++calls === 1 ? ["locked"] : cancel),
+        isCancel: (value: unknown) => value === cancel,
+        logError: () => {},
+      },
+      async () => {
+        const result = await parseAsync(
+          prompt(multiple(option("--region", string())), {
+            type: "autocomplete-multiselect",
+            message: "Regions",
+            options: [{ value: "locked", disabled: true }, "open"],
+            required: true,
+          }),
+          [],
+        );
+        assert.ok(!result.success);
+        assert.equal(formatMessage(result.error), "Prompt cancelled.");
+        assert.equal(calls, 2);
+      },
+    );
   });
 
   it("should normalize and forward single autocomplete settings", async () => {
@@ -1633,55 +1777,62 @@ describe("autocomplete prompts", () => {
     const validated: string[] = [];
     const filter = (search: string, option: { readonly value: string }) =>
       option.value.startsWith(search);
-    await withPromptFunctionsOverride({
-      autocomplete: (config: {
-        readonly options: readonly unknown[];
-        readonly initialValue?: string;
-        readonly initialUserInput?: string;
-        readonly placeholder?: string;
-        readonly maxItems?: number;
-        readonly filter?: typeof filter;
-        readonly validate: (value: unknown) => string | undefined;
-        readonly signal?: AbortSignal;
-      }) => {
-        assert.deepEqual(config.options, [
-          { value: "east", label: "east" },
-          options[1],
-        ]);
-        assert.notEqual(config.options, options);
-        assert.equal(config.initialValue, "");
-        assert.equal(config.initialUserInput, "ea");
-        assert.equal(config.placeholder, "");
-        assert.equal(config.maxItems, 8);
-        assert.equal(config.filter, filter);
-        assert.equal(config.validate(undefined), "No option selected.");
-        assert.equal(config.validate("west"), "Choose east.");
-        assert.equal(config.validate("east"), undefined);
-        assert.ok(config.signal);
-        assert.notEqual(config.signal, controller.signal);
-        return Promise.resolve("east");
-      },
-    }, async () => {
-      const parser = prompt(option("--region", string()), {
-        type: "autocomplete",
-        message: "Region",
-        options,
-        initialValue: "",
-        initialUserInput: "ea",
-        placeholder: "",
-        maxItems: 8,
-        filter,
-        validate: (value) => {
-          validated.push(value);
-          return value === "east" ? undefined : "Choose east.";
+    await withPromptFunctionsOverride(
+      {
+        autocomplete: (config: {
+          readonly options: readonly unknown[];
+          readonly initialValue?: string;
+          readonly initialUserInput?: string;
+          readonly placeholder?: string;
+          readonly maxItems?: number;
+          readonly filter?: typeof filter;
+          readonly validate: (value: unknown) => string | undefined;
+          readonly signal?: AbortSignal;
+        }) => {
+          assert.deepEqual(config.options, [
+            { value: "east", label: "east" },
+            options[1],
+          ]);
+          assert.notEqual(config.options, options);
+          assert.equal(config.initialValue, "");
+          assert.equal(config.initialUserInput, "ea");
+          assert.equal(config.placeholder, "");
+          assert.equal(config.maxItems, 8);
+          assert.equal(config.filter, filter);
+          assert.equal(config.validate(undefined), "No option selected.");
+          assert.equal(config.validate("west"), "Choose east.");
+          assert.equal(config.validate("east"), undefined);
+          assert.ok(config.signal);
+          assert.notEqual(config.signal, controller.signal);
+          return Promise.resolve("east");
         },
-      }, { signal: controller.signal });
-      assert.deepEqual(await parseAsync(parser, []), {
-        success: true,
-        value: "east",
-      });
-      assert.deepEqual(validated, ["west", "east"]);
-    });
+      },
+      async () => {
+        const parser = prompt(
+          option("--region", string()),
+          {
+            type: "autocomplete",
+            message: "Region",
+            options,
+            initialValue: "",
+            initialUserInput: "ea",
+            placeholder: "",
+            maxItems: 8,
+            filter,
+            validate: (value) => {
+              validated.push(value);
+              return value === "east" ? undefined : "Choose east.";
+            },
+          },
+          { signal: controller.signal },
+        );
+        assert.deepEqual(await parseAsync(parser, []), {
+          success: true,
+          value: "east",
+        });
+        assert.deepEqual(validated, ["west", "east"]);
+      },
+    );
   });
 
   it("should reject an absent selection without invoking user validation", async () => {
@@ -1707,74 +1858,88 @@ describe("autocomplete prompts", () => {
     const controller = new AbortController();
     const messages: string[] = [];
     let calls = 0;
-    await withPromptFunctionsOverride({
-      autocompleteMultiselect: (config: {
-        readonly options: readonly unknown[];
-        readonly initialValues?: readonly string[];
-        readonly required?: boolean;
-        readonly placeholder?: string;
-        readonly maxItems?: number;
-        readonly signal?: AbortSignal;
-      }) => {
-        assert.deepEqual(config.options, [{ value: "east", label: "east" }, {
-          value: "west",
-          label: "west",
-        }]);
-        assert.deepEqual(config.initialValues, initialValues);
-        assert.notEqual(config.initialValues, initialValues);
-        assert.ok(config.required);
-        assert.equal(config.placeholder, "Search");
-        assert.equal(config.maxItems, 4);
-        assert.ok(config.signal);
-        return Promise.resolve(++calls === 1 ? ["east"] : ["east", "west"]);
+    await withPromptFunctionsOverride(
+      {
+        autocompleteMultiselect: (config: {
+          readonly options: readonly unknown[];
+          readonly initialValues?: readonly string[];
+          readonly required?: boolean;
+          readonly placeholder?: string;
+          readonly maxItems?: number;
+          readonly signal?: AbortSignal;
+        }) => {
+          assert.deepEqual(config.options, [
+            { value: "east", label: "east" },
+            {
+              value: "west",
+              label: "west",
+            },
+          ]);
+          assert.deepEqual(config.initialValues, initialValues);
+          assert.notEqual(config.initialValues, initialValues);
+          assert.ok(config.required);
+          assert.equal(config.placeholder, "Search");
+          assert.equal(config.maxItems, 4);
+          assert.ok(config.signal);
+          return Promise.resolve(++calls === 1 ? ["east"] : ["east", "west"]);
+        },
+        logError: (text: string) => messages.push(text),
       },
-      logError: (text: string) => messages.push(text),
-    }, async () => {
-      const parser = prompt(multiple(option("--region", string())), {
-        type: "autocomplete-multiselect",
-        message: "Regions",
-        options: ["east", "west"],
-        initialValues,
-        required: true,
-        placeholder: "Search",
-        maxItems: 4,
-      }, {
-        signal: controller.signal,
-        validate: (values) =>
-          values.length === 2 ? undefined : message`Pick two.`,
-        maxAttempts: 2,
-      });
-      assert.deepEqual(await parseAsync(parser, []), {
-        success: true,
-        value: ["east", "west"],
-      });
-      assert.deepEqual(messages, ["Pick two."]);
-    });
+      async () => {
+        const parser = prompt(
+          multiple(option("--region", string())),
+          {
+            type: "autocomplete-multiselect",
+            message: "Regions",
+            options: ["east", "west"],
+            initialValues,
+            required: true,
+            placeholder: "Search",
+            maxItems: 4,
+          },
+          {
+            signal: controller.signal,
+            validate: (values) =>
+              values.length === 2 ? undefined : message`Pick two.`,
+            maxAttempts: 2,
+          },
+        );
+        assert.deepEqual(await parseAsync(parser, []), {
+          success: true,
+          value: ["east", "west"],
+        });
+        assert.deepEqual(messages, ["Pick two."]);
+      },
+    );
   });
 
   for (const type of ["autocomplete", "autocomplete-multiselect"] as const) {
     it(`should preserve cancellation for ${type}`, async () => {
       const cancel = Symbol("cancel");
-      await withPromptFunctionsOverride({
-        autocomplete: () => Promise.resolve(cancel),
-        autocompleteMultiselect: () => Promise.resolve(cancel),
-        isCancel: (value: unknown) => value === cancel,
-      }, async () => {
-        const parser = type === "autocomplete"
-          ? prompt(option("--region", string()), {
-            type,
-            message: "Region",
-            options: [],
-          })
-          : prompt(multiple(option("--region", string())), {
-            type,
-            message: "Regions",
-            options: [],
-          });
-        const result = await parseAsync<unknown>(parser, []);
-        assert.ok(!result.success);
-        assert.equal(formatMessage(result.error), "Prompt cancelled.");
-      });
+      await withPromptFunctionsOverride(
+        {
+          autocomplete: () => Promise.resolve(cancel),
+          autocompleteMultiselect: () => Promise.resolve(cancel),
+          isCancel: (value: unknown) => value === cancel,
+        },
+        async () => {
+          const parser =
+            type === "autocomplete"
+              ? prompt(option("--region", string()), {
+                  type,
+                  message: "Region",
+                  options: [],
+                })
+              : prompt(multiple(option("--region", string())), {
+                  type,
+                  message: "Regions",
+                  options: [],
+                });
+          const result = await parseAsync<unknown>(parser, []);
+          assert.ok(!result.success);
+          assert.equal(formatMessage(result.error), "Prompt cancelled.");
+        },
+      );
     });
   }
 
@@ -1851,31 +2016,38 @@ describe("autocomplete abort", () => {
       entered = resolve;
     });
     let receivedSignal: AbortSignal | undefined;
-    await withPromptFunctionsOverride({
-      autocomplete: (config: { readonly signal?: AbortSignal }) => {
-        receivedSignal = config.signal;
-        entered();
-        return new Promise((_resolve, reject) => {
-          receivedSignal?.addEventListener(
-            "abort",
-            () => reject(receivedSignal?.reason),
-            { once: true },
-          );
-        });
+    await withPromptFunctionsOverride(
+      {
+        autocomplete: (config: { readonly signal?: AbortSignal }) => {
+          receivedSignal = config.signal;
+          entered();
+          return new Promise((_resolve, reject) => {
+            receivedSignal?.addEventListener(
+              "abort",
+              () => reject(receivedSignal?.reason),
+              { once: true },
+            );
+          });
+        },
       },
-    }, async () => {
-      const parser = prompt(option("--region", string()), {
-        type: "autocomplete",
-        message: "Region",
-        options: [],
-      }, { signal: controller.signal });
-      const pending = parseAsync(parser, []);
-      await ready;
-      controller.abort(reason);
-      await assert.rejects(pending, (error) => error === reason);
-      assert.ok(receivedSignal?.aborted);
-      assert.equal(receivedSignal.reason, reason);
-    });
+      async () => {
+        const parser = prompt(
+          option("--region", string()),
+          {
+            type: "autocomplete",
+            message: "Region",
+            options: [],
+          },
+          { signal: controller.signal },
+        );
+        const pending = parseAsync(parser, []);
+        await ready;
+        controller.abort(reason);
+        await assert.rejects(pending, (error) => error === reason);
+        assert.ok(receivedSignal?.aborted);
+        assert.equal(receivedSignal.reason, reason);
+      },
+    );
   });
 });
 
@@ -1888,30 +2060,39 @@ describe("autocomplete-multiselect abort", () => {
       entered = resolve;
     });
     let receivedSignal: AbortSignal | undefined;
-    await withPromptFunctionsOverride({
-      autocompleteMultiselect: (config: { readonly signal?: AbortSignal }) => {
-        receivedSignal = config.signal;
-        entered();
-        return new Promise((_resolve, reject) => {
-          receivedSignal?.addEventListener(
-            "abort",
-            () => reject(receivedSignal?.reason),
-            { once: true },
-          );
-        });
+    await withPromptFunctionsOverride(
+      {
+        autocompleteMultiselect: (config: {
+          readonly signal?: AbortSignal;
+        }) => {
+          receivedSignal = config.signal;
+          entered();
+          return new Promise((_resolve, reject) => {
+            receivedSignal?.addEventListener(
+              "abort",
+              () => reject(receivedSignal?.reason),
+              { once: true },
+            );
+          });
+        },
       },
-    }, async () => {
-      const parser = prompt(multiple(option("--region", string())), {
-        type: "autocomplete-multiselect",
-        message: "Region",
-        options: [],
-      }, { signal: controller.signal });
-      const pending = parseAsync(parser, []);
-      await ready;
-      controller.abort(reason);
-      await assert.rejects(pending, (error) => error === reason);
-      assert.ok(receivedSignal?.aborted);
-      assert.equal(receivedSignal.reason, reason);
-    });
+      async () => {
+        const parser = prompt(
+          multiple(option("--region", string())),
+          {
+            type: "autocomplete-multiselect",
+            message: "Region",
+            options: [],
+          },
+          { signal: controller.signal },
+        );
+        const pending = parseAsync(parser, []);
+        await ready;
+        controller.abort(reason);
+        await assert.rejects(pending, (error) => error === reason);
+        assert.ok(receivedSignal?.aborted);
+        assert.equal(receivedSignal.reason, reason);
+      },
+    );
   });
 });

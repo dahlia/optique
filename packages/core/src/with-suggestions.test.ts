@@ -43,7 +43,9 @@ async function collect(
 }
 
 function texts(suggestions: readonly Suggestion[]): string[] {
-  return suggestions.map((s) => s.kind === "literal" ? s.text : `<${s.type}>`);
+  return suggestions.map((s) =>
+    s.kind === "literal" ? s.text : `<${s.type}>`,
+  );
 }
 
 function literal(text: string): Suggestion {
@@ -426,7 +428,7 @@ describe("withSuggestions", () => {
     it("can keep provider literals that do not match the prefix", () => {
       const provider = (prefix: string) =>
         ["Foo", "fop", "bar"].filter((name) =>
-          name.toLowerCase().startsWith(prefix.toLowerCase())
+          name.toLowerCase().startsWith(prefix.toLowerCase()),
         );
       const filtered = withSuggestions(string(), { suggest: provider });
       assert.deepEqual(texts(Array.from(filtered.suggest!("fo"))), ["fop"]);
@@ -443,18 +445,22 @@ describe("withSuggestions", () => {
     it("chains nested wrappers", () => {
       const inner = withSuggestions(string(), { suggest: () => ["a"] });
       assert.deepEqual(
-        texts(Array.from(
-          withSuggestions(inner, { suggest: () => ["b"] }).suggest!(""),
-        )),
+        texts(
+          Array.from(
+            withSuggestions(inner, { suggest: () => ["b"] }).suggest!(""),
+          ),
+        ),
         ["b"],
       );
       assert.deepEqual(
-        texts(Array.from(
-          withSuggestions(inner, {
-            includeExisting: true,
-            suggest: () => ["b"],
-          }).suggest!(""),
-        )),
+        texts(
+          Array.from(
+            withSuggestions(inner, {
+              includeExisting: true,
+              suggest: () => ["b"],
+            }).suggest!(""),
+          ),
+        ),
         ["a", "b"],
       );
     });
@@ -632,7 +638,7 @@ describe("withSuggestions", () => {
         setTimeout(() => {
           assert.equal(rejected, 1);
           resolve();
-        }, 0)
+        }, 0),
       );
     });
 
@@ -732,9 +738,7 @@ describe("withSuggestions", () => {
         mode: "async",
         suggest: () => ["ok", candidate()] as never,
       });
-      assert.deepEqual(texts(await collect(asyncParser.suggest!(""))), [
-        "ok",
-      ]);
+      assert.deepEqual(texts(await collect(asyncParser.suggest!(""))), ["ok"]);
       assert.equal(handled, 2);
     });
 
@@ -860,9 +864,11 @@ describe("withSuggestions", () => {
           parse: (input) => Promise.resolve({ success: true, value: input }),
           format: (value) => value,
           async *suggest() {
-            for await (
-              const text of closingAsyncSource(closed, "e", throwOnClose)
-            ) {
+            for await (const text of closingAsyncSource(
+              closed,
+              "e",
+              throwOnClose,
+            )) {
               yield { kind: "literal", text };
             }
           },
@@ -979,7 +985,7 @@ describe("withSuggestions", () => {
         metavar: "LEVEL",
         mode: "sync",
         factory: (value) =>
-          choice(value === "dev" ? ["debug"] as const : ["warn"] as const),
+          choice(value === "dev" ? (["debug"] as const) : (["warn"] as const)),
         defaultValue: () => "dev" as const,
       });
       return { env, level };
@@ -1009,9 +1015,7 @@ describe("withSuggestions", () => {
         env: option("--env", env),
         level: option("--level", replace),
       });
-      assert.deepEqual(texts(suggestSync(parser, ["--level", ""])), [
-        "custom",
-      ]);
+      assert.deepEqual(texts(suggestSync(parser, ["--level", ""])), ["custom"]);
       assert.deepEqual(
         texts(suggestSync(parser, ["--env", "prod", "--level", ""])),
         ["custom"],
@@ -1223,9 +1227,10 @@ describe("withSuggestions", () => {
         },
       });
       assert.deepEqual(Array.from(misdeclared.suggest!("")), []);
-      const options: WithSuggestionsOptions = Math.random() < 2
-        ? { mode: "async", suggest: () => [] }
-        : { suggest: () => [] };
+      const options: WithSuggestionsOptions =
+        Math.random() < 2
+          ? { mode: "async", suggest: () => [] }
+          : { suggest: () => [] };
       const either: ValueParser<"sync" | "async", number> = withSuggestions(
         integer(),
         options,

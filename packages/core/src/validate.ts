@@ -48,9 +48,7 @@ export function validateOptionNames(
   label: string,
 ): void {
   if (names.length === 0) {
-    throw new TypeError(
-      `Expected at least one ${label.toLowerCase()} name.`,
-    );
+    throw new TypeError(`Expected at least one ${label.toLowerCase()} name.`);
   }
   for (const name of names) {
     if (name === "") {
@@ -101,9 +99,7 @@ export function validateCommandNames(
   label: string,
 ): void {
   if (names.length === 0) {
-    throw new TypeError(
-      `Expected at least one ${label.toLowerCase()} name.`,
-    );
+    throw new TypeError(`Expected at least one ${label.toLowerCase()} name.`);
   }
   for (const name of names) {
     if (name === "") {
@@ -191,8 +187,7 @@ export function validateMetaNameCollisions(
       const existingLabel = nameToLabel.get(name);
       if (existingLabel != null) {
         throw new TypeError(
-          `Name "${name}" is used by both ` +
-            `${existingLabel} and ${label}.`,
+          `Name "${name}" is used by both ` + `${existingLabel} and ${label}.`,
         );
       }
       nameToLabel.set(name, label);
@@ -212,8 +207,15 @@ export function validateMetaNameCollisions(
           if (i === j && otherName === name) continue;
           if (!otherName.startsWith(prefix)) continue;
           throw new TypeError(
-            'The prefix form of name "' + name + '" in ' + label +
-              ' shadows "' + otherName + '" in ' + otherLabel + ".",
+            'The prefix form of name "' +
+              name +
+              '" in ' +
+              label +
+              ' shadows "' +
+              otherName +
+              '" in ' +
+              otherLabel +
+              ".",
           );
         }
       }
@@ -302,9 +304,7 @@ export function validateContextIds(
   const seen = new Set<symbol>();
   for (const context of contexts) {
     if (seen.has(context.id)) {
-      throw new TypeError(
-        `Duplicate SourceContext id: ${String(context.id)}`,
-      );
+      throw new TypeError(`Duplicate SourceContext id: ${String(context.id)}`);
     }
     seen.add(context.id);
   }

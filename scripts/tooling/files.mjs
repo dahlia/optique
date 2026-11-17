@@ -40,20 +40,24 @@ export function ownedFiles(root, kind) {
       if (
         entry.isDirectory() &&
         (local === "coverage" || /^packages\/[^/]+\/coverage$/.test(local))
-      ) continue;
+      )
+        continue;
       const excluded = rules.some(({ directory: base, config: data }) => {
         const local = relative(base, file).replaceAll("\\", "/");
         if (local.startsWith("../")) return false;
         const patterns = [
-          ...(data.exclude ?? []).filter((pattern) =>
-            base !== root || !nodeOnly.has(pattern)
+          ...(data.exclude ?? []).filter(
+            (pattern) => base !== root || !nodeOnly.has(pattern),
           ),
-          ...(kind === "format" ? data.fmt?.exclude ?? [] : []),
+          ...(kind === "format" ? (data.fmt?.exclude ?? []) : []),
         ];
         return patterns.some((pattern) => {
           const clean = pattern.replace(/\/$/, "");
-          return local === clean || local.startsWith(`${clean}/`) ||
-            matchesGlob(local, clean);
+          return (
+            local === clean ||
+            local.startsWith(`${clean}/`) ||
+            matchesGlob(local, clean)
+          );
         });
       });
       if (excluded) continue;

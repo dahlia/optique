@@ -13,12 +13,15 @@ describe("constructor documentation snapshots", () => {
   it("should read each captured choice only a bounded number of times", () => {
     const count = 1024;
     let reads = 0;
-    const choices = new Proxy(Array.from({ length: count }, (_, i) => i), {
-      get(target, property, receiver) {
-        if (typeof property === "string" && /^\d+$/.test(property)) reads++;
-        return Reflect.get(target, property, receiver);
+    const choices = new Proxy(
+      Array.from({ length: count }, (_, i) => i),
+      {
+        get(target, property, receiver) {
+          if (typeof property === "string" && /^\d+$/.test(property)) reads++;
+          return Reflect.get(target, property, receiver);
+        },
       },
-    });
+    );
 
     const parser = captureDocValue({}, { kind: "number", choices });
 
@@ -45,21 +48,23 @@ describe("constructor documentation snapshots", () => {
   it("should retain only linear usage nodes across nested snapshots", () => {
     const depth = 128;
     let reads = 0;
-    let usage: Usage = [{
-      type: "literal",
-      get value() {
-        reads++;
-        return "leaf";
+    let usage: Usage = [
+      {
+        type: "literal",
+        get value() {
+          reads++;
+          return "leaf";
+        },
       },
-    }];
+    ];
     const parsers = [captureDocParser({ usage }, { kind: "leaf" })];
     for (let i = 0; i < depth; i++) {
       usage = [{ type: "optional", terms: usage }];
       parsers.push(captureDocParser({ usage }, { kind: "optional" }));
     }
     const seen = new Set<UsageTerm>();
-    const pending = parsers.flatMap((parser) =>
-      getDocNode(parser)?.usage ?? []
+    const pending = parsers.flatMap(
+      (parser) => getDocNode(parser)?.usage ?? [],
     );
     while (pending.length > 0) {
       const term = pending.pop();
@@ -97,34 +102,48 @@ describe("constructor documentation snapshots", () => {
       return usage;
     };
     const override: Usage = [{ type: "literal", value: "override" }];
-    const usage: Usage = [{
-      type: "exclusive",
-      acceptsEmpty: false,
-      terms: [[{
-        type: "multiple",
-        min: 2,
-        acceptsEmpty: true,
-        terms: [{
-          type: "sequence",
-          terms: [{
-            type: "command",
-            name: "serve",
-            aliases: ["s"],
-            hiddenAliases: ["secret"],
-            hidden: "usage",
-            usageLine: override,
-          }, {
-            type: "command",
-            name: "other",
-            usageLine: callback,
-          }],
-        }],
-      }]],
-    }];
-    const parser = captureDocParser({ usage }, {
-      kind: "command",
-      usageLine: override,
-    });
+    const usage: Usage = [
+      {
+        type: "exclusive",
+        acceptsEmpty: false,
+        terms: [
+          [
+            {
+              type: "multiple",
+              min: 2,
+              acceptsEmpty: true,
+              terms: [
+                {
+                  type: "sequence",
+                  terms: [
+                    {
+                      type: "command",
+                      name: "serve",
+                      aliases: ["s"],
+                      hiddenAliases: ["secret"],
+                      hidden: "usage",
+                      usageLine: override,
+                    },
+                    {
+                      type: "command",
+                      name: "other",
+                      usageLine: callback,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        ],
+      },
+    ];
+    const parser = captureDocParser(
+      { usage },
+      {
+        kind: "command",
+        usageLine: override,
+      },
+    );
     const captured = getDocNode(parser);
     assert.ok(captured);
 

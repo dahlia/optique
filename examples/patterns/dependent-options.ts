@@ -20,16 +20,14 @@ const parser = merge(
   }),
 );
 
-type Result =
-  & (
-    | { readonly flag: false }
-    | {
+type Result = (
+  | { readonly flag: false }
+  | {
       readonly flag: true;
       readonly dependentFlag: boolean;
       readonly dependentFlag2?: boolean;
     }
-  )
-  & { readonly normalFlag: boolean };
+) & { readonly normalFlag: boolean };
 
 const result: Result = run(parser);
 print(message`${JSON.stringify(result, null, 2)}`);

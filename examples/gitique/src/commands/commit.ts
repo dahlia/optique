@@ -73,8 +73,7 @@ const commitOptions = group(
         metavar: "MESSAGE",
         pattern: /\S/,
         errors: {
-          patternMismatch:
-            message`Commit message must contain non-whitespace characters.`,
+          patternMismatch: message`Commit message must contain non-whitespace characters.`,
         },
       }),
       {
@@ -82,15 +81,14 @@ const commitOptions = group(
         errors: {
           missing: (names) =>
             message`Use ${optionNames(names)} to provide a commit message.`,
-          endOfInput: message`${optionNames(["-m", "--message"])} requires ${
-            metavar("MESSAGE")
-          }.`,
+          endOfInput: message`${optionNames(["-m", "--message"])} requires ${metavar(
+            "MESSAGE",
+          )}.`,
         },
       },
     ),
     all: option("-a", "--all", {
-      description:
-        message`Automatically stage all modified and deleted files before committing`,
+      description: message`Automatically stage all modified and deleted files before committing`,
     }),
     allowEmpty: option("--allow-empty", {
       description: message`Allow creating a commit with no changes`,
@@ -106,12 +104,11 @@ const authorOptions = group(
   object({
     author: optional(
       option("--author", authorParser, {
-        description:
-          message`Override the commit author (format: "Name <email>")`,
+        description: message`Override the commit author (format: "Name <email>")`,
         errors: {
-          endOfInput: message`${optionName("--author")} requires ${
-            metavar("AUTHOR")
-          }.`,
+          endOfInput: message`${optionName("--author")} requires ${metavar(
+            "AUTHOR",
+          )}.`,
           invalidValue: (error) =>
             message`${optionName("--author")} is invalid: ${error}`,
         },
@@ -138,17 +135,15 @@ const commitOptionsParser = merge(
  */
 export const commitCommand = command("commit", commitOptionsParser, {
   brief: message`Record changes to the repository`,
-  description: message`Record changes to the repository with a commit. Use ${
-    optionName("-m")
-  } to provide a commit message.`,
+  description: message`Record changes to the repository with a commit. Use ${optionName(
+    "-m",
+  )} to provide a commit message.`,
   footer: message`Examples:${lineBreak()}
   ${commandLine('gitique commit -m "Initial commit"')}${lineBreak()}
   ${commandLine('gitique commit -a -m "Fix bug"')}${lineBreak()}
-  ${
-    commandLine(
-      'gitique commit --author "John <john@example.com>" -m "Co-authored"',
-    )
-  }${lineBreak()}
+  ${commandLine(
+    'gitique commit --author "John <john@example.com>" -m "Co-authored"',
+  )}${lineBreak()}
   ${commandLine('gitique commit --allow-empty -m "Empty commit"')}`,
 });
 
@@ -181,9 +176,7 @@ export async function executeCommit(config: CommitConfig): Promise<void> {
 
     const commitMessage = config.message.trim();
     if (!commitMessage) {
-      throw new Error(
-        "Aborting commit due to empty commit message.",
-      );
+      throw new Error("Aborting commit due to empty commit message.");
     }
 
     // Create author signature; pass repo so local config is checked first.

@@ -29,18 +29,19 @@ function bind(
   });
   const envOptions = { context: env, key: "NAME", parser: string() };
   const configOptions = { context: config, key: "name" as const };
-  const parser = kind === "env"
-    ? bindEnv(inner, envOptions)
-    : kind === "config"
-    ? bindConfig(inner, configOptions)
-    : kind === "env-config"
-    ? bindEnv(bindConfig(inner, configOptions), envOptions)
-    : bindConfig(bindEnv(inner, envOptions), configOptions);
+  const parser =
+    kind === "env"
+      ? bindEnv(inner, envOptions)
+      : kind === "config"
+        ? bindConfig(inner, configOptions)
+        : kind === "env-config"
+          ? bindEnv(bindConfig(inner, configOptions), envOptions)
+          : bindConfig(bindEnv(inner, envOptions), configOptions);
   return {
     parser,
     async annotations() {
       return {
-        ...await env.getAnnotations(),
+        ...(await env.getAnnotations()),
         [config.id]: { data: { name: "configuration" } },
       };
     },
@@ -70,27 +71,26 @@ describe("source binding CLI provenance", () => {
           it(`${kind} preserves ${mode} ${wrapper} CLI input in ${construct}`, async () => {
             const value = mode === "sync" ? string() : asyncString();
             const named = option("--name", value);
-            const inner = wrapper === "bare"
-              ? named
-              : wrapper === "optional"
-              ? optional(named)
-              : withDefault(named, "default");
+            const inner =
+              wrapper === "bare"
+                ? named
+                : wrapper === "optional"
+                  ? optional(named)
+                  : withDefault(named, "default");
             const source = bind(kind, inner);
             const tags = multiple(option("--tag", string()));
-            const parser = construct === "tuple"
-              ? tuple([tags, source.parser])
-              : concat(tuple([tags]), tuple([source.parser]));
+            const parser =
+              construct === "tuple"
+                ? tuple([tags, source.parser])
+                : concat(tuple([tags]), tuple([source.parser]));
             const annotations = await source.annotations();
             assert.equal(parser.mode, mode);
             assert.deepEqual(
-              await parseAsync(parser, [
-                "--name",
-                "original",
-                "--tag",
-                "a",
-                "--tag",
-                "b",
-              ], { annotations }),
+              await parseAsync(
+                parser,
+                ["--name", "original", "--tag", "a", "--tag", "b"],
+                { annotations },
+              ),
               { success: true, value: [["a", "b"], "original"] },
             );
             // A new run on the same instance must still use its fallback.
@@ -98,12 +98,10 @@ describe("source binding CLI provenance", () => {
               await parseAsync(parser, ["--tag", "c"], { annotations }),
               { success: true, value: [["c"], source.fallback] },
             );
-            for (
-              const args of [
-                ["--name"],
-                ["--name", "original", "--tag", "a", "--name", "duplicate"],
-              ]
-            ) {
+            for (const args of [
+              ["--name"],
+              ["--name", "original", "--tag", "a", "--name", "duplicate"],
+            ]) {
               const result = await parseAsync(parser, args, { annotations });
               assert.ok(!result.success);
             }
@@ -226,10 +224,9 @@ describe("source binding CLI provenance", () => {
         complete: (state) => ({ success: true, value: state }),
         suggest: function* () {},
         getDocFragments: () => ({ fragments: [] }),
-        getSuggestRuntimeNodes: (
-          state,
-          path,
-        ) => [{ parser: inner, state, path }],
+        getSuggestRuntimeNodes: (state, path) => [
+          { parser: inner, state, path },
+        ],
       };
       const source = bind(kind, inner);
       const parser = source.parser;
@@ -249,7 +246,8 @@ describe("source binding CLI provenance", () => {
       assert.ok(result.success);
       assert.equal(result.value, "original!");
       assert.ok(
-        parser.getSuggestRuntimeNodes?.(reparsed.next.state, ["name"])
+        parser
+          .getSuggestRuntimeNodes?.(reparsed.next.state, ["name"])
           .some((node) => node.state === "original!"),
       );
     });
@@ -280,14 +278,11 @@ describe("source binding CLI provenance", () => {
         ]);
         const annotations = await source.annotations();
         assert.deepEqual(
-          await parseAsync(parser, [
-            "--name",
-            "original",
-            "--tag",
-            "a",
-            "--tag",
-            "b",
-          ], { annotations }),
+          await parseAsync(
+            parser,
+            ["--name", "original", "--tag", "a", "--tag", "b"],
+            { annotations },
+          ),
           { success: true, value: [["a", "b"], "original"] },
         );
         assert.deepEqual(

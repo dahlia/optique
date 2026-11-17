@@ -10,14 +10,15 @@ export const info = defineCommand({
   path: ["file", "info"],
   metadata: { brief: message`Report a local file's path and size in bytes.` },
   parser: object({
-    path: argument(string({
-      metavar: "PATH",
-      pattern: /^(?!-$).+$/s,
-      errors: {
-        patternMismatch:
-          message`Expected a nonempty file path; stdin (-) is not supported.`,
-      },
-    })),
+    path: argument(
+      string({
+        metavar: "PATH",
+        pattern: /^(?!-$).+$/s,
+        errors: {
+          patternMismatch: message`Expected a nonempty file path; stdin (-) is not supported.`,
+        },
+      }),
+    ),
   }),
   async handler(value, context?: ProgramHookContext<InputScope>) {
     const scope = context?.resource;

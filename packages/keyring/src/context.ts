@@ -44,7 +44,7 @@ async function defaultKeyringSource(
   }
 
   const { AsyncEntry } = await import("@napi-rs/keyring");
-  return await new AsyncEntry(service, username).getPassword() ?? undefined;
+  return (await new AsyncEntry(service, username).getPassword()) ?? undefined;
 }
 
 function getTypeName(value: unknown): string {

@@ -676,39 +676,30 @@ describe("git parsers", () => {
     });
 
     it("should reject empty string remote", () => {
-      assert.throws(
-        () => gitRemoteBranch("", { dir: "/tmp/dummy" }),
-        {
-          name: "TypeError",
-          message:
-            "Expected remote to be a non-empty string without whitespace " +
-            'or control characters, but got: "".',
-        },
-      );
+      assert.throws(() => gitRemoteBranch("", { dir: "/tmp/dummy" }), {
+        name: "TypeError",
+        message:
+          "Expected remote to be a non-empty string without whitespace " +
+          'or control characters, but got: "".',
+      });
     });
 
     it("should reject whitespace-only remote", () => {
-      assert.throws(
-        () => gitRemoteBranch("   ", { dir: "/tmp/dummy" }),
-        {
-          name: "TypeError",
-          message:
-            "Expected remote to be a non-empty string without whitespace " +
-            'or control characters, but got: "   ".',
-        },
-      );
+      assert.throws(() => gitRemoteBranch("   ", { dir: "/tmp/dummy" }), {
+        name: "TypeError",
+        message:
+          "Expected remote to be a non-empty string without whitespace " +
+          'or control characters, but got: "   ".',
+      });
     });
 
     it("should reject remote with newlines", () => {
-      assert.throws(
-        () => gitRemoteBranch("bad\nname", { dir: "/tmp/dummy" }),
-        {
-          name: "TypeError",
-          message:
-            "Expected remote to be a non-empty string without whitespace " +
-            'or control characters, but got: "bad\\nname".',
-        },
-      );
+      assert.throws(() => gitRemoteBranch("bad\nname", { dir: "/tmp/dummy" }), {
+        name: "TypeError",
+        message:
+          "Expected remote to be a non-empty string without whitespace " +
+          'or control characters, but got: "bad\\nname".',
+      });
     });
 
     it("should reject non-string remote (number)", () => {
@@ -841,10 +832,7 @@ describe("git parsers", () => {
         const literals = suggestions.filter(
           (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         );
-        assert.ok(
-          literals.length > 0,
-          "Should suggest recent commits",
-        );
+        assert.ok(literals.length > 0, "Should suggest recent commits");
         assert.ok(
           literals[0].text.length === 7,
           "Should suggest short (7-char) commit SHAs",
@@ -888,68 +876,76 @@ describe("git parsers", () => {
       }
     });
 
-    it("should suggest only unique and parseable commit SHAs", {
-      timeout: 15000,
-    }, async () => {
-      const { dir, prefix, oids } = await createTestRepoWithAmbiguousPrefix();
-      try {
-        const parser = gitCommit({ dir });
-        const suggestions: Suggestion[] = [];
-        for await (const s of parser.suggest!(prefix)) {
-          suggestions.push(s);
-        }
-        const literals = suggestions.filter(
-          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
-        );
-        assert.ok(
-          literals.length === 2,
-          `Should have exactly 2 suggestions sharing prefix '${prefix}', ` +
-            `got ${literals.length}`,
-        );
-        const texts = literals.map((s) => s.text);
-        assert.deepEqual(
-          new Set(texts),
-          new Set(oids.map((oid) => oid.slice(0, 8))),
-        );
-        const unique = new Set(texts);
-        assert.equal(
-          unique.size,
-          texts.length,
-          `Suggestions should be unique, got: ${JSON.stringify(texts)}`,
-        );
-        for (const s of literals) {
-          const result = await parser.parse(s.text);
-          assert.ok(
-            result.success,
-            `Suggestion '${s.text}' should be parseable`,
-          );
-          if (result.success) {
-            assert.equal(
-              result.value,
-              oids.find((oid) => oid.startsWith(s.text)),
-            );
+    it(
+      "should suggest only unique and parseable commit SHAs",
+      {
+        timeout: 15000,
+      },
+      async () => {
+        const { dir, prefix, oids } = await createTestRepoWithAmbiguousPrefix();
+        try {
+          const parser = gitCommit({ dir });
+          const suggestions: Suggestion[] = [];
+          for await (const s of parser.suggest!(prefix)) {
+            suggestions.push(s);
           }
+          const literals = suggestions.filter(
+            (s): s is { kind: "literal"; text: string } => s.kind === "literal",
+          );
+          assert.ok(
+            literals.length === 2,
+            `Should have exactly 2 suggestions sharing prefix '${prefix}', ` +
+              `got ${literals.length}`,
+          );
+          const texts = literals.map((s) => s.text);
+          assert.deepEqual(
+            new Set(texts),
+            new Set(oids.map((oid) => oid.slice(0, 8))),
+          );
+          const unique = new Set(texts);
+          assert.equal(
+            unique.size,
+            texts.length,
+            `Suggestions should be unique, got: ${JSON.stringify(texts)}`,
+          );
+          for (const s of literals) {
+            const result = await parser.parse(s.text);
+            assert.ok(
+              result.success,
+              `Suggestion '${s.text}' should be parseable`,
+            );
+            if (result.success) {
+              assert.equal(
+                result.value,
+                oids.find((oid) => oid.startsWith(s.text)),
+              );
+            }
+          }
+        } finally {
+          await cleanupTestRepo(dir);
         }
-      } finally {
-        await cleanupTestRepo(dir);
-      }
-    });
+      },
+    );
 
-    it("should report ambiguous abbreviated commit SHAs", {
-      timeout: 15000,
-    }, async () => {
-      const { dir, prefix } = await createTestRepoWithAmbiguousPrefix();
-      try {
-        const parser = gitCommit({ dir });
-        const result = await parser.parse(prefix.slice(0, 4));
-        assert.ok(!result.success);
-        if (!result.success) {
-          assert.match(formatMessage(result.error), /ambiguous/i);
+    it(
+      "should report ambiguous abbreviated commit SHAs",
+      {
+        timeout: 15000,
+      },
+      async () => {
+        const { dir, prefix } = await createTestRepoWithAmbiguousPrefix();
+        try {
+          const parser = gitCommit({ dir });
+          const result = await parser.parse(prefix.slice(0, 4));
+          assert.ok(!result.success);
+          if (!result.success) {
+            assert.match(formatMessage(result.error), /ambiguous/i);
+          }
+        } finally {
+          await cleanupTestRepo(dir);
         }
-      } finally {
-        await cleanupTestRepo(dir);
-      }
-    });
+      },
+    );
   });
 
   describe("gitRef()", () => {
@@ -1370,8 +1366,9 @@ describe("git parsers", () => {
 
         assert.deepEqual(
           suggestions
-            .filter((s): s is { kind: "literal"; text: string } =>
-              s.kind === "literal" && s.text === shortOid
+            .filter(
+              (s): s is { kind: "literal"; text: string } =>
+                s.kind === "literal" && s.text === shortOid,
             )
             .map((s) => s.text),
           [shortOid],
@@ -1424,10 +1421,7 @@ describe("git parsers", () => {
         const literals = suggestions.filter(
           (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         );
-        assert.ok(
-          literals.length > 0,
-          "Should suggest at least one commit",
-        );
+        assert.ok(literals.length > 0, "Should suggest at least one commit");
         for (const s of literals) {
           assert.ok(
             s.text.length >= longPrefix.length,
@@ -1443,56 +1437,60 @@ describe("git parsers", () => {
       }
     });
 
-    it("should suggest only unique and parseable commit SHAs", {
-      timeout: 15000,
-    }, async () => {
-      const { dir, prefix, oids } = await createTestRepoWithAmbiguousPrefix();
-      try {
-        const parser = gitRef({ dir });
-        const suggestions: Suggestion[] = [];
-        for await (const s of parser.suggest!(prefix.slice(0, 4))) {
-          suggestions.push(s);
-        }
-        const literals = suggestions.filter(
-          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
-        );
-        // Filter to only commit SHA suggestions (not branches/tags)
-        const commitSuggestions = literals.filter(
-          (s) => /^[0-9a-f]+$/i.test(s.text),
-        );
-        assert.ok(
-          commitSuggestions.length === 2,
-          `Should have exactly 2 commit suggestions sharing prefix ` +
-            `'${prefix}', got ${commitSuggestions.length}`,
-        );
-        const texts = commitSuggestions.map((s) => s.text);
-        assert.deepEqual(
-          new Set(texts),
-          new Set(oids.map((oid) => oid.slice(0, 8))),
-        );
-        const unique = new Set(texts);
-        assert.equal(
-          unique.size,
-          texts.length,
-          `Suggestions should be unique, got: ${JSON.stringify(texts)}`,
-        );
-        for (const s of commitSuggestions) {
-          const result = await parser.parse(s.text);
-          assert.ok(
-            result.success,
-            `Suggestion '${s.text}' should be parseable`,
-          );
-          if (result.success) {
-            assert.equal(
-              result.value,
-              oids.find((oid) => oid.startsWith(s.text)),
-            );
+    it(
+      "should suggest only unique and parseable commit SHAs",
+      {
+        timeout: 15000,
+      },
+      async () => {
+        const { dir, prefix, oids } = await createTestRepoWithAmbiguousPrefix();
+        try {
+          const parser = gitRef({ dir });
+          const suggestions: Suggestion[] = [];
+          for await (const s of parser.suggest!(prefix.slice(0, 4))) {
+            suggestions.push(s);
           }
+          const literals = suggestions.filter(
+            (s): s is { kind: "literal"; text: string } => s.kind === "literal",
+          );
+          // Filter to only commit SHA suggestions (not branches/tags)
+          const commitSuggestions = literals.filter((s) =>
+            /^[0-9a-f]+$/i.test(s.text),
+          );
+          assert.ok(
+            commitSuggestions.length === 2,
+            `Should have exactly 2 commit suggestions sharing prefix ` +
+              `'${prefix}', got ${commitSuggestions.length}`,
+          );
+          const texts = commitSuggestions.map((s) => s.text);
+          assert.deepEqual(
+            new Set(texts),
+            new Set(oids.map((oid) => oid.slice(0, 8))),
+          );
+          const unique = new Set(texts);
+          assert.equal(
+            unique.size,
+            texts.length,
+            `Suggestions should be unique, got: ${JSON.stringify(texts)}`,
+          );
+          for (const s of commitSuggestions) {
+            const result = await parser.parse(s.text);
+            assert.ok(
+              result.success,
+              `Suggestion '${s.text}' should be parseable`,
+            );
+            if (result.success) {
+              assert.equal(
+                result.value,
+                oids.find((oid) => oid.startsWith(s.text)),
+              );
+            }
+          }
+        } finally {
+          await cleanupTestRepo(dir);
         }
-      } finally {
-        await cleanupTestRepo(dir);
-      }
-    });
+      },
+    );
 
     it("should not yield commits when prefix is non-hex", async () => {
       const testRepoDir = await createTestRepo();
@@ -1708,9 +1706,10 @@ describe("git parsers", () => {
           dir: testRepoDir,
           errors: {
             notFound: (input, available) =>
-              message`Custom error: ${input} not found. Try: ${
-                valueSet(available ?? [], "none")
-              }`,
+              message`Custom error: ${input} not found. Try: ${valueSet(
+                available ?? [],
+                "none",
+              )}`,
           },
         });
         const result = await parser.parse("nonexistent");
@@ -1834,9 +1833,10 @@ describe("git parsers", () => {
           dir: testRepoDir,
           errors: {
             notFound: (input, available) =>
-              message`Branch ${input} not found on origin. Available: ${
-                valueSet(available ?? [], "none")
-              }`,
+              message`Branch ${input} not found on origin. Available: ${valueSet(
+                available ?? [],
+                "none",
+              )}`,
           },
         });
         const result = await parser.parse("nonexistent-branch");
@@ -1882,9 +1882,10 @@ describe("git parsers", () => {
           dir: testRepoDir,
           errors: {
             remoteNotFound: (remote, availableRemotes) =>
-              message`No such remote ${remote}. Try: ${
-                valueSet(availableRemotes, "none")
-              }`,
+              message`No such remote ${remote}. Try: ${valueSet(
+                availableRemotes,
+                "none",
+              )}`,
           },
         });
         const result = await parser.parse("main");
@@ -1919,22 +1920,26 @@ describe("git parsers", () => {
       }
     });
 
-    it("should report ambiguous short SHA for commit and ref parsers", {
-      timeout: 30000,
-    }, async () => {
-      const { dir, prefix } = await createTestRepoWithAmbiguousPrefix();
-      try {
-        for (const parser of [gitCommit({ dir }), gitRef({ dir })]) {
-          const result = await parser.parse(prefix.slice(0, 4));
-          assert.ok(!result.success);
-          if (!result.success) {
-            assert.match(formatMessage(result.error), /ambiguous/i);
+    it(
+      "should report ambiguous short SHA for commit and ref parsers",
+      {
+        timeout: 30000,
+      },
+      async () => {
+        const { dir, prefix } = await createTestRepoWithAmbiguousPrefix();
+        try {
+          for (const parser of [gitCommit({ dir }), gitRef({ dir })]) {
+            const result = await parser.parse(prefix.slice(0, 4));
+            assert.ok(!result.success);
+            if (!result.success) {
+              assert.match(formatMessage(result.error), /ambiguous/i);
+            }
           }
+        } finally {
+          await cleanupTestRepo(dir);
         }
-      } finally {
-        await cleanupTestRepo(dir);
-      }
-    });
+      },
+    );
 
     it("should execute parse catch fallback when notFound callback throws", async () => {
       const testRepoDir = await createTestRepoWithBranchesAndTags();
@@ -1996,35 +2001,32 @@ describe("git parsers", () => {
         const badPrefix = Symbol("bad-prefix") as unknown as string;
 
         const branchSuggestions: Suggestion[] = [];
-        for await (
-          const s of gitBranch({ dir: testRepoDir }).suggest!(badPrefix)
-        ) {
+        for await (const s of gitBranch({ dir: testRepoDir }).suggest!(
+          badPrefix,
+        )) {
           branchSuggestions.push(s);
         }
         assert.deepEqual(branchSuggestions, []);
 
         const remoteBranchSuggestions: Suggestion[] = [];
-        for await (
-          const s of gitRemoteBranch("origin", { dir: testRepoDir }).suggest!(
-            badPrefix,
-          )
-        ) {
+        for await (const s of gitRemoteBranch("origin", { dir: testRepoDir })
+          .suggest!(badPrefix)) {
           remoteBranchSuggestions.push(s);
         }
         assert.deepEqual(remoteBranchSuggestions, []);
 
         const tagSuggestions: Suggestion[] = [];
-        for await (
-          const s of gitTag({ dir: testRepoDir }).suggest!(badPrefix)
-        ) {
+        for await (const s of gitTag({ dir: testRepoDir }).suggest!(
+          badPrefix,
+        )) {
           tagSuggestions.push(s);
         }
         assert.deepEqual(tagSuggestions, []);
 
         const remoteSuggestions: Suggestion[] = [];
-        for await (
-          const s of gitRemote({ dir: testRepoDir }).suggest!(badPrefix)
-        ) {
+        for await (const s of gitRemote({ dir: testRepoDir }).suggest!(
+          badPrefix,
+        )) {
           remoteSuggestions.push(s);
         }
         assert.deepEqual(remoteSuggestions, []);
@@ -2039,9 +2041,8 @@ describe("git parsers", () => {
       await fs.writeFile(filePath, "x");
       try {
         const remoteBranchSuggestions: Suggestion[] = [];
-        for await (
-          const s of gitRemoteBranch("origin", { dir: filePath }).suggest!("ma")
-        ) {
+        for await (const s of gitRemoteBranch("origin", { dir: filePath })
+          .suggest!("ma")) {
           remoteBranchSuggestions.push(s);
         }
         assert.deepEqual(remoteBranchSuggestions, []);
@@ -2099,11 +2100,8 @@ describe("git parsers", () => {
 
         const badPrefix = Symbol("bad-prefix") as unknown as string;
         const suggestions: Suggestion[] = [];
-        for await (
-          const s of gitRemoteBranch("origin", { dir: testRepoDir }).suggest!(
-            badPrefix,
-          )
-        ) {
+        for await (const s of gitRemoteBranch("origin", { dir: testRepoDir })
+          .suggest!(badPrefix)) {
           suggestions.push(s);
         }
         assert.deepEqual(suggestions, []);
@@ -2125,9 +2123,9 @@ describe("git parsers", () => {
 
         const badPrefix = Symbol("bad-prefix") as unknown as string;
         const suggestions: Suggestion[] = [];
-        for await (
-          const s of gitRemote({ dir: testRepoDir }).suggest!(badPrefix)
-        ) {
+        for await (const s of gitRemote({ dir: testRepoDir }).suggest!(
+          badPrefix,
+        )) {
           suggestions.push(s);
         }
         assert.deepEqual(suggestions, []);
@@ -2138,32 +2136,24 @@ describe("git parsers", () => {
   });
 
   describe("suggestionDepth validation", () => {
-    for (
-      const depth of [
-        0,
-        -1,
-        1.5,
-        NaN,
-        Infinity,
-        -Infinity,
-        "2",
-        "foo",
-        BigInt(2),
-      ] as never[]
-    ) {
+    for (const depth of [
+      0,
+      -1,
+      1.5,
+      NaN,
+      Infinity,
+      -Infinity,
+      "2",
+      "foo",
+      BigInt(2),
+    ] as never[]) {
       const label = `${typeof depth} ${String(depth)}`;
       it(`gitCommit() rejects suggestionDepth: ${label}`, () => {
-        assert.throws(
-          () => gitCommit({ suggestionDepth: depth }),
-          RangeError,
-        );
+        assert.throws(() => gitCommit({ suggestionDepth: depth }), RangeError);
       });
 
       it(`gitRef() rejects suggestionDepth: ${label}`, () => {
-        assert.throws(
-          () => gitRef({ suggestionDepth: depth }),
-          RangeError,
-        );
+        assert.throws(() => gitRef({ suggestionDepth: depth }), RangeError);
       });
     }
 

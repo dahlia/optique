@@ -59,21 +59,25 @@ describe("hook installation", () => {
       const hooks = join(dir, ".git/hooks");
       // Isolate this fixture from any user-level core.hooksPath configuration.
       command("git", ["config", "core.hooksPath", hooks], dir);
-      command("git", [
-        "config",
-        "merge.sacho.driver",
-        "custom-driver %O %A %B",
-      ], dir);
-      command("git", [
-        "-c",
-        "user.name=Test",
-        "-c",
-        "user.email=test@example.com",
-        "commit",
-        "--allow-empty",
-        "-m",
-        "Fixture",
-      ], dir);
+      command(
+        "git",
+        ["config", "merge.sacho.driver", "custom-driver %O %A %B"],
+        dir,
+      );
+      command(
+        "git",
+        [
+          "-c",
+          "user.name=Test",
+          "-c",
+          "user.email=test@example.com",
+          "commit",
+          "--allow-empty",
+          "-m",
+          "Fixture",
+        ],
+        dir,
+      );
       const worktree = join(dir, "worktree");
       command("git", ["worktree", "add", "-b", "fixture", worktree], dir);
       const existing = "#!/bin/sh\n# User-owned hook\n";

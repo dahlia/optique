@@ -60,7 +60,9 @@ function formatStatusShortMerged(
   const isUntracked = !stagedEntry && unstagedEntry?.status === "Untracked";
   const stagedCol = isUntracked
     ? "?"
-    : (stagedEntry ? (statusIndicatorMap[stagedEntry.status] ?? "?") : " ");
+    : stagedEntry
+      ? (statusIndicatorMap[stagedEntry.status] ?? "?")
+      : " ";
   const unstagedCol = unstagedEntry
     ? (statusIndicatorMap[unstagedEntry.status] ?? "?")
     : " ";
@@ -68,7 +70,9 @@ function formatStatusShortMerged(
   const displayPath = oldPath ? `${oldPath} -> ${path}` : path;
   const stagedColor = isUntracked
     ? colors.red
-    : (stagedEntry ? colors.green : "");
+    : stagedEntry
+      ? colors.green
+      : "";
   const unstagedColor = unstagedEntry ? colors.red : "";
   return `${stagedColor}${stagedCol}${colors.reset}${unstagedColor}${unstagedCol}${colors.reset} ${displayPath}`;
 }
@@ -85,7 +89,9 @@ function formatStatusPorcelainMerged(
   const isUntracked = !stagedEntry && unstagedEntry?.status === "Untracked";
   const stagedCol = isUntracked
     ? "?"
-    : (stagedEntry ? (statusIndicatorMap[stagedEntry.status] ?? "?") : " ");
+    : stagedEntry
+      ? (statusIndicatorMap[stagedEntry.status] ?? "?")
+      : " ";
   const unstagedCol = unstagedEntry
     ? (statusIndicatorMap[unstagedEntry.status] ?? "?")
     : " ";
@@ -124,9 +130,9 @@ const displayOptions = group(
           metavar: "FORMAT",
           errors: {
             invalidChoice: (input, choices) =>
-              message`Unknown status format ${input}. Choose ${
-                outputFormatChoices(choices)
-              }.`,
+              message`Unknown status format ${input}. Choose ${outputFormatChoices(
+                choices,
+              )}.`,
           },
         }),
         {
@@ -138,9 +144,9 @@ const displayOptions = group(
       description: message`Shorthand for ${optionName("--format")}=short`,
     }),
     porcelain: option("--porcelain", {
-      description: message`Shorthand for ${
-        optionName("--format")
-      }=porcelain (machine-readable)`,
+      description: message`Shorthand for ${optionName(
+        "--format",
+      )}=porcelain (machine-readable)`,
     }),
     branch: option("-b", "--branch", {
       description: message`Show branch information`,
@@ -158,10 +164,7 @@ const displayOptions = group(
  * - map() for transforming parser results
  */
 const statusOptionsParser = map(
-  merge(
-    object({ command: constant("status" as const) }),
-    displayOptions,
-  ),
+  merge(object({ command: constant("status" as const) }), displayOptions),
   (result) => {
     if ((result.short || result.porcelain) && result.format !== undefined) {
       throw new Error(
@@ -176,8 +179,8 @@ const statusOptionsParser = map(
       format: result.short
         ? ("short" as const)
         : result.porcelain
-        ? ("porcelain" as const)
-        : (result.format ?? ("long" as const)),
+          ? ("porcelain" as const)
+          : (result.format ?? ("long" as const)),
     };
   },
 );
@@ -187,18 +190,17 @@ const statusOptionsParser = map(
  */
 export const statusCommand = command("status", statusOptionsParser, {
   brief: message`Show working tree status`,
-  description:
-    message`Display the state of the working directory and staging area. Use ${
-      optionName("-s")
-    } for compact output or ${
-      optionName("--porcelain")
-    } for machine-readable format.`,
+  description: message`Display the state of the working directory and staging area. Use ${optionName(
+    "-s",
+  )} for compact output or ${optionName(
+    "--porcelain",
+  )} for machine-readable format.`,
   footer: message`Examples:${lineBreak()}
   ${commandLine("gitique status")}              Show full status${lineBreak()}
   ${commandLine("gitique status -s")}           Show short format${lineBreak()}
-  ${
-    commandLine("gitique status --porcelain")
-  }  Machine-readable format${lineBreak()}
+  ${commandLine(
+    "gitique status --porcelain",
+  )}  Machine-readable format${lineBreak()}
   ${commandLine("gitique status -b")}           Show branch information`,
 });
 
@@ -381,11 +383,7 @@ export async function executeStatus(config: StatusConfig): Promise<void> {
               formatStatusPorcelainMerged(stagedEntry, undefined, file.path),
             );
             console.log(
-              formatStatusPorcelainMerged(
-                undefined,
-                unstagedEntry,
-                file.path,
-              ),
+              formatStatusPorcelainMerged(undefined, unstagedEntry, file.path),
             );
           } else {
             console.log(

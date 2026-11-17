@@ -96,15 +96,16 @@ export interface CommandEntry {
  * @template R The resource made available by program-level lifecycle hooks.
  * @since 1.2.0
  */
-export type RunProgramCommandEntry<R = unknown> =
-  & Omit<CommandEntry, "command">
-  & {
-    /**
-     * A command compatible with the program-level resource, or one that
-     * always creates its own command context.
-     */
-    readonly command: RunProgramCommand<R>;
-  };
+export type RunProgramCommandEntry<R = unknown> = Omit<
+  CommandEntry,
+  "command"
+> & {
+  /**
+   * A command compatible with the program-level resource, or one that
+   * always creates its own command context.
+   */
+  readonly command: RunProgramCommand<R>;
+};
 
 /**
  * A command found on disk.
@@ -266,11 +267,10 @@ export interface ProgramHelpOptions {
   readonly bareGroup?: "never" | "namespace" | "always";
 }
 
-interface RunProgramBaseOptions<R = unknown> extends
-  Omit<
-    RunOptions,
-    "help" | "version" | "completion" | "programName"
-  > {
+interface RunProgramBaseOptions<R = unknown> extends Omit<
+  RunOptions,
+  "help" | "version" | "completion" | "programName"
+> {
   /**
    * Root program metadata.
    */
@@ -328,8 +328,9 @@ interface RunProgramBaseOptions<R = unknown> extends
  * @template R The resource made available by program-level lifecycle hooks.
  * @since 1.1.0
  */
-export interface RunProgramDiscoveryOptions<R = unknown>
-  extends RunProgramBaseOptions<R> {
+export interface RunProgramDiscoveryOptions<
+  R = unknown,
+> extends RunProgramBaseOptions<R> {
   /**
    * Directory containing command modules.
    */
@@ -361,8 +362,9 @@ export interface RunProgramDiscoveryOptions<R = unknown>
  * @template R The resource made available by program-level lifecycle hooks.
  * @since 1.1.0
  */
-export interface RunProgramStaticOptions<R = unknown>
-  extends RunProgramBaseOptions<R> {
+export interface RunProgramStaticOptions<
+  R = unknown,
+> extends RunProgramBaseOptions<R> {
   /**
    * Commands to compose without file-system discovery.
    *
@@ -464,16 +466,11 @@ export async function discoverCommands(
     }
     seen.set(key, filePath);
 
-    const mod = await import(pathToFileURL(filePath).href) as {
+    const mod = (await import(pathToFileURL(filePath).href)) as {
       readonly default?: unknown;
     };
     const commandDefinition = commandFromModuleExport(filePath, mod.default);
-    validateDeclaredCommandPath(
-      commandDefinition,
-      path,
-      filePath,
-      "file path",
-    );
+    validateDeclaredCommandPath(commandDefinition, path, filePath, "file path");
     discovered.push({ path, filePath, command: commandDefinition });
   }
 
@@ -514,7 +511,7 @@ export function commandsFromModules<R = unknown>(
   );
   const entryFileName = normalizeEntryFileName(options.entryFileName);
   const modulePaths = Object.keys(modules).toSorted((a, b) =>
-    a.localeCompare(b)
+    a.localeCompare(b),
   );
 
   const seen = new Map<string, string>();
@@ -633,9 +630,10 @@ export async function runProgram<R = unknown>(
   }
   if (options.hooks != null) validateHooks(options.hooks, "Program");
   const help = normalizeProgramHelp(options.help);
-  const policy = options.help != null && typeof options.help === "object"
-    ? options.help.bareGroup ?? "never"
-    : "never";
+  const policy =
+    options.help != null && typeof options.help === "object"
+      ? (options.help.bareGroup ?? "never")
+      : "never";
   let commands: readonly Pick<DiscoveredCommand, "path" | "command">[];
   if (isStaticRunProgramOptions(options)) {
     commands = staticCommandsToEntries(options.commands);
@@ -688,28 +686,25 @@ async function dispatchInvocation<R>(
   const commandHooks = invocation.command.hooks as
     | ProgramHooks<unknown>
     | undefined;
-  await runHookScope(
-    programHooks,
-    invocation,
-    (programContext) =>
-      runHookScope(
-        commandHooks,
-        invocation,
-        (commandContext) => {
-          // Pass the hook context only when a beforeEach actually produced one,
-          // using the most specific scope.  When no beforeEach ran, call the
-          // handler with just the value so handlers see the exact single-argument
-          // call shape of a plain runProgram() without hooks.
-          if (commandHooks?.beforeEach != null) {
-            return invocation.handler(invocation.value, commandContext);
-          }
-          if (programHooks?.beforeEach != null) {
-            return invocation.handler(invocation.value, programContext);
-          }
-          return invocation.handler(invocation.value);
-        },
-        programContext,
-      ),
+  await runHookScope(programHooks, invocation, (programContext) =>
+    runHookScope(
+      commandHooks,
+      invocation,
+      (commandContext) => {
+        // Pass the hook context only when a beforeEach actually produced one,
+        // using the most specific scope.  When no beforeEach ran, call the
+        // handler with just the value so handlers see the exact single-argument
+        // call shape of a plain runProgram() without hooks.
+        if (commandHooks?.beforeEach != null) {
+          return invocation.handler(invocation.value, commandContext);
+        }
+        if (programHooks?.beforeEach != null) {
+          return invocation.handler(invocation.value, programContext);
+        }
+        return invocation.handler(invocation.value);
+      },
+      programContext,
+    ),
   );
 }
 
@@ -731,9 +726,8 @@ async function runHookScope<R>(
   inner: (context: ProgramHookContext<R>) => unknown | Promise<unknown>,
   fallbackContext: ProgramHookContext<R> = {},
 ): Promise<unknown> {
-  let context: ProgramHookContext<R> = hooks?.beforeEach == null
-    ? fallbackContext
-    : {};
+  let context: ProgramHookContext<R> =
+    hooks?.beforeEach == null ? fallbackContext : {};
   try {
     // Default a nullish beforeEach result to an empty context so afterEach,
     // onError, and the handler never receive null/undefined.
@@ -815,20 +809,23 @@ function hasNodeTypeScriptLoader(
   nativeSupport: boolean,
 ): boolean {
   const haystack = [...execArgv, nodeOptions].join(" ");
-  return nativeSupport ||
+  return (
+    nativeSupport ||
     /\b(?:tsx|ts-node|tsimp|jiti)\b/.test(haystack) ||
     /--(?:experimental-)?transform-types\b/.test(haystack) ||
-    /--experimental-strip-types\b/.test(haystack);
+    /--experimental-strip-types\b/.test(haystack)
+  );
 }
 
 function hasNativeNodeTypeScriptSupport(): boolean {
   const features = process.features as
     | (typeof process.features & {
-      readonly typescript?: unknown;
-    })
+        readonly typescript?: unknown;
+      })
     | undefined;
-  return features?.typescript === "strip" ||
-    features?.typescript === "transform";
+  return (
+    features?.typescript === "strip" || features?.typescript === "transform"
+  );
 }
 
 function pathFromDir(dir: string | URL): string {
@@ -848,8 +845,8 @@ function normalizeExtensions(extensions: readonly string[]): readonly string[] {
     }
     if (!normalized.includes(extension)) normalized.push(extension);
   }
-  return normalized.toSorted((a, b) =>
-    b.length - a.length || a.localeCompare(b)
+  return normalized.toSorted(
+    (a, b) => b.length - a.length || a.localeCompare(b),
   );
 }
 
@@ -896,14 +893,14 @@ async function collectCommandFiles(
 
   const entries = await readdir(dir, { withFileTypes: true });
   const files: string[] = [];
-  for (
-    const entry of entries.toSorted((a, b) => a.name.localeCompare(b.name))
-  ) {
+  for (const entry of entries.toSorted((a, b) =>
+    a.name.localeCompare(b.name),
+  )) {
     const path = resolve(dir, entry.name);
     const entryType = await getCommandFileEntryType(path, entry);
     if (entryType === "directory") {
       files.push(
-        ...await collectCommandFiles(path, extensions, nextActiveDirs),
+        ...(await collectCommandFiles(path, extensions, nextActiveDirs)),
       );
     } else if (
       entryType === "file" &&
@@ -942,10 +939,7 @@ function isDeclarationFile(fileName: string): boolean {
   return /\.d\.[cm]?ts$/.test(fileName);
 }
 
-function isTestFile(
-  fileName: string,
-  extensions: readonly string[],
-): boolean {
+function isTestFile(fileName: string, extensions: readonly string[]): boolean {
   const matchedExtension = extensions.find((ext) => fileName.endsWith(ext));
   if (matchedExtension == null) return false;
   const base = fileName.slice(0, -matchedExtension.length);
@@ -1034,8 +1028,10 @@ function displayCommandPath(path: readonly string[]): string {
 }
 
 function isCommandPath(path: unknown): path is CommandPath {
-  return Array.isArray(path) &&
-    path.every((segment) => typeof segment === "string" && segment.length > 0);
+  return (
+    Array.isArray(path) &&
+    path.every((segment) => typeof segment === "string" && segment.length > 0)
+  );
 }
 
 function rejectDuplicatePaths(
@@ -1059,7 +1055,7 @@ function sortCommands<T extends Pick<DiscoveredCommand, "path">>(
   commands: readonly T[],
 ): readonly T[] {
   return commands.toSorted((a, b) =>
-    commandPathKey(a.path).localeCompare(commandPathKey(b.path))
+    commandPathKey(a.path).localeCompare(commandPathKey(b.path)),
   );
 }
 
@@ -1077,10 +1073,7 @@ function isStaticRunProgramOptions<R>(
 }
 
 function staticCommandsToEntries<R>(
-  commands: readonly (
-    | RunProgramStaticCommand<R>
-    | RunProgramCommandEntry<R>
-  )[],
+  commands: readonly (RunProgramStaticCommand<R> | RunProgramCommandEntry<R>)[],
 ): readonly CommandEntry[] {
   return commands.map((entry) => {
     if (isCommandEntry(entry)) return entry;
@@ -1090,9 +1083,7 @@ function staticCommandsToEntries<R>(
       );
     }
     if (!isCommandPath(entry.path)) {
-      throw new TypeError(
-        "Static command entries must declare a path.",
-      );
+      throw new TypeError("Static command entries must declare a path.");
     }
     return {
       path: entry.path,
@@ -1102,10 +1093,12 @@ function staticCommandsToEntries<R>(
 }
 
 function isCommandEntry(value: unknown): value is CommandEntry {
-  return value != null &&
+  return (
+    value != null &&
     typeof value === "object" &&
     isCommandPath((value as { readonly path?: unknown }).path) &&
-    isCommand((value as { readonly command?: unknown }).command);
+    isCommand((value as { readonly command?: unknown }).command)
+  );
 }
 
 function unwrapCommandExport(value: unknown): AnyCommand | undefined {
@@ -1141,16 +1134,14 @@ function validateDeclaredCommandPath(
     commandPathKey(commandDefinition.path) !== commandPathKey(path)
   ) {
     throw new TypeError(
-      `Module ${source} declares command path "${
-        displayCommandPath(commandDefinition.path)
-      }" but ${sourcePathLabel} defines "${displayCommandPath(path)}".`,
+      `Module ${source} declares command path "${displayCommandPath(
+        commandDefinition.path,
+      )}" but ${sourcePathLabel} defines "${displayCommandPath(path)}".`,
     );
   }
 }
 
-function buildCommandTree(
-  commands: readonly CommandEntry[],
-): CommandTreeNode {
+function buildCommandTree(commands: readonly CommandEntry[]): CommandTreeNode {
   const root: CommandTreeNode = { children: new Map() };
   for (const entry of commands) {
     let current = root;
@@ -1205,10 +1196,11 @@ function createExecutableNodeParser(
 ): Parser<Mode, ProgramInvocation, ExecutableNodeParserState> {
   const leafParser = createLeafParser(commandDefinition, path, true);
   const branchParsers = [childParser, leafParser] as const;
-  const parser = longestMatch(
-    childParser,
-    leafParser,
-  ) as Parser<Mode, ProgramInvocation, unknown>;
+  const parser = longestMatch(childParser, leafParser) as Parser<
+    Mode,
+    ProgramInvocation,
+    unknown
+  >;
   const phase2SeedHook = findPhase2SeedHook(parser);
   const executableParser: Parser<
     Mode,
@@ -1223,8 +1215,10 @@ function createExecutableNodeParser(
       const activeState = normalizeExecutableNodeState(context.state);
       const firstArg = context.buffer[0];
       if (
-        preferChildren && activeState == null &&
-        !context.optionsTerminated && firstArg != null &&
+        preferChildren &&
+        activeState == null &&
+        !context.optionsTerminated &&
+        firstArg != null &&
         childParser.leadingNames.has(firstArg)
       ) {
         // A registered first token selects its own grammar even when the root
@@ -1312,10 +1306,13 @@ function createExecutableNodeParser(
           prefix,
         );
       }
-      return parser.suggest({
-        ...context,
-        state: toExclusiveState(activeState, context.state),
-      }, prefix);
+      return parser.suggest(
+        {
+          ...context,
+          state: toExclusiveState(activeState, context.state),
+        },
+        prefix,
+      );
     },
     getSuggestRuntimeNodes(state, path): readonly RuntimeNode[] {
       const activeState = normalizeExecutableNodeState(state);
@@ -1329,10 +1326,12 @@ function createExecutableNodeParser(
         );
       }
       if (activeState?.result.success !== true) {
-        return parser.getSuggestRuntimeNodes?.(
-          toExclusiveState(activeState, state),
-          path,
-        ) ?? [];
+        return (
+          parser.getSuggestRuntimeNodes?.(
+            toExclusiveState(activeState, state),
+            path,
+          ) ?? []
+        );
       }
       const branchParser = branchParsers[activeState.branch];
       const branchPath = [...path, activeState.branch];
@@ -1347,15 +1346,16 @@ function createExecutableNodeParser(
       );
     },
     getDocFragments(state, defaultValue) {
-      const activeState = state.kind === "available"
-        ? normalizeExecutableNodeState(state.state)
-        : undefined;
+      const activeState =
+        state.kind === "available"
+          ? normalizeExecutableNodeState(state.state)
+          : undefined;
       const fragments = parser.getDocFragments(
         state.kind === "available"
           ? {
-            kind: "available",
-            state: toExclusiveState(activeState, state.state),
-          }
+              kind: "available",
+              state: toExclusiveState(activeState, state.state),
+            }
           : state,
         defaultValue,
       );
@@ -1387,10 +1387,10 @@ function getExecutableNodeBranchSuggestRuntimeNodes(
   state: unknown,
   path: readonly PropertyKey[],
 ): readonly RuntimeNode[] {
-  return parser.getSuggestRuntimeNodes?.(state, path) ??
-    (parser.dependencyMetadata?.source != null
-      ? [{ path, parser, state }]
-      : []);
+  return (
+    parser.getSuggestRuntimeNodes?.(state, path) ??
+    (parser.dependencyMetadata?.source != null ? [{ path, parser, state }] : [])
+  );
 }
 
 interface Phase2SeedHook {
@@ -1439,7 +1439,7 @@ function completeExecutableNodeLeaf(
         wrapForMode(
           "async",
           completeParsedExecutableNodeLeaf(state, exec, leafParser, resolved),
-        )
+        ),
       ),
   );
 }
@@ -1487,7 +1487,7 @@ function extractExecutableNodePhase2Seed(
           exec,
           resolved,
           phase2SeedHook,
-        )
+        ),
       ),
   );
 }
@@ -1522,9 +1522,9 @@ function parseExecutableNodeLeaf(
     state: inheritAnnotations(state, leafParser.initialState),
     ...(childExec != null
       ? {
-        exec: childExec,
-        dependencyRegistry: childExec.dependencyRegistry,
-      }
+          exec: childExec,
+          dependencyRegistry: childExec.dependencyRegistry,
+        }
       : {}),
   };
   return leafParser.parse(childContext);
@@ -1562,15 +1562,14 @@ function toExclusiveState(
   state: ExecutableNodeParserState,
   sourceState: unknown = state,
 ): unknown {
-  const exclusiveState = state == null
-    ? undefined
-    : [state.branch, state.result] as [number, ParserResult<unknown>];
+  const exclusiveState =
+    state == null
+      ? undefined
+      : ([state.branch, state.result] as [number, ParserResult<unknown>]);
   return inheritAnnotations(sourceState, exclusiveState);
 }
 
-function fromExclusiveState(
-  state: unknown,
-): ExecutableNodeParserState {
+function fromExclusiveState(state: unknown): ExecutableNodeParserState {
   if (
     !Array.isArray(state) ||
     state.length !== 2 ||
@@ -1586,11 +1585,13 @@ function fromExclusiveState(
 }
 
 function isCommittedResult(result: unknown): boolean {
-  return result != null &&
+  return (
+    result != null &&
     typeof result === "object" &&
     (result as { readonly success?: unknown }).success === true &&
     Array.isArray((result as { readonly consumed?: unknown }).consumed) &&
-    (result as { readonly consumed: readonly unknown[] }).consumed.length > 0;
+    (result as { readonly consumed: readonly unknown[] }).consumed.length > 0
+  );
 }
 
 function wrapInitialParseResult(
@@ -1619,8 +1620,10 @@ function wrapBranchParseResult(
     context.exec,
     result.next.exec,
   );
-  const dependencyRegistry = mergedExec?.dependencyRegistry ??
-    result.next.dependencyRegistry ?? context.dependencyRegistry;
+  const dependencyRegistry =
+    mergedExec?.dependencyRegistry ??
+    result.next.dependencyRegistry ??
+    context.dependencyRegistry;
   const nextState = inheritAnnotations(result.next.state, {
     branch: activeState.branch,
     result,
@@ -1650,19 +1653,20 @@ function withExecutableNodeChildContext(
   parser: Parser<Mode, ProgramInvocation, unknown>,
 ): ParserContext<unknown> {
   const exec = withExecutableNodeChildExecPath(context.exec, branch);
-  const dependencyRegistry = context.dependencyRegistry ??
-    exec?.dependencyRegistry;
+  const dependencyRegistry =
+    context.dependencyRegistry ?? exec?.dependencyRegistry;
   return {
     ...context,
     state,
     usage: parser.usage,
     ...(exec != null
       ? {
-        exec: dependencyRegistry === exec.dependencyRegistry
-          ? exec
-          : { ...exec, dependencyRegistry },
-        dependencyRegistry,
-      }
+          exec:
+            dependencyRegistry === exec.dependencyRegistry
+              ? exec
+              : { ...exec, dependencyRegistry },
+          dependencyRegistry,
+        }
       : {}),
   };
 }
@@ -1690,10 +1694,10 @@ function mergeExecutableNodeChildExec(
     dependencyRuntime: child.dependencyRuntime ?? parent.dependencyRuntime,
     dependencyRegistry: child.dependencyRegistry ?? parent.dependencyRegistry,
     commandPath: child.commandPath ?? parent.commandPath,
-    preCompletedByParser: child.preCompletedByParser ??
-      parent.preCompletedByParser,
-    excludedSourceFields: child.excludedSourceFields ??
-      parent.excludedSourceFields,
+    preCompletedByParser:
+      child.preCompletedByParser ?? parent.preCompletedByParser,
+    excludedSourceFields:
+      child.excludedSourceFields ?? parent.excludedSourceFields,
   });
 }
 
@@ -1820,8 +1824,7 @@ function namespaceCommandMetadata(
   }
   return {
     ...(metadata?.aliases != null && { aliases: metadata.aliases }),
-    ...(metadata?.showAliases != null &&
-      { showAliases: metadata.showAliases }),
+    ...(metadata?.showAliases != null && { showAliases: metadata.showAliases }),
     ...(metadata?.errors != null && { errors: metadata.errors }),
     ...(hidden != null && { hidden }),
     ...(metadata?.usageLine != null && { usageLine: metadata.usageLine }),
@@ -1889,7 +1892,7 @@ function withRootDocs(
     const root = rootCommand?.command.parser.getDocFragments({
       kind: "unavailable",
     });
-    const fragments: DocFragment[] = [...root?.fragments ?? []];
+    const fragments: DocFragment[] = [...(root?.fragments ?? [])];
     if (listedCommands.length > 0) {
       fragments.push({
         type: "section",
@@ -1906,7 +1909,8 @@ function withRootDocs(
               ...(aliases.length > 0 && { aliases }),
               hidden: commandPathHidden(entry.path, commandsByPath),
             },
-            description: entry.command.metadata?.brief ??
+            description:
+              entry.command.metadata?.brief ??
               entry.command.metadata?.description,
             ...(showAliases != null && { showAliases }),
           };
@@ -1920,9 +1924,10 @@ function withRootDocs(
       ...(root?.environmentBindings != null && {
         environmentBindings: root.environmentBindings,
       }),
-      ...(listedCommands.length === 0 && root?.sourceOnly === true && {
-        sourceOnly: true,
-      }),
+      ...(listedCommands.length === 0 &&
+        root?.sourceOnly === true && {
+          sourceOnly: true,
+        }),
       fragments,
     };
   };
@@ -2034,7 +2039,8 @@ function normalizeProgramHelp(
   if (help == null || typeof help === "string") return help ?? "both";
   const { command, option, bareGroup } = help;
   if (
-    bareGroup != null && !["never", "namespace", "always"].includes(bareGroup)
+    bareGroup != null &&
+    !["never", "namespace", "always"].includes(bareGroup)
   ) {
     throw new TypeError(`Invalid bareGroup help policy: ${bareGroup}`);
   }
@@ -2054,8 +2060,9 @@ function resolveBareGroup(
   const path: string[] = [];
   for (const token of args) {
     if (token.startsWith("-")) return undefined;
-    const entry = [...node.children].find(([name, child]) =>
-      name === token || child.command?.metadata?.aliases?.includes(token)
+    const entry = [...node.children].find(
+      ([name, child]) =>
+        name === token || child.command?.metadata?.aliases?.includes(token),
     );
     if (entry == null) return undefined;
     path.push(entry[0]);
@@ -2072,10 +2079,14 @@ function withRootMetaCommands(
 ): Parser<Mode, ProgramInvocation, unknown> {
   const firstArg = args[0];
   if (
-    tree.command == null || firstArg == null ||
-    [...tree.children].some(([name, child]) =>
-      name === firstArg || child.command?.metadata?.aliases?.includes(firstArg)
-    ) || !rootMetaCommandNames(options).includes(firstArg)
+    tree.command == null ||
+    firstArg == null ||
+    [...tree.children].some(
+      ([name, child]) =>
+        name === firstArg ||
+        child.command?.metadata?.aliases?.includes(firstArg),
+    ) ||
+    !rootMetaCommandNames(options).includes(firstArg)
   ) {
     return parser;
   }
@@ -2087,7 +2098,8 @@ function withRootMetaCommands(
       // reparses user input with this same full parser in the suggest phase.
       if (
         context.buffer.length === args.length &&
-        context.buffer[0] === firstArg && !context.optionsTerminated &&
+        context.buffer[0] === firstArg &&
+        !context.optionsTerminated &&
         context.exec?.phase !== "suggest"
       ) {
         return wrapForMode(parser.mode, {
@@ -2110,13 +2122,15 @@ function rootMetaCommandNames(options: RunOptions): readonly string[] {
     config == null
       ? []
       : config === true
-      ? [defaultName]
-      : config.names ?? [defaultName];
+        ? [defaultName]
+        : (config.names ?? [defaultName]);
   const commandConfig = (
     config: RunOptions["help"] | RunOptions["completion"],
   ): Extract<RunOptions["help"], object>["command"] =>
     typeof config === "string"
-      ? config === "option" ? undefined : true
+      ? config === "option"
+        ? undefined
+        : true
       : config?.command;
   return [
     ...names(commandConfig(options.help), "help"),
@@ -2156,10 +2170,12 @@ function buildRunOptions<R>(
     bugs: options.bugs ?? metadata.bugs,
     footer: options.footer ?? metadata.footer,
     help: normalizedHelp,
-    version: version === false
-      ? undefined
-      : version ?? (metadata.version == null ? undefined : metadata.version),
-    completion: completion === false ? undefined : completion ?? "both",
+    version:
+      version === false
+        ? undefined
+        : (version ??
+          (metadata.version == null ? undefined : metadata.version)),
+    completion: completion === false ? undefined : (completion ?? "both"),
   };
   return runOptions;
 }
@@ -2204,10 +2220,7 @@ function wrapProgramContext(
 function unwrapProgramContextRequest(
   request: SourceContextRequest | undefined,
 ): SourceContextRequest | undefined {
-  if (
-    request?.phase === "phase2" &&
-    isProgramInvocation(request.parsed)
-  ) {
+  if (request?.phase === "phase2" && isProgramInvocation(request.parsed)) {
     return { phase: "phase2", parsed: request.parsed.value };
   }
   return request;
@@ -2219,7 +2232,9 @@ function isProgramInvocation(value: unknown): value is ProgramInvocation {
     readonly command?: unknown;
     readonly handler?: unknown;
   };
-  return "value" in value &&
+  return (
+    "value" in value &&
     isCommand(candidate.command) &&
-    typeof candidate.handler === "function";
+    typeof candidate.handler === "function"
+  );
 }

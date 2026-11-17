@@ -120,10 +120,11 @@ describe("check_versions", () => {
         join(root, "scripts/bump_version.ts"),
         join(dir, "scripts/bump_version.ts"),
       );
-      const result = spawnSync("node", [
-        join(dir, "scripts/bump_version.ts"),
-        "2.0.0",
-      ], { encoding: "utf8", timeout: 10_000 });
+      const result = spawnSync(
+        "node",
+        [join(dir, "scripts/bump_version.ts"), "2.0.0"],
+        { encoding: "utf8", timeout: 10_000 },
+      );
       assert.ifError(result.error);
       assert.equal(result.status, 0, result.stderr);
       for (const name of ["deno.json", "package.json"]) {
@@ -168,14 +169,15 @@ async function metadata(dir: string, path: string, value: object) {
 
 function run(dir: string, ...args: string[]) {
   // Explicit Node binary lookup also works when Deno discovers this test.
-  const result = spawnSync("node", [
-    join(dir, "scripts/check_versions.ts"),
-    ...args,
-  ], {
-    cwd: root,
-    encoding: "utf8",
-    timeout: 10_000,
-  });
+  const result = spawnSync(
+    "node",
+    [join(dir, "scripts/check_versions.ts"), ...args],
+    {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 10_000,
+    },
+  );
   assert.ifError(result.error);
   return result;
 }

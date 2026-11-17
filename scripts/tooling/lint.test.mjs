@@ -17,20 +17,24 @@ function lint(source) {
   const file = resolve(directory, "fixture.ts");
   writeFileSync(file, source);
   try {
-    const result = spawnSync("node", [
-      fileURLToPath(
-        new URL("bin/oxlint", import.meta.resolve("oxlint/package.json")),
-      ),
-      "--config",
-      resolve(".oxlintrc.json"),
-      "--no-ignore",
-      "--deny-warnings",
-      "--report-unused-disable-directives-severity=error",
-      file,
-    ], {
-      encoding: "utf8",
-      timeout: 30_000,
-    });
+    const result = spawnSync(
+      "node",
+      [
+        fileURLToPath(
+          new URL("bin/oxlint", import.meta.resolve("oxlint/package.json")),
+        ),
+        "--config",
+        resolve(".oxlintrc.json"),
+        "--no-ignore",
+        "--deny-warnings",
+        "--report-unused-disable-directives-severity=error",
+        file,
+      ],
+      {
+        encoding: "utf8",
+        timeout: 30_000,
+      },
+    );
     if (result.error) throw result.error;
     return { status: result.status, output: result.stdout + result.stderr };
   } finally {
@@ -51,18 +55,16 @@ test("72 mapped counterparts retain all 87 compatibility rules", () => {
 });
 
 test("real linter enforces key rules and unused directives", () => {
-  for (
-    const [source, rule] of [
-      ["export async function f() { return 1; }", "require-await"],
-      ["export const value: any = 1;", "no-explicit-any"],
-      ["const unused = 1;", "no-unused-vars"],
-      ["export const re = /\\x00/;", "no-control-regex"],
-      [
-        "/* oxlint-disable-next-line no-debugger */\nexport const value = 1;",
-        "Unused",
-      ],
-    ]
-  ) {
+  for (const [source, rule] of [
+    ["export async function f() { return 1; }", "require-await"],
+    ["export const value: any = 1;", "no-explicit-any"],
+    ["const unused = 1;", "no-unused-vars"],
+    ["export const re = /\\x00/;", "no-control-regex"],
+    [
+      "/* oxlint-disable-next-line no-debugger */\nexport const value = 1;",
+      "Unused",
+    ],
+  ]) {
     const result = lint(source);
     assert.notEqual(result.status, 0, result.output);
     assert.match(result.output.toLowerCase(), new RegExp(rule.toLowerCase()));

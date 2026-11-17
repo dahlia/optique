@@ -83,8 +83,8 @@ export function enterCommandDocPolicy(
 ): ExecutionContext | undefined {
   const current = policy(exec);
   if (exec == null || current == null) return exec;
-  const active = current.records.findLast((scope) =>
-    scope.id === id && samePath(scope.path, exec.path)
+  const active = current.records.findLast(
+    (scope) => scope.id === id && samePath(scope.path, exec.path),
   );
   return {
     ...exec,
@@ -136,7 +136,8 @@ export function withoutCommandDocPolicySubtree(
   if (exec == null || current == null) return exec;
   const retained = new Set<Scope>();
   const records = current.records.filter((scope) => {
-    const inside = scope.path.length >= path.length &&
+    const inside =
+      scope.path.length >= path.length &&
       path.every((part, i) => part === scope.path[i]);
     if (inside || (scope.parent != null && !retained.has(scope.parent))) {
       return false;

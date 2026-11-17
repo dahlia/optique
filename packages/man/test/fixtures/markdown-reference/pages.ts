@@ -43,12 +43,18 @@ export const referenceEntries: readonly MarkdownCommandEntry[] = [
   {
     path: [],
     page: {
-      usage: [...globals, {
-        type: "exclusive",
-        terms: [[cmd("serve")], [cmd("config")], [cmd("docs")], [
-          cmd("completion"),
-        ]],
-      }],
+      usage: [
+        ...globals,
+        {
+          type: "exclusive",
+          terms: [
+            [cmd("serve")],
+            [cmd("config")],
+            [cmd("docs")],
+            [cmd("completion")],
+          ],
+        },
+      ],
       sections: [
         {
           title: "Commands",
@@ -76,40 +82,59 @@ export const referenceEntries: readonly MarkdownCommandEntry[] = [
   {
     path: ["serve"],
     page: {
-      usage: [cmd("serve"), ...globals, {
-        type: "optional",
-        terms: [port.term],
-      }, {
-        type: "multiple",
-        terms: [{ type: "option", names: ["--tag"], metavar: "TAG" }],
-        min: 0,
-      }],
-      sections: [{ title: "Shared options", entries: [verbose] }, {
-        title: "Inputs",
-        entries: [port, {
-          term: { type: "option", names: ["--tag"], metavar: "TAG" },
-          description: message`Repeat to add example tags.`,
-        }],
-      }],
+      usage: [
+        cmd("serve"),
+        ...globals,
+        {
+          type: "optional",
+          terms: [port.term],
+        },
+        {
+          type: "multiple",
+          terms: [{ type: "option", names: ["--tag"], metavar: "TAG" }],
+          min: 0,
+        },
+      ],
+      sections: [
+        { title: "Shared options", entries: [verbose] },
+        {
+          title: "Inputs",
+          entries: [
+            port,
+            {
+              term: { type: "option", names: ["--tag"], metavar: "TAG" },
+              description: message`Repeat to add example tags.`,
+            },
+          ],
+        },
+      ],
       examples: message`ref-tool serve --port 9000 --tag local --tag demo`,
-      environmentBindings: [{
-        name: "REF_PORT",
-        description:
-          message`An example documented binding; this fixture does not read it.`,
-      }],
+      environmentBindings: [
+        {
+          name: "REF_PORT",
+          description: message`An example documented binding; this fixture does not read it.`,
+        },
+      ],
     },
   },
   {
     path: ["config"],
     page: {
-      usage: [cmd("config"), ...globals, {
-        type: "exclusive",
-        terms: [[cmd("get")], [cmd("set")]],
-      }],
-      sections: [{ entries: [{ term: cmd("get") }, { term: cmd("set") }] }, {
-        title: "Shared options",
-        entries: [verbose],
-      }],
+      usage: [
+        cmd("config"),
+        ...globals,
+        {
+          type: "exclusive",
+          terms: [[cmd("get")], [cmd("set")]],
+        },
+      ],
+      sections: [
+        { entries: [{ term: cmd("get") }, { term: cmd("set") }] },
+        {
+          title: "Shared options",
+          entries: [verbose],
+        },
+      ],
     },
   },
   {
@@ -117,31 +142,50 @@ export const referenceEntries: readonly MarkdownCommandEntry[] = [
     aliases: ["g"],
     hiddenAliases: ["old-get"],
     page: {
-      usage: [cmd("config"), cmd("get"), ...globals, {
-        type: "multiple",
-        terms: [{ type: "argument", metavar: "KEY" }],
-        min: 1,
-      }],
-      sections: [{ title: "Shared options", entries: [verbose] }, {
-        title: "Inputs",
-        entries: [{
-          term: { type: "argument", metavar: "KEY" },
-          description: message`One or more keys to display.`,
-        }],
-      }],
+      usage: [
+        cmd("config"),
+        cmd("get"),
+        ...globals,
+        {
+          type: "multiple",
+          terms: [{ type: "argument", metavar: "KEY" }],
+          min: 1,
+        },
+      ],
+      sections: [
+        { title: "Shared options", entries: [verbose] },
+        {
+          title: "Inputs",
+          entries: [
+            {
+              term: { type: "argument", metavar: "KEY" },
+              description: message`One or more keys to display.`,
+            },
+          ],
+        },
+      ],
     },
   },
   {
     path: ["config", "set"],
     page: {
-      usage: [cmd("config"), cmd("set"), ...globals, {
-        type: "argument",
-        metavar: "KEY",
-      }, { type: "optional", terms: [format.term] }],
-      sections: [{ title: "Shared options", entries: [verbose] }, {
-        title: "Inputs",
-        entries: [{ term: { type: "argument", metavar: "KEY" } }, format],
-      }],
+      usage: [
+        cmd("config"),
+        cmd("set"),
+        ...globals,
+        {
+          type: "argument",
+          metavar: "KEY",
+        },
+        { type: "optional", terms: [format.term] },
+      ],
+      sections: [
+        { title: "Shared options", entries: [verbose] },
+        {
+          title: "Inputs",
+          entries: [{ term: { type: "argument", metavar: "KEY" } }, format],
+        },
+      ],
       description: message`Prints the parsed example; it changes no settings.`,
     },
   },
@@ -156,21 +200,29 @@ export const referenceEntries: readonly MarkdownCommandEntry[] = [
   {
     path: ["completion"],
     page: {
-      usage: [cmd("completion"), { type: "argument", metavar: "SHELL" }, {
-        type: "multiple",
-        terms: [{ type: "argument", metavar: "ARG" }],
-        min: 0,
-      }],
-      sections: [{
-        entries: [{
-          term: { type: "argument", metavar: "SHELL" },
-          description:
-            message`Generate a script, or pass completion query arguments.`,
-        }, {
-          term: { type: "argument", metavar: "ARG" },
-          description: message`Runner completion query inputs, when provided.`,
-        }],
-      }],
+      usage: [
+        cmd("completion"),
+        { type: "argument", metavar: "SHELL" },
+        {
+          type: "multiple",
+          terms: [{ type: "argument", metavar: "ARG" }],
+          min: 0,
+        },
+      ],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "argument", metavar: "SHELL" },
+              description: message`Generate a script, or pass completion query arguments.`,
+            },
+            {
+              term: { type: "argument", metavar: "ARG" },
+              description: message`Runner completion query inputs, when provided.`,
+            },
+          ],
+        },
+      ],
     },
   },
 ];

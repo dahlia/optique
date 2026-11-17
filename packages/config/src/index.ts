@@ -64,9 +64,7 @@ export interface ConfigMeta {
   readonly configPath: string;
 }
 
-const phase1ConfigAnnotationMarker = Symbol(
-  "@optique/config/phase1Annotation",
-);
+const phase1ConfigAnnotationMarker = Symbol("@optique/config/phase1Annotation");
 
 /**
  * Options for creating a config context.
@@ -198,8 +196,10 @@ export interface ConfigContextRequiredOptions<TConfigMeta = ConfigMeta> {
  * @template TConfigMeta Metadata type for config sources.
  * @since 0.10.0
  */
-export interface ConfigContext<T, TConfigMeta = ConfigMeta>
-  extends SourceContext<ConfigContextRequiredOptions<TConfigMeta>> {
+export interface ConfigContext<
+  T,
+  TConfigMeta = ConfigMeta,
+> extends SourceContext<ConfigContextRequiredOptions<TConfigMeta>> {
   /**
    * The Standard Schema validator for the config file.
    */
@@ -213,10 +213,12 @@ function getTypeName(value: unknown): string {
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-  return value != null &&
+  return (
+    value != null &&
     (typeof value === "object" || typeof value === "function") &&
     "then" in value &&
-    typeof (value as Record<string, unknown>).then === "function";
+    typeof (value as Record<string, unknown>).then === "function"
+  );
 }
 
 /**
@@ -234,9 +236,11 @@ function isPromise(value: unknown): boolean {
   ) {
     return false;
   }
-  return isPromiseLike(value) &&
+  return (
+    isPromiseLike(value) &&
     (value as unknown as Record<symbol, unknown>)[Symbol.toStringTag] ===
-      "Promise";
+      "Promise"
+  );
 }
 
 function validateLoadResult<TConfigMeta>(
@@ -251,9 +255,7 @@ function validateLoadResult<TConfigMeta>(
     );
   }
   if (!("config" in loaded)) {
-    throw new TypeError(
-      "Expected load() result to have a config property.",
-    );
+    throw new TypeError("Expected load() result to have a config property.");
   }
   const result = loaded as Record<string, unknown>;
   // Use isPromise() to catch both same-realm and cross-realm
@@ -276,7 +278,8 @@ function validateLoadResult<TConfigMeta>(
 
 function isStandardSchema(value: unknown): value is StandardSchemaV1 {
   if (
-    value == null || (typeof value !== "object" && typeof value !== "function")
+    value == null ||
+    (typeof value !== "object" && typeof value !== "function")
   ) {
     return false;
   }
@@ -300,7 +303,9 @@ function isStandardSchema(value: unknown): value is StandardSchemaV1 {
  * @throws {Error} If the home directory cannot be determined.
  */
 function expandHomeDirectory(path: string): string {
-  const hasHomePrefix = path === "~" || path.startsWith("~/") ||
+  const hasHomePrefix =
+    path === "~" ||
+    path.startsWith("~/") ||
     (sep === "\\" && path.startsWith("~\\"));
   if (!hasHomePrefix) return path;
   const home = homedir();
@@ -315,9 +320,7 @@ function expandHomeDirectory(path: string): string {
   return path === "~" ? home : join(home, path.slice(2));
 }
 
-function isErrnoException(
-  error: unknown,
-): error is NodeJS.ErrnoException {
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
   return typeof error === "object" && error !== null && "code" in error;
 }
 
@@ -325,12 +328,10 @@ function isErrnoException(
  * Validates raw data against a Standard Schema and returns the validated value.
  * @internal
  */
-function processValidationResult<T>(
-  validationResult: {
-    readonly issues?: readonly { readonly message?: string }[];
-    readonly value?: T;
-  },
-): T {
+function processValidationResult<T>(validationResult: {
+  readonly issues?: readonly { readonly message?: string }[];
+  readonly value?: T;
+}): T {
   if (validationResult.issues) {
     const firstIssue = validationResult.issues[0];
     throw new Error(
@@ -405,9 +406,9 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
   const rawSchema = options.schema;
   if (!isStandardSchema(rawSchema)) {
     throw new TypeError(
-      `Expected schema to be a Standard Schema object, but got: ${
-        getTypeName(rawSchema)
-      }.`,
+      `Expected schema to be a Standard Schema object, but got: ${getTypeName(
+        rawSchema,
+      )}.`,
     );
   }
 
@@ -415,9 +416,9 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
   const rawFileParser = options.fileParser;
   if (rawFileParser !== undefined && typeof rawFileParser !== "function") {
     throw new TypeError(
-      `Expected fileParser to be a function, but got: ${
-        getTypeName(rawFileParser)
-      }.`,
+      `Expected fileParser to be a function, but got: ${getTypeName(
+        rawFileParser,
+      )}.`,
     );
   }
 
@@ -486,18 +487,19 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         typeof opts.getConfigPath !== "function"
       ) {
         throw new TypeError(
-          `Expected getConfigPath to be a function, but got: ${
-            getTypeName(opts.getConfigPath)
-          }.`,
+          `Expected getConfigPath to be a function, but got: ${getTypeName(
+            opts.getConfigPath,
+          )}.`,
         );
       }
       if (
-        opts.expandHome !== undefined && typeof opts.expandHome !== "boolean"
+        opts.expandHome !== undefined &&
+        typeof opts.expandHome !== "boolean"
       ) {
         throw new TypeError(
-          `Expected expandHome to be a boolean, but got: ${
-            getTypeName(opts.expandHome)
-          }.`,
+          `Expected expandHome to be a boolean, but got: ${getTypeName(
+            opts.expandHome,
+          )}.`,
         );
       }
 
@@ -536,7 +538,7 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
         const validated = validateWithSchema(rawSchema, rawData);
         if (validated instanceof Promise) {
           return validated.then((configData) =>
-            buildAnnotations(configData, configMeta)
+            buildAnnotations(configData, configMeta),
           );
         }
         return buildAnnotations(validated, configMeta);
@@ -578,9 +580,9 @@ export function createConfigContext<T, TConfigMeta = ConfigMeta>(
 
         if (configPath !== undefined && typeof configPath !== "string") {
           throw new TypeError(
-            `Expected getConfigPath() to return a string or undefined, but got: ${
-              getTypeName(configPath)
-            }.`,
+            `Expected getConfigPath() to return a string or undefined, but got: ${getTypeName(
+              configPath,
+            )}.`,
           );
         }
 
@@ -730,13 +732,15 @@ export function bindConfig<
 ): FluentParser<M, TValue, TState> {
   const keyType = typeof options.key;
   if (
-    keyType !== "string" && keyType !== "number" && keyType !== "symbol" &&
+    keyType !== "string" &&
+    keyType !== "number" &&
+    keyType !== "symbol" &&
     keyType !== "function"
   ) {
     throw new TypeError(
-      `Expected key to be a property key or function, but got: ${
-        getTypeName(options.key)
-      }.`,
+      `Expected key to be a property key or function, but got: ${getTypeName(
+        options.key,
+      )}.`,
     );
   }
 
@@ -744,18 +748,17 @@ export function bindConfig<
   // approach used by bindEnv.  This prevents complete() from accidentally
   // treating an unrelated state object with a `hasCliValue` property as a
   // ConfigBindState.
-  const configBindStateKey: unique symbol = Symbol(
-    "@optique/config/bindState",
-  );
+  const configBindStateKey: unique symbol = Symbol("@optique/config/bindState");
 
-  type ConfigBindState =
-    & { readonly [K in typeof configBindStateKey]: true }
-    & { readonly hasCliValue: boolean; readonly cliState?: TState };
+  type ConfigBindState = { readonly [K in typeof configBindStateKey]: true } & {
+    readonly hasCliValue: boolean;
+    readonly cliState?: TState;
+  };
 
   function isConfigBindState(value: unknown): value is ConfigBindState {
-    return value != null &&
-      typeof value === "object" &&
-      configBindStateKey in value;
+    return (
+      value != null && typeof value === "object" && configBindStateKey in value
+    );
   }
 
   function shouldDeferCompletion(
@@ -766,8 +769,10 @@ export function bindConfig<
     if (annotations?.[options.context.id] === phase1ConfigAnnotationMarker) {
       return true;
     }
-    return typeof parser.shouldDeferCompletion === "function" &&
-      parser.shouldDeferCompletion(getInnerState(state), exec) === true;
+    return (
+      typeof parser.shouldDeferCompletion === "function" &&
+      parser.shouldDeferCompletion(getInnerState(state), exec) === true
+    );
   }
 
   // bindConfig() resolves fallbacks through config annotations at completion
@@ -811,8 +816,7 @@ export function bindConfig<
     const configValue = options.key(configData, configMeta);
     if (
       configValue != null &&
-      (typeof configValue === "object" ||
-        typeof configValue === "function") &&
+      (typeof configValue === "object" || typeof configValue === "function") &&
       "then" in configValue &&
       typeof (configValue as Record<string, unknown>).then === "function"
     ) {
@@ -826,9 +830,9 @@ export function bindConfig<
 
   const getCliState = (state: TState): TState =>
     isConfigBindState(state)
-      ? (state.hasCliValue
-        ? state.cliState as TState
-        : inheritAnnotations(state, parser.initialState))
+      ? state.hasCliValue
+        ? (state.cliState as TState)
+        : inheritAnnotations(state, parser.initialState)
       : state;
 
   const boundParser: Parser<M, TValue, TState> = {
@@ -836,9 +840,10 @@ export function bindConfig<
     $valueType: parser.$valueType,
     $stateType: parser.$stateType,
     priority: parser.priority,
-    usage: options.default !== undefined
-      ? [{ type: "optional", terms: parser.usage }]
-      : parser.usage,
+    usage:
+      options.default !== undefined
+        ? [{ type: "optional", terms: parser.usage }]
+        : parser.usage,
     leadingNames: parser.leadingNames,
     acceptingAnyToken: parser.acceptingAnyToken,
     initialState: parser.initialState,
@@ -855,20 +860,14 @@ export function bindConfig<
     },
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
       const innerState = getInnerState(state);
-      return delegateSuggestNodes(
-        parser,
-        boundParser,
-        state,
-        path,
-        innerState,
-      );
+      return delegateSuggestNodes(parser, boundParser, state, path, innerState);
     },
 
     parse: (context) => {
       // Extract annotations from context to preserve them
       const annotations = getAnnotations(context.state);
-      const hadCliValue = isConfigBindState(context.state) &&
-        context.state.hasCliValue;
+      const hadCliValue =
+        isConfigBindState(context.state) && context.state.hasCliValue;
 
       // Unwrap state from a previous parse() call.  After a successful
       // parse, object() stores the wrapped ConfigBindState and passes it
@@ -876,9 +875,10 @@ export function bindConfig<
       // native state, so we unwrap cliState before delegating, mirroring
       // the pattern used by bindEnv.
       const innerState = getCliState(context.state);
-      const innerContext = innerState !== context.state
-        ? { ...context, state: innerState }
-        : context;
+      const innerContext =
+        innerState !== context.state
+          ? { ...context, state: innerState }
+          : context;
 
       const processResult = (
         result: ParserResult<TState>,
@@ -888,16 +888,21 @@ export function bindConfig<
           // updates; the binding owns cumulative CLI provenance.  A re-parse
           // must retain earlier input, while an initially empty parse must
           // still allow the fallback source.
-          const terminatorOnly = result.consumed.length === 1 &&
-            result.consumed[0] === "--" && !context.optionsTerminated &&
+          const terminatorOnly =
+            result.consumed.length === 1 &&
+            result.consumed[0] === "--" &&
+            !context.optionsTerminated &&
             result.next.optionsTerminated;
-          const cliConsumed = hadCliValue ||
-            (result.consumed.length > 0 && !terminatorOnly);
-          const newState = injectAnnotations({
-            [configBindStateKey]: true as const,
-            hasCliValue: cliConsumed,
-            cliState: result.next.state,
-          }, annotations);
+          const cliConsumed =
+            hadCliValue || (result.consumed.length > 0 && !terminatorOnly);
+          const newState = injectAnnotations(
+            {
+              [configBindStateKey]: true as const,
+              hasCliValue: cliConsumed,
+              cliState: result.next.state,
+            },
+            annotations,
+          );
           return {
             success: true,
             ...(result.provisional ? { provisional: true as const } : {}),
@@ -919,10 +924,13 @@ export function bindConfig<
           return { success: true, next: context, consumed: [] };
         }
 
-        const newState = injectAnnotations({
-          [configBindStateKey]: true as const,
-          hasCliValue: false,
-        }, annotations);
+        const newState = injectAnnotations(
+          {
+            [configBindStateKey]: true as const,
+            hasCliValue: false,
+          },
+          annotations,
+        );
         return {
           success: true,
           next: { ...innerContext, state: newState as TState },
@@ -959,9 +967,10 @@ export function bindConfig<
 
     suggest: (context, prefix) => {
       const innerState = getInnerState(context.state);
-      const innerContext = innerState !== context.state
-        ? { ...context, state: innerState }
-        : context;
+      const innerContext =
+        innerState !== context.state
+          ? { ...context, state: innerState }
+          : context;
       return parser.suggest(innerContext, prefix);
     },
     shouldDeferCompletion,
@@ -1011,20 +1020,21 @@ export function bindConfig<
     parser,
     (sourceMetadata: ParserSourceMetadata<M, TValue, TState>) => ({
       ...sourceMetadata,
-      getMissingSourceValue: sourceMetadata.preservesSourceValue !== false &&
-          options.default !== undefined
-        ? () => {
-          // Route the default through the inner parser's validateValue
-          // so that CLI constraints (regex, numeric bounds, choices)
-          // cannot be bypassed via bindConfig defaults (#414).
-          if (typeof parser.validateValue === "function") {
-            return parser.validateValue(options.default!) as
-              | ValueParserResult<unknown>
-              | Promise<ValueParserResult<unknown>>;
-          }
-          return { success: true as const, value: options.default };
-        }
-        : undefined,
+      getMissingSourceValue:
+        sourceMetadata.preservesSourceValue !== false &&
+        options.default !== undefined
+          ? () => {
+              // Route the default through the inner parser's validateValue
+              // so that CLI constraints (regex, numeric bounds, choices)
+              // cannot be bypassed via bindConfig defaults (#414).
+              if (typeof parser.validateValue === "function") {
+                return parser.validateValue(options.default!) as
+                  | ValueParserResult<unknown>
+                  | Promise<ValueParserResult<unknown>>;
+              }
+              return { success: true as const, value: options.default };
+            }
+          : undefined,
       extractSourceValue: (state: unknown) => {
         if (!isConfigBindState(state)) {
           if (sourceMetadata.preservesSourceValue) {
@@ -1039,15 +1049,11 @@ export function bindConfig<
           return sourceMetadata.extractSourceValue(state);
         }
         if (state.hasCliValue) {
-          return sourceMetadata.extractSourceValue(
-            state.cliState,
-          );
+          return sourceMetadata.extractSourceValue(state.cliState);
         }
         const fallbackState = state.cliState ?? state;
         if (!sourceMetadata.preservesSourceValue) {
-          return sourceMetadata.extractSourceValue(
-            fallbackState,
-          );
+          return sourceMetadata.extractSourceValue(fallbackState);
         }
         return getConfigSourceValue(
           state,
@@ -1065,13 +1071,14 @@ export function bindConfig<
       // source value, this wrapper's completion lives in the transformed
       // domain and must never register under the raw source ID, so no
       // completion is exposed.
-      completeSource: sourceMetadata.completeSource == null ||
-          sourceMetadata.preservesSourceValue === false
-        ? undefined
-        : (state: unknown, exec) =>
-          Promise.resolve(
-            boundParser.complete(state as TState, exec),
-          ) as Promise<ValueParserResult<unknown> | undefined>,
+      completeSource:
+        sourceMetadata.completeSource == null ||
+        sourceMetadata.preservesSourceValue === false
+          ? undefined
+          : (state: unknown, exec) =>
+              Promise.resolve(
+                boundParser.complete(state as TState, exec),
+              ) as Promise<ValueParserResult<unknown> | undefined>,
     }),
   );
   if (dependencyMetadata != null) {
@@ -1086,9 +1093,11 @@ export function bindConfig<
   // The empty step preserves success/provisional or accepts a non-match.
   const emptyStep = getEmptyInputBehavior(parser).step;
   defineEmptyInputBehavior(boundParser, {
-    ...(emptyStep === undefined ? {} : {
-      step: emptyStep === "failure" ? "success" : emptyStep,
-    }),
+    ...(emptyStep === undefined
+      ? {}
+      : {
+          step: emptyStep === "failure" ? "success" : emptyStep,
+        }),
   });
   return fluent(boundParser);
 }
@@ -1115,12 +1124,7 @@ export function bindConfig<
  * @throws {Error} Propagates errors thrown by `innerParser.complete()` when
  *                 falling through to a deferred inner parser.
  */
-function getConfigOrDefault<
-  M extends "sync" | "async",
-  T,
-  TValue,
-  TConfigMeta,
->(
+function getConfigOrDefault<M extends "sync" | "async", T, TValue, TConfigMeta>(
   state: unknown,
   options: BindConfigOptions<T, TValue, TConfigMeta>,
   mode: M,
@@ -1144,10 +1148,10 @@ function getConfigOrDefault<
   // run() was called without any contexts or parse() was called directly—we
   // fall through to the generic "Missing required configuration value" message
   // to avoid misleading low-level callers.
-  const configContextAbsent = annotations != null &&
-    !(contextId in annotations);
-  const configPending = annotations?.[contextId] ===
-    phase1ConfigAnnotationMarker;
+  const configContextAbsent =
+    annotations != null && !(contextId in annotations);
+  const configPending =
+    annotations?.[contextId] === phase1ConfigAnnotationMarker;
   const annotationValue = annotations?.[contextId] as
     | { readonly data: T; readonly meta?: TConfigMeta | undefined }
     | undefined;
@@ -1192,9 +1196,9 @@ function getConfigOrDefault<
     innerParser != null &&
     typeof innerParser.shouldDeferCompletion === "function" &&
     innerParser.shouldDeferCompletion(
-        innerState ?? innerParser.initialState,
-        exec,
-      ) === true
+      innerState ?? innerParser.initialState,
+      exec,
+    ) === true
   ) {
     return wrapForMode(mode, {
       success: true as const,
@@ -1209,8 +1213,7 @@ function getConfigOrDefault<
   if (configContextAbsent) {
     return wrapForMode(mode, {
       success: false,
-      error:
-        message`Configuration value could not be read: the config context was not passed to run()'s contexts option.`,
+      error: message`Configuration value could not be read: the config context was not passed to run()'s contexts option.`,
     });
   }
 
@@ -1225,14 +1228,11 @@ function getConfigOrDefault<
     innerParser != null &&
     typeof innerParser.shouldDeferCompletion === "function" &&
     innerParser.shouldDeferCompletion(
-        innerState ?? innerParser.initialState,
-        exec,
-      ) === true
-  ) {
-    return innerParser.complete(
       innerState ?? innerParser.initialState,
       exec,
-    );
+    ) === true
+  ) {
+    return innerParser.complete(innerState ?? innerParser.initialState, exec);
   }
 
   return wrapForMode(mode, {
@@ -1259,9 +1259,7 @@ function validateFallbackValue<M extends "sync" | "async", TValue>(
   innerParser: Parser<M, TValue, unknown> | undefined,
   value: TValue,
 ): ModeValue<M, Result<TValue>> {
-  if (
-    innerParser == null || typeof innerParser.validateValue !== "function"
-  ) {
+  if (innerParser == null || typeof innerParser.validateValue !== "function") {
     return wrapForMode(mode, {
       success: true as const,
       value,
@@ -1331,12 +1329,11 @@ function getConfigSourceValue<
   // inner parser is async (#414).
   const validateFallback = (
     parsed: ValueParserResult<TValue>,
-  ):
-    | ValueParserResult<unknown>
-    | Promise<ValueParserResult<unknown>> => {
+  ): ValueParserResult<unknown> | Promise<ValueParserResult<unknown>> => {
     if (!parsed.success) return parsed;
     if (
-      innerParser == null || typeof innerParser.validateValue !== "function"
+      innerParser == null ||
+      typeof innerParser.validateValue !== "function"
     ) {
       return parsed;
     }

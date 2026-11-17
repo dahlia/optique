@@ -16,10 +16,7 @@ import {
 // Helpers
 // =============================================================================
 
-function makeEntry(
-  kind: TraceEntry["kind"],
-  rawInput: string,
-): TraceEntry {
+function makeEntry(kind: TraceEntry["kind"], rawInput: string): TraceEntry {
   return { kind, rawInput, consumed: [rawInput] };
 }
 
@@ -102,9 +99,7 @@ describe("InputTrace", () => {
   test("overwrite existing entry", () => {
     const entry1 = makeEntry("option-value", "dev");
     const entry2 = makeEntry("option-value", "prod");
-    const trace = createInputTrace()
-      .set(["env"], entry1)
-      .set(["env"], entry2);
+    const trace = createInputTrace().set(["env"], entry1).set(["env"], entry2);
     assert.deepStrictEqual(trace.get(["env"]), entry2);
   });
 
@@ -168,9 +163,7 @@ describe("InputTrace", () => {
     const local = Symbol("optique.test.name");
     const entry1 = makeEntry("option-value", "reg");
     const entry2 = makeEntry("option-value", "local");
-    const trace = createInputTrace()
-      .set([reg], entry1)
-      .set([local], entry2);
+    const trace = createInputTrace().set([reg], entry1).set([local], entry2);
     assert.deepStrictEqual(trace.get([reg]), entry1);
     assert.deepStrictEqual(trace.get([local]), entry2);
   });
@@ -214,17 +207,15 @@ describe("persistent trace snapshots", () => {
       [8, 4, 12, 2, 6, 10, 14, 9, 11, 13, 15],
       Array.from({ length: 128 }, (_, i) => i),
       Array.from({ length: 128 }, (_, i) => 127 - i),
-      Array.from({ length: 128 }, (_, i) => i % 2 ? 127 - (i >> 1) : i >> 1),
+      Array.from({ length: 128 }, (_, i) => (i % 2 ? 127 - (i >> 1) : i >> 1)),
     ];
     for (const order of orders) {
-      for (
-        const deletion of [
-          order,
-          order.toReversed(),
-          order.toSorted((a, b) => a - b),
-          order.toSorted((a, b) => b - a),
-        ]
-      ) {
+      for (const deletion of [
+        order,
+        order.toReversed(),
+        order.toSorted((a, b) => a - b),
+        order.toSorted((a, b) => b - a),
+      ]) {
         let trace = createInputTrace();
         const expected = new Map<number, TraceEntry>();
         const versions: [InputTrace, ReadonlyMap<number, TraceEntry>][] = [];

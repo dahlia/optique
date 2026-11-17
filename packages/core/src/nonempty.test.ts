@@ -59,13 +59,10 @@ describe("ensureNonEmptyString", () => {
   });
 
   it("should throw TypeError for empty string", () => {
-    assert.throws(
-      () => ensureNonEmptyString(""),
-      {
-        name: "TypeError",
-        message: "Expected a non-empty string.",
-      },
-    );
+    assert.throws(() => ensureNonEmptyString(""), {
+      name: "TypeError",
+      message: "Expected a non-empty string.",
+    });
   });
 
   it("should narrow type after assertion", () => {
@@ -82,13 +79,10 @@ describe("ensureNonEmptyString", () => {
         if (isNonEmptyString(value)) {
           assert.doesNotThrow(() => ensureNonEmptyString(value));
         } else {
-          assert.throws(
-            () => ensureNonEmptyString(value),
-            {
-              name: "TypeError",
-              message: "Expected a non-empty string.",
-            },
-          );
+          assert.throws(() => ensureNonEmptyString(value), {
+            name: "TypeError",
+            message: "Expected a non-empty string.",
+          });
         }
       }),
       propertyParameters,

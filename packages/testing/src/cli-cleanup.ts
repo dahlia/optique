@@ -210,9 +210,10 @@ export async function cleanupCliProcess(
     destroyStreams(target, "Tree cleanup command");
   }
   async function taskkill(pid: number) {
-    const root = dependencies.systemRoot?.() ??
+    const root =
+      dependencies.systemRoot?.() ??
       (dependencies.systemRoot === undefined
-        ? process.env.SystemRoot ?? process.env.windir
+        ? (process.env.SystemRoot ?? process.env.windir)
         : undefined);
     if (root === undefined || !win32.isAbsolute(root)) {
       record("Windows system directory is unavailable for tree cleanup.");
@@ -222,7 +223,8 @@ export async function cleanupCliProcess(
     try {
       const command = win32.join(root, "System32", "taskkill.exe");
       const args = ["/PID", String(pid), "/T", "/F"];
-      helper = dependencies.spawnHelper?.(command, args) ??
+      helper =
+        dependencies.spawnHelper?.(command, args) ??
         spawn(command, args, {
           shell: false,
           windowsHide: true,
@@ -291,12 +293,15 @@ export async function cleanupCliProcess(
   const exited = () => getState().exited || getState().closed;
   const targetClosed = () => {
     const state = getState();
-    return state.closed && state.stdinClosed && state.stdoutClosed &&
-      state.stderrClosed;
+    return (
+      state.closed &&
+      state.stdinClosed &&
+      state.stdoutClosed &&
+      state.stderrClosed
+    );
   };
   const allClosed = () =>
-    targetClosed() &&
-    (helper === undefined || helperClosed);
+    targetClosed() && (helper === undefined || helperClosed);
   try {
     attempt("CLI stdin could not be closed during cleanup.", () => {
       child.stdin.destroy();
@@ -315,22 +320,27 @@ export async function cleanupCliProcess(
         }
         killChild("SIGTERM");
         if (
-          found && !await waiter.waitFor(
+          found &&
+          !(await waiter.waitFor(
             () => exited() && !groupSignal(0),
             Math.min(deadline, waiter.now() + 1000),
-          )
-        ) groupSignal("SIGKILL");
+          ))
+        )
+          groupSignal("SIGKILL");
         killChild("SIGKILL");
       } else {
         killChild("SIGTERM");
         if (
-          !await waiter.waitFor(exited, Math.min(deadline, waiter.now() + 1000))
+          !(await waiter.waitFor(
+            exited,
+            Math.min(deadline, waiter.now() + 1000),
+          ))
         ) {
           killChild("SIGKILL");
         }
       }
     }
-    if (!await waiter.waitFor(exited, deadline)) {
+    if (!(await waiter.waitFor(exited, deadline))) {
       record("The CLI process did not exit during cleanup.");
       killChild("SIGKILL");
     }
@@ -345,7 +355,7 @@ export async function cleanupCliProcess(
     killChild("SIGKILL");
   }
   destroyStreams(child, "CLI process");
-  if (!await waiter.waitFor(allClosed, deadline)) {
+  if (!(await waiter.waitFor(allClosed, deadline))) {
     // destroy() can enqueue local close events after the deadline. Observe one
     // turn collectively, without granting a new positive-duration grace period.
     await waiter.observeClose();

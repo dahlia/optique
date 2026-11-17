@@ -24,12 +24,16 @@ import { getDisplayWidth, stripAnsi } from "#src/displaywidth.ts";
 describe("formatDocPage", () => {
   it("should format a minimal page with only sections", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "argument", metavar: "test" },
-          description: [{ type: "text", text: "A test command" }],
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "argument", metavar: "test" },
+              description: [{ type: "text", text: "A test command" }],
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page);
@@ -57,13 +61,10 @@ describe("formatDocPage", () => {
       sections: [],
     };
 
-    assert.throws(
-      () => formatDocPage("app", page, { maxWidth: 11 }),
-      {
-        name: "RangeError",
-        message: "maxWidth must be at least 12, got 11.",
-      },
-    );
+    assert.throws(() => formatDocPage("app", page, { maxWidth: 11 }), {
+      name: "RangeError",
+      message: "maxWidth must be at least 12, got 11.",
+    });
     const result = formatDocPage("app", page, { maxWidth: 12 });
     assert.ok(result.startsWith("Usage: app"));
     assert.ok(result.includes("sub"));
@@ -98,12 +99,16 @@ describe("formatDocPage", () => {
       brief: message`Project tools.`,
       usage: [{ type: "command", name: "build" }],
       description: message`Run project automation commands.`,
-      sections: [{
-        entries: [{
-          term: { type: "command", name: "build" },
-          description: message`Build the project.`,
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "command", name: "build" },
+              description: message`Build the project.`,
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, { showUsage: false });
@@ -117,16 +122,22 @@ describe("formatDocPage", () => {
 
   it("should ignore suppressed usage when validating maxWidth", () => {
     const page: DocPage = {
-      usage: [{
-        type: "command",
-        name: "very-long-command-name-that-would-not-fit",
-      }],
-      sections: [{
-        entries: [{
-          term: { type: "command", name: "run" },
-          description: message`Run.`,
-        }],
-      }],
+      usage: [
+        {
+          type: "command",
+          name: "very-long-command-name-that-would-not-fit",
+        },
+      ],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "command", name: "run" },
+              description: message`Run.`,
+            },
+          ],
+        },
+      ],
     };
 
     assert.throws(
@@ -167,13 +178,17 @@ describe("formatDocPage", () => {
 
   it("should format sections with titles", () => {
     const page: DocPage = {
-      sections: [{
-        title: "Options",
-        entries: [{
-          term: { type: "option", names: ["-v", "--verbose"] },
-          description: [{ type: "text", text: "Enable verbose output" }],
-        }],
-      }],
+      sections: [
+        {
+          title: "Options",
+          entries: [
+            {
+              term: { type: "option", names: ["-v", "--verbose"] },
+              description: [{ type: "text", text: "Enable verbose output" }],
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page);
@@ -184,13 +199,17 @@ describe("formatDocPage", () => {
 
   it("should format entries with default values when showDefault is false", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-p", "--port"] },
-          description: [{ type: "text", text: "Port number" }],
-          default: [{ type: "text", text: "8080" }],
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["-p", "--port"] },
+              description: [{ type: "text", text: "Port number" }],
+              default: [{ type: "text", text: "8080" }],
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page);
@@ -200,16 +219,21 @@ describe("formatDocPage", () => {
 
   it("should show default values when showDefault is true", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-p", "--port"] },
-          description: [{ type: "text", text: "Port number" }],
-          default: [{ type: "text", text: "8080" }],
-        }, {
-          term: { type: "option", names: ["-h", "--host"] },
-          default: [{ type: "text", text: "localhost" }],
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["-p", "--port"] },
+              description: [{ type: "text", text: "Port number" }],
+              default: [{ type: "text", text: "8080" }],
+            },
+            {
+              term: { type: "option", names: ["-h", "--host"] },
+              default: [{ type: "text", text: "localhost" }],
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, { showDefault: true });
@@ -220,13 +244,17 @@ describe("formatDocPage", () => {
 
   it("should show default values with custom prefix and suffix", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-f", "--format"] },
-          description: [{ type: "text", text: "Output format" }],
-          default: [{ type: "text", text: "json" }],
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["-f", "--format"] },
+              description: [{ type: "text", text: "Output format" }],
+              default: [{ type: "text", text: "json" }],
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, {
@@ -239,13 +267,17 @@ describe("formatDocPage", () => {
 
   it("should dim default values when colors are enabled", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-p", "--port"] },
-          description: [{ type: "text", text: "Port number" }],
-          default: [{ type: "text", text: "8080" }],
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["-p", "--port"] },
+              description: [{ type: "text", text: "Port number" }],
+              default: [{ type: "text", text: "8080" }],
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, {
@@ -259,12 +291,16 @@ describe("formatDocPage", () => {
 
   it("should not show defaults when entry.default is undefined", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-v", "--verbose"] },
-          description: [{ type: "text", text: "Enable verbose output" }],
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["-v", "--verbose"] },
+              description: [{ type: "text", text: "Enable verbose output" }],
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, { showDefault: true });
@@ -274,11 +310,15 @@ describe("formatDocPage", () => {
 
   it("should handle entries without descriptions", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "command", name: "command" },
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "command", name: "command" },
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page);
@@ -288,12 +328,16 @@ describe("formatDocPage", () => {
 
   it("should respect termIndent option", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "argument", metavar: "test" },
-          description: [{ type: "text", text: "Test description" }],
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "argument", metavar: "test" },
+              description: [{ type: "text", text: "Test description" }],
+            },
+          ],
+        },
+      ],
     };
 
     const options: DocPageFormatOptions = { termIndent: 4 };
@@ -304,12 +348,16 @@ describe("formatDocPage", () => {
 
   it("should respect termWidth option", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "argument", metavar: "short" },
-          description: [{ type: "text", text: "Description" }],
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "argument", metavar: "short" },
+              description: [{ type: "text", text: "Description" }],
+            },
+          ],
+        },
+      ],
     };
 
     const options: DocPageFormatOptions = { termWidth: 10 };
@@ -321,18 +369,20 @@ describe("formatDocPage", () => {
   describe("automatic term width", () => {
     it("should align descriptions to the widest relevant term", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [
-            {
-              term: { type: "option", names: ["-v"] },
-              description: message`Enable verbose output.`,
-            },
-            {
-              term: { type: "option", names: ["--configuration"] },
-              description: message`Load configuration.`,
-            },
-          ],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "option", names: ["-v"] },
+                description: message`Enable verbose output.`,
+              },
+              {
+                term: { type: "option", names: ["--configuration"] },
+                description: message`Load configuration.`,
+              },
+            ],
+          },
+        ],
       };
 
       const result = formatDocPage("myapp", page, { termWidth: "auto" });
@@ -346,26 +396,28 @@ describe("formatDocPage", () => {
 
     it("should measure CJK, emoji, and combining sequences by display width", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [
-            {
-              term: { type: "argument", metavar: "ABC" },
-              description: message`ASCII`,
-            },
-            {
-              term: { type: "argument", metavar: "한글" },
-              description: message`Korean`,
-            },
-            {
-              term: { type: "argument", metavar: "👨‍👩‍👧‍👦" },
-              description: message`Family`,
-            },
-            {
-              term: { type: "argument", metavar: "e\u0301" },
-              description: message`Combined`,
-            },
-          ],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "ABC" },
+                description: message`ASCII`,
+              },
+              {
+                term: { type: "argument", metavar: "한글" },
+                description: message`Korean`,
+              },
+              {
+                term: { type: "argument", metavar: "👨‍👩‍👧‍👦" },
+                description: message`Family`,
+              },
+              {
+                term: { type: "argument", metavar: "e\u0301" },
+                description: message`Combined`,
+              },
+            ],
+          },
+        ],
       };
 
       const result = formatDocPage("myapp", page, { termWidth: "auto" });
@@ -381,18 +433,20 @@ describe("formatDocPage", () => {
 
     it("should ignore ANSI styling when measuring colored terms", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [
-            {
-              term: { type: "option", names: ["-v"] },
-              description: message`Enable verbose output.`,
-            },
-            {
-              term: { type: "option", names: ["--configuration"] },
-              description: message`Load configuration.`,
-            },
-          ],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "option", names: ["-v"] },
+                description: message`Enable verbose output.`,
+              },
+              {
+                term: { type: "option", names: ["--configuration"] },
+                description: message`Load configuration.`,
+              },
+            ],
+          },
+        ],
       };
 
       const plain = formatDocPage("myapp", page, {
@@ -414,36 +468,38 @@ describe("formatDocPage", () => {
 
     it("should ignore hidden, degenerate, and bare entries when measuring", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [
-            {
-              term: {
-                type: "option",
-                names: ["--hidden-and-extremely-long"],
-                hidden: true,
+        sections: [
+          {
+            entries: [
+              {
+                term: {
+                  type: "option",
+                  names: ["--hidden-and-extremely-long"],
+                  hidden: true,
+                },
+                description: message`Hidden`,
               },
-              description: message`Hidden`,
-            },
-            {
-              term: {
-                type: "option",
-                names: [],
-                metavar: "DEGENERATE_AND_EXTREMELY_LONG",
+              {
+                term: {
+                  type: "option",
+                  names: [],
+                  metavar: "DEGENERATE_AND_EXTREMELY_LONG",
+                },
+                description: message`Degenerate`,
               },
-              description: message`Degenerate`,
-            },
-            {
-              term: {
-                type: "command",
-                name: "bare-and-extremely-long-command",
+              {
+                term: {
+                  type: "command",
+                  name: "bare-and-extremely-long-command",
+                },
               },
-            },
-            {
-              term: { type: "option", names: ["-v"] },
-              description: message`Visible`,
-            },
-          ],
-        }],
+              {
+                term: { type: "option", names: ["-v"] },
+                description: message`Visible`,
+              },
+            ],
+          },
+        ],
       };
 
       const result = formatDocPage("myapp", page, { termWidth: "auto" });
@@ -456,9 +512,11 @@ describe("formatDocPage", () => {
 
     it("should preserve default formatting when no entry has content", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{ term: { type: "command", name: "status" } }],
-        }],
+        sections: [
+          {
+            entries: [{ term: { type: "command", name: "status" } }],
+          },
+        ],
       };
 
       const defaultResult = formatDocPage("myapp", page);
@@ -479,21 +537,23 @@ describe("formatDocPage", () => {
 
     it("should measure entries with displayed defaults and choices", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [
-            {
-              term: { type: "option", names: ["--output"] },
-              default: message`result.txt`,
-            },
-            {
-              term: { type: "option", names: ["--format-long"] },
-              choices: valueSet(["json", "yaml"], {
-                fallback: "",
-                type: "unit",
-              }),
-            },
-          ],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "option", names: ["--output"] },
+                default: message`result.txt`,
+              },
+              {
+                term: { type: "option", names: ["--format-long"] },
+                choices: valueSet(["json", "yaml"], {
+                  fallback: "",
+                  type: "unit",
+                }),
+              },
+            ],
+          },
+        ],
       };
 
       const result = formatDocPage("myapp", page, {
@@ -511,15 +571,19 @@ describe("formatDocPage", () => {
 
     it("should retain maxWidth layout reduction", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: {
-              type: "option",
-              names: ["-s", "--longname"],
-            },
-            description: message`A B C D E F`,
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: {
+                  type: "option",
+                  names: ["-s", "--longname"],
+                },
+                description: message`A B C D E F`,
+              },
+            ],
+          },
+        ],
       };
 
       const result = formatDocPage("myapp", page, {
@@ -538,16 +602,20 @@ describe("formatDocPage", () => {
 
     it("should reserve description space under maxWidth", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: {
-              type: "option",
-              names: ["--package-manager"],
-              metavar: "PACKAGE_MANAGER",
-            },
-            description: message`description words`,
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: {
+                  type: "option",
+                  names: ["--package-manager"],
+                  metavar: "PACKAGE_MANAGER",
+                },
+                description: message`description words`,
+              },
+            ],
+          },
+        ],
       };
 
       const result = formatDocPage("myapp", page, {
@@ -566,19 +634,23 @@ describe("formatDocPage", () => {
 
     it("should validate prefixes against the automatic maxWidth layout", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: {
-              type: "option",
-              names: ["--package-manager"],
-              metavar: "PACKAGE_ID",
-            },
-            choices: valueSet(["npm", "pnpm"], {
-              fallback: "",
-              type: "unit",
-            }),
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: {
+                  type: "option",
+                  names: ["--package-manager"],
+                  metavar: "PACKAGE_ID",
+                },
+                choices: valueSet(["npm", "pnpm"], {
+                  fallback: "",
+                  type: "unit",
+                }),
+              },
+            ],
+          },
+        ],
       };
 
       const result = formatDocPage("myapp", page, {
@@ -601,11 +673,12 @@ describe("formatDocPage", () => {
 
   it("should respect maxWidth option with brief", () => {
     const page: DocPage = {
-      brief: [{
-        type: "text",
-        text:
-          "A very long brief description that should be wrapped at some point",
-      }],
+      brief: [
+        {
+          type: "text",
+          text: "A very long brief description that should be wrapped at some point",
+        },
+      ],
       sections: [],
     };
 
@@ -637,18 +710,25 @@ describe("formatDocPage", () => {
 
   it("should sort command-only sections before argument-only sections", () => {
     const page: DocPage = {
-      sections: [{
-        title: "Commands",
-        entries: [{
-          term: { type: "command", name: "cmd" },
-          description: [{ type: "text", text: "A command" }],
-        }],
-      }, {
-        entries: [{
-          term: { type: "argument", metavar: "untitled" },
-          description: [{ type: "text", text: "Untitled entry" }],
-        }],
-      }],
+      sections: [
+        {
+          title: "Commands",
+          entries: [
+            {
+              term: { type: "command", name: "cmd" },
+              description: [{ type: "text", text: "A command" }],
+            },
+          ],
+        },
+        {
+          entries: [
+            {
+              term: { type: "argument", metavar: "untitled" },
+              description: [{ type: "text", text: "Untitled entry" }],
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page);
@@ -664,24 +744,33 @@ describe("formatDocPage", () => {
         { type: "command", name: "myapp" },
         { type: "optional", terms: [{ type: "option", names: ["-v"] }] },
       ],
-      description: [{
-        type: "text",
-        text: "This application does many useful things.",
-      }],
-      sections: [{
-        title: "Options",
-        entries: [{
-          term: { type: "option", names: ["-v", "--verbose"] },
-          description: [{ type: "text", text: "Enable verbose output" }],
-        }, {
-          term: { type: "option", names: ["-h", "--help"] },
-          description: [{ type: "text", text: "Show help information" }],
-        }],
-      }],
-      footer: [{
-        type: "text",
-        text: "For more information, visit our website.",
-      }],
+      description: [
+        {
+          type: "text",
+          text: "This application does many useful things.",
+        },
+      ],
+      sections: [
+        {
+          title: "Options",
+          entries: [
+            {
+              term: { type: "option", names: ["-v", "--verbose"] },
+              description: [{ type: "text", text: "Enable verbose output" }],
+            },
+            {
+              term: { type: "option", names: ["-h", "--help"] },
+              description: [{ type: "text", text: "Show help information" }],
+            },
+          ],
+        },
+      ],
+      footer: [
+        {
+          type: "text",
+          text: "For more information, visit our website.",
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page);
@@ -692,13 +781,17 @@ describe("formatDocPage", () => {
 
   it("should apply resetSuffix correctly in default values with colors", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-p", "--port"] },
-          description: [{ type: "text", text: "Port number" }],
-          default: [{ type: "value", value: "8080" }],
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["-p", "--port"] },
+              description: [{ type: "text", text: "Port number" }],
+              default: [{ type: "value", value: "8080" }],
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, {
@@ -713,13 +806,17 @@ describe("formatDocPage", () => {
 
   it("should handle resetSuffix with custom prefix and suffix", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-f", "--format"] },
-          description: [{ type: "text", text: "Output format" }],
-          default: [{ type: "value", value: "json" }],
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["-f", "--format"] },
+              description: [{ type: "text", text: "Output format" }],
+              default: [{ type: "value", value: "json" }],
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, {
@@ -735,13 +832,17 @@ describe("formatDocPage", () => {
 
   it("should not apply resetSuffix when colors is false", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-p", "--port"] },
-          description: [{ type: "text", text: "Port number" }],
-          default: [{ type: "value", value: "8080" }],
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["-p", "--port"] },
+              description: [{ type: "text", text: "Port number" }],
+              default: [{ type: "value", value: "8080" }],
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, {
@@ -756,17 +857,21 @@ describe("formatDocPage", () => {
 
   it("should handle complex message defaults with resetSuffix", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--config"] },
-          description: [{ type: "text", text: "Configuration file" }],
-          default: [
-            { type: "text", text: "Uses " },
-            { type: "envVar", envVar: "CONFIG_FILE" },
-            { type: "text", text: " if set" },
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--config"] },
+              description: [{ type: "text", text: "Configuration file" }],
+              default: [
+                { type: "text", text: "Uses " },
+                { type: "envVar", envVar: "CONFIG_FILE" },
+                { type: "text", text: " if set" },
+              ],
+            },
           ],
-        }],
-      }],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, {
@@ -1043,19 +1148,27 @@ describe("formatDocPage", () => {
 
   it("should treat entry-level empty description as absent", () => {
     const withEmpty: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "command", name: "cmd" },
-          description: [],
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "command", name: "cmd" },
+              description: [],
+            },
+          ],
+        },
+      ],
     };
     const withAbsent: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "command", name: "cmd" },
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "command", name: "cmd" },
+            },
+          ],
+        },
+      ],
     };
     assert.equal(
       formatDocPage("app", withEmpty),
@@ -1069,17 +1182,21 @@ describe("formatDocPage", () => {
       sections: [
         {
           title: "Options",
-          entries: [{
-            term: { type: "option", names: ["--help"] },
-            description: message`Show help`,
-          }],
+          entries: [
+            {
+              term: { type: "option", names: ["--help"] },
+              description: message`Show help`,
+            },
+          ],
         },
         {
           title: "Commands",
-          entries: [{
-            term: { type: "command", name: "test" },
-            description: message`Run tests`,
-          }],
+          entries: [
+            {
+              term: { type: "command", name: "test" },
+              description: message`Run tests`,
+            },
+          ],
         },
       ],
       examples: message`myapp --help`,
@@ -1121,10 +1238,12 @@ describe("formatDocPage", () => {
       sections: [
         {
           title: "Options",
-          entries: [{
-            term: { type: "option", names: ["--help"] },
-            description: message`Show help`,
-          }],
+          entries: [
+            {
+              term: { type: "option", names: ["--help"] },
+              description: message`Show help`,
+            },
+          ],
         },
       ],
       examples: message`myapp --help`,
@@ -1158,16 +1277,20 @@ describe("formatDocPage", () => {
 
   it("should not show choices when showChoices is not set", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--format"] },
-          description: [{ type: "text", text: "Output format" }],
-          choices: valueSet(["json", "yaml", "xml"], {
-            fallback: "",
-            type: "unit",
-          }),
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--format"] },
+              description: [{ type: "text", text: "Output format" }],
+              choices: valueSet(["json", "yaml", "xml"], {
+                fallback: "",
+                type: "unit",
+              }),
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page);
@@ -1177,16 +1300,20 @@ describe("formatDocPage", () => {
 
   it("should not show choices when showChoices is false", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--format"] },
-          description: [{ type: "text", text: "Output format" }],
-          choices: valueSet(["json", "yaml", "xml"], {
-            fallback: "",
-            type: "unit",
-          }),
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--format"] },
+              description: [{ type: "text", text: "Output format" }],
+              choices: valueSet(["json", "yaml", "xml"], {
+                fallback: "",
+                type: "unit",
+              }),
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, { showChoices: false });
@@ -1196,16 +1323,20 @@ describe("formatDocPage", () => {
 
   it("should show choices when showChoices is true", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--format"] },
-          description: [{ type: "text", text: "Output format" }],
-          choices: valueSet(["json", "yaml", "xml"], {
-            fallback: "",
-            type: "unit",
-          }),
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--format"] },
+              description: [{ type: "text", text: "Output format" }],
+              choices: valueSet(["json", "yaml", "xml"], {
+                fallback: "",
+                type: "unit",
+              }),
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, { showChoices: true });
@@ -1214,13 +1345,20 @@ describe("formatDocPage", () => {
 
   it("should show choices with custom prefix, suffix, and label", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--format"] },
-          description: [{ type: "text", text: "Output format" }],
-          choices: valueSet(["json", "yaml"], { fallback: "", type: "unit" }),
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--format"] },
+              description: [{ type: "text", text: "Output format" }],
+              choices: valueSet(["json", "yaml"], {
+                fallback: "",
+                type: "unit",
+              }),
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, {
@@ -1231,13 +1369,20 @@ describe("formatDocPage", () => {
 
   it("should show choices with custom label", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--format"] },
-          description: [{ type: "text", text: "Output format" }],
-          choices: valueSet(["json", "yaml"], { fallback: "", type: "unit" }),
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--format"] },
+              description: [{ type: "text", text: "Output format" }],
+              choices: valueSet(["json", "yaml"], {
+                fallback: "",
+                type: "unit",
+              }),
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, {
@@ -1248,15 +1393,19 @@ describe("formatDocPage", () => {
 
   it("should show choices without description", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--level"] },
-          choices: valueSet(["debug", "info", "warn"], {
-            fallback: "",
-            type: "unit",
-          }),
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--level"] },
+              choices: valueSet(["debug", "info", "warn"], {
+                fallback: "",
+                type: "unit",
+              }),
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, { showChoices: true });
@@ -1265,13 +1414,20 @@ describe("formatDocPage", () => {
 
   it("should use default label when showChoices object has no label", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--format"] },
-          description: [{ type: "text", text: "Output format" }],
-          choices: valueSet(["json", "yaml"], { fallback: "", type: "unit" }),
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--format"] },
+              description: [{ type: "text", text: "Output format" }],
+              choices: valueSet(["json", "yaml"], {
+                fallback: "",
+                type: "unit",
+              }),
+            },
+          ],
+        },
+      ],
     };
     const result = formatDocPage("myapp", page, {
       showChoices: {},
@@ -1281,13 +1437,17 @@ describe("formatDocPage", () => {
 
   it("should use default prefix when showDefault object has no prefix", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--port"] },
-          description: [{ type: "text", text: "Port number" }],
-          default: message`3000`,
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--port"] },
+              description: [{ type: "text", text: "Port number" }],
+              default: message`3000`,
+            },
+          ],
+        },
+      ],
     };
     const result = formatDocPage("myapp", page, {
       showDefault: { suffix: "]" },
@@ -1300,12 +1460,16 @@ describe("formatDocPage", () => {
 
   it("should not show choices when entry has no choices field", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-v", "--verbose"] },
-          description: [{ type: "text", text: "Enable verbose output" }],
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["-v", "--verbose"] },
+              description: [{ type: "text", text: "Enable verbose output" }],
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, { showChoices: true });
@@ -1315,13 +1479,17 @@ describe("formatDocPage", () => {
 
   it("should not render choices suffix for empty choices array", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--format"] },
-          description: [{ type: "text", text: "Output format" }],
-          choices: [],
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--format"] },
+              description: [{ type: "text", text: "Output format" }],
+              choices: [],
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, { showChoices: true });
@@ -1333,13 +1501,17 @@ describe("formatDocPage", () => {
 
   it("should not render default suffix for empty default array", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--format"] },
-          description: [{ type: "text", text: "Output format" }],
-          default: [],
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--format"] },
+              description: [{ type: "text", text: "Output format" }],
+              default: [],
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, { showDefault: true });
@@ -1350,17 +1522,21 @@ describe("formatDocPage", () => {
 
   it("should render description, default, then choices in order", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--format"] },
-          description: [{ type: "text", text: "Output format" }],
-          default: [{ type: "text", text: "json" }],
-          choices: valueSet(["json", "yaml", "xml"], {
-            fallback: "",
-            type: "unit",
-          }),
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--format"] },
+              description: [{ type: "text", text: "Output format" }],
+              default: [{ type: "text", text: "json" }],
+              choices: valueSet(["json", "yaml", "xml"], {
+                fallback: "",
+                type: "unit",
+              }),
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, {
@@ -1372,21 +1548,25 @@ describe("formatDocPage", () => {
     const choicesIdx = line.indexOf("(choices:");
     assert.ok(defaultIdx !== -1, "default should be present");
     assert.ok(choicesIdx !== -1, "choices should be present");
-    assert.ok(
-      defaultIdx < choicesIdx,
-      "default should come before choices",
-    );
+    assert.ok(defaultIdx < choicesIdx, "default should come before choices");
   });
 
   it("should dim choices with per-value coloring when colors are enabled", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--format"] },
-          description: [{ type: "text", text: "Output format" }],
-          choices: valueSet(["json", "yaml"], { fallback: "", type: "unit" }),
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--format"] },
+              description: [{ type: "text", text: "Output format" }],
+              choices: valueSet(["json", "yaml"], {
+                fallback: "",
+                type: "unit",
+              }),
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, {
@@ -1419,17 +1599,21 @@ describe("formatDocPage", () => {
         sections: [
           {
             title: "Options",
-            entries: [{
-              term: { type: "option", names: ["--verbose"] },
-              description: [{ type: "text", text: "Verbose output" }],
-            }],
+            entries: [
+              {
+                term: { type: "option", names: ["--verbose"] },
+                description: [{ type: "text", text: "Verbose output" }],
+              },
+            ],
           },
           {
             title: "Commands",
-            entries: [{
-              term: { type: "command", name: "serve" },
-              description: [{ type: "text", text: "Start server" }],
-            }],
+            entries: [
+              {
+                term: { type: "command", name: "serve" },
+                description: [{ type: "text", text: "Start server" }],
+              },
+            ],
           },
         ],
       };
@@ -1448,10 +1632,12 @@ describe("formatDocPage", () => {
         sections: [
           {
             title: "Options",
-            entries: [{
-              term: { type: "option", names: ["--flag"] },
-              description: [{ type: "text", text: "A flag" }],
-            }],
+            entries: [
+              {
+                term: { type: "option", names: ["--flag"] },
+                description: [{ type: "text", text: "A flag" }],
+              },
+            ],
           },
           {
             title: "Mixed",
@@ -1468,10 +1654,12 @@ describe("formatDocPage", () => {
           },
           {
             title: "Commands",
-            entries: [{
-              term: { type: "command", name: "build" },
-              description: [{ type: "text", text: "Build" }],
-            }],
+            entries: [
+              {
+                term: { type: "command", name: "build" },
+                description: [{ type: "text", text: "Build" }],
+              },
+            ],
           },
         ],
       };
@@ -1495,16 +1683,20 @@ describe("formatDocPage", () => {
         sections: [
           {
             title: "Named",
-            entries: [{
-              term: { type: "command", name: "named" },
-              description: [{ type: "text", text: "A named section" }],
-            }],
+            entries: [
+              {
+                term: { type: "command", name: "named" },
+                description: [{ type: "text", text: "A named section" }],
+              },
+            ],
           },
           {
-            entries: [{
-              term: { type: "command", name: "ungrouped" },
-              description: [{ type: "text", text: "An ungrouped command" }],
-            }],
+            entries: [
+              {
+                term: { type: "command", name: "ungrouped" },
+                description: [{ type: "text", text: "An ungrouped command" }],
+              },
+            ],
           },
         ],
       };
@@ -1523,17 +1715,21 @@ describe("formatDocPage", () => {
         sections: [
           {
             title: "Beta",
-            entries: [{
-              term: { type: "command", name: "beta" },
-              description: [{ type: "text", text: "Beta command" }],
-            }],
+            entries: [
+              {
+                term: { type: "command", name: "beta" },
+                description: [{ type: "text", text: "Beta command" }],
+              },
+            ],
           },
           {
             title: "Alpha",
-            entries: [{
-              term: { type: "command", name: "alpha" },
-              description: [{ type: "text", text: "Alpha command" }],
-            }],
+            entries: [
+              {
+                term: { type: "command", name: "alpha" },
+                description: [{ type: "text", text: "Alpha command" }],
+              },
+            ],
           },
         ],
       };
@@ -1552,17 +1748,21 @@ describe("formatDocPage", () => {
         sections: [
           {
             title: "Commands",
-            entries: [{
-              term: { type: "command", name: "build" },
-              description: [{ type: "text", text: "Build" }],
-            }],
+            entries: [
+              {
+                term: { type: "command", name: "build" },
+                description: [{ type: "text", text: "Build" }],
+              },
+            ],
           },
           {
             title: "Options",
-            entries: [{
-              term: { type: "option", names: ["--flag"] },
-              description: [{ type: "text", text: "A flag" }],
-            }],
+            entries: [
+              {
+                term: { type: "option", names: ["--flag"] },
+                description: [{ type: "text", text: "A flag" }],
+              },
+            ],
           },
         ],
       };
@@ -1589,24 +1789,30 @@ describe("formatDocPage", () => {
         sections: [
           {
             title: "First",
-            entries: [{
-              term: { type: "command", name: "a" },
-              description: [{ type: "text", text: "First" }],
-            }],
+            entries: [
+              {
+                term: { type: "command", name: "a" },
+                description: [{ type: "text", text: "First" }],
+              },
+            ],
           },
           {
             title: "Second",
-            entries: [{
-              term: { type: "command", name: "b" },
-              description: [{ type: "text", text: "Second" }],
-            }],
+            entries: [
+              {
+                term: { type: "command", name: "b" },
+                description: [{ type: "text", text: "Second" }],
+              },
+            ],
           },
           {
             title: "Third",
-            entries: [{
-              term: { type: "command", name: "c" },
-              description: [{ type: "text", text: "Third" }],
-            }],
+            entries: [
+              {
+                term: { type: "command", name: "c" },
+                description: [{ type: "text", text: "Third" }],
+              },
+            ],
           },
         ],
       };
@@ -1626,9 +1832,11 @@ describe("formatDocPage", () => {
   // https://github.com/dahlia/optique/issues/1009
   describe("annotation headings in narrow columns", () => {
     const page = (entry: Omit<DocEntry, "term">): DocPage => ({
-      sections: [{
-        entries: [{ term: { type: "option", names: ["-c"] }, ...entry }],
-      }],
+      sections: [
+        {
+          entries: [{ term: { type: "option", names: ["-c"] }, ...entry }],
+        },
+      ],
     });
     const showDefault = { prefix: "    [", suffix: "]" };
 
@@ -1705,14 +1913,22 @@ describe("formatDocPage", () => {
 
     it("should place a default on the term line at its minimum width", () => {
       assert.equal(
-        formatDocPage("app", {
-          sections: [{
-            entries: [{
-              term: { type: "argument", metavar: "X" },
-              default: [text("0")],
-            }],
-          }],
-        }, { maxWidth: 7, showDefault: true }),
+        formatDocPage(
+          "app",
+          {
+            sections: [
+              {
+                entries: [
+                  {
+                    term: { type: "argument", metavar: "X" },
+                    default: [text("0")],
+                  },
+                ],
+              },
+            ],
+          },
+          { maxWidth: 7, showDefault: true },
+        ),
         "\n  X  [\n     0]\n",
       );
     });
@@ -1817,13 +2033,11 @@ describe("formatDocPage", () => {
     });
 
     it("should retain suffix and later heading line width constraints", () => {
-      for (
-        const showDefault of [
-          { prefix: "    [", suffix: "]]" },
-          { prefix: "    [\nABC", suffix: "]" },
-          { prefix: "    [", suffix: "]\nABC" },
-        ]
-      ) {
+      for (const showDefault of [
+        { prefix: "    [", suffix: "]]" },
+        { prefix: "    [\nABC", suffix: "]" },
+        { prefix: "    [", suffix: "]\nABC" },
+      ]) {
         assert.throws(
           () =>
             formatDocPage("app", page({ default: [text("x")] }), {
@@ -1867,13 +2081,17 @@ describe("formatDocPage", () => {
       description: string,
       extra: Pick<DocEntry, "default" | "choices">,
     ): DocPage => ({
-      sections: [{
-        entries: [{
-          term: { type: "option", names: [name] },
-          description: [{ type: "text", text: description }],
-          ...extra,
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: [name] },
+              description: [{ type: "text", text: description }],
+              ...extra,
+            },
+          ],
+        },
+      ],
     });
 
     it("should drop the custom showDefault prefix's leading space", () => {
@@ -1989,12 +2207,16 @@ describe("formatDocPage", () => {
       const result = formatDocPage(
         "app",
         {
-          sections: [{
-            entries: [{
-              term: { type: "option", names: ["--x"] },
-              choices: [value("")],
-            }],
-          }],
+          sections: [
+            {
+              entries: [
+                {
+                  term: { type: "option", names: ["--x"] },
+                  choices: [value("")],
+                },
+              ],
+            },
+          ],
         },
         {
           maxWidth: 15,
@@ -2013,10 +2235,7 @@ describe("formatDocPage", () => {
         { maxWidth: 46, showDefault: true, colors: true },
       );
       const lines = result.split("\n");
-      assert.equal(
-        lines[2],
-        `${" ".repeat(30)}\x1b[2m[8080]\x1b[0m`,
-      );
+      assert.equal(lines[2], `${" ".repeat(30)}\x1b[2m[8080]\x1b[0m`);
     });
   });
 
@@ -2033,26 +2252,30 @@ describe("formatDocPage", () => {
       // description + choices text fills 69 chars in the desc column, and the
       // full line becomes 2 + 38 + 2 + 69 = 111 chars (observed in the issue).
       const page: DocPage = {
-        sections: [{
-          title: "Options",
-          entries: [{
-            term: {
-              type: "option",
-              names: ["-p", "--package-manager"],
-              metavar: "PACKAGE_MANAGER" as const,
-            },
-            description: [
+        sections: [
+          {
+            title: "Options",
+            entries: [
               {
-                type: "text",
-                text: "The package manager to use for installing dependencies.",
+                term: {
+                  type: "option",
+                  names: ["-p", "--package-manager"],
+                  metavar: "PACKAGE_MANAGER" as const,
+                },
+                description: [
+                  {
+                    type: "text",
+                    text: "The package manager to use for installing dependencies.",
+                  },
+                ],
+                choices: valueSet(["deno", "pnpm", "bun", "yarn", "npm"], {
+                  fallback: "",
+                  type: "unit",
+                }),
               },
             ],
-            choices: valueSet(
-              ["deno", "pnpm", "bun", "yarn", "npm"],
-              { fallback: "", type: "unit" },
-            ),
-          }],
-        }],
+          },
+        ],
       };
 
       const result = formatDocPage("repro", page, {
@@ -2064,9 +2287,9 @@ describe("formatDocPage", () => {
       for (const line of result.split("\n")) {
         assert.ok(
           getDisplayWidth(line) <= 100,
-          `Line exceeds maxWidth 100: "${line}" (${
-            getDisplayWidth(line)
-          } columns)`,
+          `Line exceeds maxWidth 100: "${line}" (${getDisplayWidth(
+            line,
+          )} columns)`,
         );
       }
     });
@@ -2082,22 +2305,26 @@ describe("formatDocPage", () => {
       // Without fix: "The package manager to use for your project." (44 chars)
       // fits in 50 but not 38, so the full line becomes 2+38+2+44 = 86 > 80.
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: {
-              type: "option",
-              names: ["-p", "--package-manager"],
-              metavar: "PACKAGE_MANAGER" as const,
-            },
-            description: [
+        sections: [
+          {
+            entries: [
               {
-                type: "text",
-                text: "The package manager to use for your project.",
+                term: {
+                  type: "option",
+                  names: ["-p", "--package-manager"],
+                  metavar: "PACKAGE_MANAGER" as const,
+                },
+                description: [
+                  {
+                    type: "text",
+                    text: "The package manager to use for your project.",
+                  },
+                ],
+                default: [{ type: "text", text: "npm" }],
               },
             ],
-            default: [{ type: "text", text: "npm" }],
-          }],
-        }],
+          },
+        ],
       };
 
       const result = formatDocPage("repro", page, {
@@ -2109,9 +2336,9 @@ describe("formatDocPage", () => {
       for (const line of result.split("\n")) {
         assert.ok(
           getDisplayWidth(line) <= 80,
-          `Line exceeds maxWidth 80: "${line}" (${
-            getDisplayWidth(line)
-          } columns)`,
+          `Line exceeds maxWidth 80: "${line}" (${getDisplayWidth(
+            line,
+          )} columns)`,
         );
       }
     });
@@ -2124,23 +2351,27 @@ describe("formatDocPage", () => {
       // descColumnWidth = 100 - 2 - 26 - 2 = 70.
       // First-line budget = 100 - (2 + 34 + 2) = 62 chars.
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: {
-              type: "option",
-              names: ["-w", "--web-framework"],
-              metavar: "WEB_FRAMEWORK" as const,
-            },
-            description: [
-              { type: "text", text: "The web framework to integrate." },
+        sections: [
+          {
+            entries: [
+              {
+                term: {
+                  type: "option",
+                  names: ["-w", "--web-framework"],
+                  metavar: "WEB_FRAMEWORK" as const,
+                },
+                description: [
+                  { type: "text", text: "The web framework to integrate." },
+                ],
+                default: [{ type: "text", text: "hono" }],
+                choices: valueSet(
+                  ["hono", "nitro", "next", "elysia", "express"],
+                  { fallback: "", type: "unit" },
+                ),
+              },
             ],
-            default: [{ type: "text", text: "hono" }],
-            choices: valueSet(
-              ["hono", "nitro", "next", "elysia", "express"],
-              { fallback: "", type: "unit" },
-            ),
-          }],
-        }],
+          },
+        ],
       };
 
       const result = formatDocPage("repro", page, {
@@ -2153,9 +2384,9 @@ describe("formatDocPage", () => {
       for (const line of result.split("\n")) {
         assert.ok(
           getDisplayWidth(line) <= 100,
-          `Line exceeds maxWidth 100: "${line}" (${
-            getDisplayWidth(line)
-          } columns)`,
+          `Line exceeds maxWidth 100: "${line}" (${getDisplayWidth(
+            line,
+          )} columns)`,
         );
       }
     });
@@ -2170,21 +2401,25 @@ describe("formatDocPage", () => {
       //   line = 2+38+2+44 = 86 > 80.
       // - With fix: wrapped at 38-char budget, first line ≤ 38 chars → fine.
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: {
-              type: "option",
-              names: ["-p", "--package-manager"],
-              metavar: "PACKAGE_MANAGER" as const,
-            },
-            description: [
+        sections: [
+          {
+            entries: [
               {
-                type: "text",
-                text: "The package manager to use for your project.",
+                term: {
+                  type: "option",
+                  names: ["-p", "--package-manager"],
+                  metavar: "PACKAGE_MANAGER" as const,
+                },
+                description: [
+                  {
+                    type: "text",
+                    text: "The package manager to use for your project.",
+                  },
+                ],
               },
             ],
-          }],
-        }],
+          },
+        ],
       };
 
       const result = formatDocPage("repro", page, {
@@ -2195,9 +2430,9 @@ describe("formatDocPage", () => {
       for (const line of result.split("\n")) {
         assert.ok(
           getDisplayWidth(line) <= 80,
-          `Line exceeds maxWidth 80: "${line}" (${
-            getDisplayWidth(line)
-          } columns)`,
+          `Line exceeds maxWidth 80: "${line}" (${getDisplayWidth(
+            line,
+          )} columns)`,
         );
       }
       // Description must have wrapped onto a new line
@@ -2210,25 +2445,29 @@ describe("formatDocPage", () => {
       // so the overflow logic should still trigger for wide terms even when
       // colors: true adds ANSI codes to the term string.
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: {
-              type: "option",
-              names: ["-p", "--package-manager"],
-              metavar: "PACKAGE_MANAGER" as const,
-            },
-            description: [
+        sections: [
+          {
+            entries: [
               {
-                type: "text",
-                text: "The package manager to use for installing dependencies.",
+                term: {
+                  type: "option",
+                  names: ["-p", "--package-manager"],
+                  metavar: "PACKAGE_MANAGER" as const,
+                },
+                description: [
+                  {
+                    type: "text",
+                    text: "The package manager to use for installing dependencies.",
+                  },
+                ],
+                choices: valueSet(["deno", "pnpm", "bun", "yarn", "npm"], {
+                  fallback: "",
+                  type: "unit",
+                }),
               },
             ],
-            choices: valueSet(
-              ["deno", "pnpm", "bun", "yarn", "npm"],
-              { fallback: "", type: "unit" },
-            ),
-          }],
-        }],
+          },
+        ],
       };
 
       const result = formatDocPage("repro", page, {
@@ -2251,22 +2490,26 @@ describe("formatDocPage", () => {
       // and behaviour should be identical to the pre-fix code path.
       // "--verbose-mode VERBOSE_MOD" is exactly 26 chars.
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: {
-              type: "option",
-              names: ["--verbose-mode"],
-              metavar: "VERBOSE_MOD" as const,
-            },
-            description: [
-              { type: "text", text: "Enable verbose mode output." },
+        sections: [
+          {
+            entries: [
+              {
+                term: {
+                  type: "option",
+                  names: ["--verbose-mode"],
+                  metavar: "VERBOSE_MOD" as const,
+                },
+                description: [
+                  { type: "text", text: "Enable verbose mode output." },
+                ],
+                choices: valueSet(["trace", "debug", "info", "warn", "error"], {
+                  fallback: "",
+                  type: "unit",
+                }),
+              },
             ],
-            choices: valueSet(
-              ["trace", "debug", "info", "warn", "error"],
-              { fallback: "", type: "unit" },
-            ),
-          }],
-        }],
+          },
+        ],
       };
 
       const result = formatDocPage("repro", page, {
@@ -2278,9 +2521,9 @@ describe("formatDocPage", () => {
       for (const line of result.split("\n")) {
         assert.ok(
           getDisplayWidth(line) <= 80,
-          `Line exceeds maxWidth 80: "${line}" (${
-            getDisplayWidth(line)
-          } columns)`,
+          `Line exceeds maxWidth 80: "${line}" (${getDisplayWidth(
+            line,
+          )} columns)`,
         );
       }
     });
@@ -2299,21 +2542,25 @@ describe("formatDocPage", () => {
       // With fix (startWidth=1): total hits 51 at "sys.", so it wraps.
       //   Full first line ≤ 80 ✓.
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: {
-              type: "option",
-              names: ["--verbose-mode"],
-              metavar: "VERBOSE_MODE" as const,
-            },
-            description: [
+        sections: [
+          {
+            entries: [
               {
-                type: "text",
-                text: "Enable verbose mode output for entire running sys.",
+                term: {
+                  type: "option",
+                  names: ["--verbose-mode"],
+                  metavar: "VERBOSE_MODE" as const,
+                },
+                description: [
+                  {
+                    type: "text",
+                    text: "Enable verbose mode output for entire running sys.",
+                  },
+                ],
               },
             ],
-          }],
-        }],
+          },
+        ],
       };
 
       const result = formatDocPage("repro", page, {
@@ -2324,9 +2571,9 @@ describe("formatDocPage", () => {
       for (const line of result.split("\n")) {
         assert.ok(
           getDisplayWidth(line) <= 80,
-          `Line exceeds maxWidth 80: "${line}" (${
-            getDisplayWidth(line)
-          } columns)`,
+          `Line exceeds maxWidth 80: "${line}" (${getDisplayWidth(
+            line,
+          )} columns)`,
         );
       }
       // With the fix the description must have wrapped
@@ -2350,12 +2597,19 @@ describe("formatDocPage", () => {
       //   choicesText = " (choices: aaaaaaaaa)" = 21 chars
       //   full line = 2 + 26 + 2 + 21 = 51 > 50
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "option", names: ["--option"] },
-            choices: valueSet(["aaaaaaaaa"], { fallback: "", type: "unit" }),
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "option", names: ["--option"] },
+                choices: valueSet(["aaaaaaaaa"], {
+                  fallback: "",
+                  type: "unit",
+                }),
+              },
+            ],
+          },
+        ],
       };
 
       const result = formatDocPage("repro", page, {
@@ -2367,22 +2621,26 @@ describe("formatDocPage", () => {
       for (const line of result.split("\n")) {
         assert.ok(
           getDisplayWidth(line) <= 50,
-          `Line exceeds maxWidth 50: "${line}" (${
-            getDisplayWidth(line)
-          } columns)`,
+          `Line exceeds maxWidth 50: "${line}" (${getDisplayWidth(
+            line,
+          )} columns)`,
         );
       }
     });
 
     it("should not exceed maxWidth when showDefault overflows the line", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "option", names: ["--opt"] },
-            description: [{ type: "text", text: "Some option" }],
-            default: [{ type: "text", text: "a very long default value" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "option", names: ["--opt"] },
+                description: [{ type: "text", text: "Some option" }],
+                default: [{ type: "text", text: "a very long default value" }],
+              },
+            ],
+          },
+        ],
       };
 
       const result = formatDocPage("myapp", page, {
@@ -2393,25 +2651,38 @@ describe("formatDocPage", () => {
       for (const line of result.split("\n")) {
         assert.ok(
           getDisplayWidth(line) <= 50,
-          `Line exceeds maxWidth 50: "${line}" (${
-            getDisplayWidth(line)
-          } columns)`,
+          `Line exceeds maxWidth 50: "${line}" (${getDisplayWidth(
+            line,
+          )} columns)`,
         );
       }
     });
 
     it("should not exceed maxWidth when showChoices overflows the line", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "option", names: ["-f", "--format"] },
-            description: [{ type: "text", text: "Output format" }],
-            choices: valueSet(
-              ["json", "yaml", "toml", "xml", "csv", "tsv", "html", "markdown"],
-              { fallback: "", type: "unit" },
-            ),
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "option", names: ["-f", "--format"] },
+                description: [{ type: "text", text: "Output format" }],
+                choices: valueSet(
+                  [
+                    "json",
+                    "yaml",
+                    "toml",
+                    "xml",
+                    "csv",
+                    "tsv",
+                    "html",
+                    "markdown",
+                  ],
+                  { fallback: "", type: "unit" },
+                ),
+              },
+            ],
+          },
+        ],
       };
 
       const result = formatDocPage("myapp", page, {
@@ -2422,26 +2693,39 @@ describe("formatDocPage", () => {
       for (const line of result.split("\n")) {
         assert.ok(
           getDisplayWidth(line) <= 60,
-          `Line exceeds maxWidth 60: "${line}" (${
-            getDisplayWidth(line)
-          } columns)`,
+          `Line exceeds maxWidth 60: "${line}" (${getDisplayWidth(
+            line,
+          )} columns)`,
         );
       }
     });
 
     it("should not exceed maxWidth when both showDefault and showChoices overflow", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "option", names: ["-f", "--format"] },
-            description: [{ type: "text", text: "Output format" }],
-            default: [{ type: "text", text: "json" }],
-            choices: valueSet(
-              ["json", "yaml", "toml", "xml", "csv", "tsv", "html", "markdown"],
-              { fallback: "", type: "unit" },
-            ),
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "option", names: ["-f", "--format"] },
+                description: [{ type: "text", text: "Output format" }],
+                default: [{ type: "text", text: "json" }],
+                choices: valueSet(
+                  [
+                    "json",
+                    "yaml",
+                    "toml",
+                    "xml",
+                    "csv",
+                    "tsv",
+                    "html",
+                    "markdown",
+                  ],
+                  { fallback: "", type: "unit" },
+                ),
+              },
+            ],
+          },
+        ],
       };
 
       const result = formatDocPage("myapp", page, {
@@ -2453,9 +2737,9 @@ describe("formatDocPage", () => {
       for (const line of result.split("\n")) {
         assert.ok(
           getDisplayWidth(line) <= 60,
-          `Line exceeds maxWidth 60: "${line}" (${
-            getDisplayWidth(line)
-          } columns)`,
+          `Line exceeds maxWidth 60: "${line}" (${getDisplayWidth(
+            line,
+          )} columns)`,
         );
       }
     });
@@ -2463,140 +2747,112 @@ describe("formatDocPage", () => {
 
   it("should throw TypeError when programName contains a newline", () => {
     const page: DocPage = { sections: [] };
-    assert.throws(
-      () => formatDocPage("bad\nname", page),
-      TypeError,
-    );
-    assert.throws(
-      () => formatDocPage("bad\rname", page),
-      TypeError,
-    );
-    assert.throws(
-      () => formatDocPage("bad\r\nname", page),
-      TypeError,
-    );
+    assert.throws(() => formatDocPage("bad\nname", page), TypeError);
+    assert.throws(() => formatDocPage("bad\rname", page), TypeError);
+    assert.throws(() => formatDocPage("bad\r\nname", page), TypeError);
   });
 
   it("should throw TypeError for non-string programName", () => {
     const page: DocPage = { sections: [] };
-    assert.throws(
-      () => formatDocPage(123 as never, page),
-      TypeError,
-    );
-    assert.throws(
-      () => formatDocPage(Symbol("x") as never, page),
-      TypeError,
-    );
+    assert.throws(() => formatDocPage(123 as never, page), TypeError);
+    assert.throws(() => formatDocPage(Symbol("x") as never, page), TypeError);
   });
 
   it("should throw TypeError for empty programName", () => {
     const page: DocPage = { sections: [] };
-    assert.throws(
-      () => formatDocPage("", page),
-      TypeError,
-    );
+    assert.throws(() => formatDocPage("", page), TypeError);
   });
 
   it("should throw TypeError for programName with control characters", () => {
     const page: DocPage = { sections: [] };
-    assert.throws(
-      () => formatDocPage("bad\x00name", page),
-      TypeError,
-    );
-    assert.throws(
-      () => formatDocPage("bad\tname", page),
-      TypeError,
-    );
+    assert.throws(() => formatDocPage("bad\x00name", page), TypeError);
+    assert.throws(() => formatDocPage("bad\tname", page), TypeError);
   });
 
   it("should throw TypeError for programName with Unicode line separators", () => {
     const page: DocPage = { sections: [] };
-    assert.throws(
-      () => formatDocPage("bad\x85name", page),
-      TypeError,
-    );
-    assert.throws(
-      () => formatDocPage("bad\u2028name", page),
-      TypeError,
-    );
-    assert.throws(
-      () => formatDocPage("bad\u2029name", page),
-      TypeError,
-    );
+    assert.throws(() => formatDocPage("bad\x85name", page), TypeError);
+    assert.throws(() => formatDocPage("bad\u2028name", page), TypeError);
+    assert.throws(() => formatDocPage("bad\u2029name", page), TypeError);
   });
 
   it("should throw TypeError when section title contains a newline", () => {
     const page: DocPage = {
-      sections: [{
-        title: "bad\nsection",
-        entries: [{
-          term: { type: "argument", metavar: "X" },
-          description: [{ type: "text", text: "desc" }],
-        }],
-      }],
+      sections: [
+        {
+          title: "bad\nsection",
+          entries: [
+            {
+              term: { type: "argument", metavar: "X" },
+              description: [{ type: "text", text: "desc" }],
+            },
+          ],
+        },
+      ],
     };
-    assert.throws(
-      () => formatDocPage("myapp", page),
-      TypeError,
-    );
+    assert.throws(() => formatDocPage("myapp", page), TypeError);
     const crPage: DocPage = {
-      sections: [{
-        title: "bad\rsection",
-        entries: [{
-          term: { type: "argument", metavar: "X" },
-          description: [{ type: "text", text: "desc" }],
-        }],
-      }],
+      sections: [
+        {
+          title: "bad\rsection",
+          entries: [
+            {
+              term: { type: "argument", metavar: "X" },
+              description: [{ type: "text", text: "desc" }],
+            },
+          ],
+        },
+      ],
     };
-    assert.throws(
-      () => formatDocPage("myapp", crPage),
-      TypeError,
-    );
+    assert.throws(() => formatDocPage("myapp", crPage), TypeError);
     const crlfPage: DocPage = {
-      sections: [{
-        title: "bad\r\nsection",
-        entries: [{
-          term: { type: "argument", metavar: "X" },
-          description: [{ type: "text", text: "desc" }],
-        }],
-      }],
+      sections: [
+        {
+          title: "bad\r\nsection",
+          entries: [
+            {
+              term: { type: "argument", metavar: "X" },
+              description: [{ type: "text", text: "desc" }],
+            },
+          ],
+        },
+      ],
     };
-    assert.throws(
-      () => formatDocPage("myapp", crlfPage),
-      TypeError,
-    );
+    assert.throws(() => formatDocPage("myapp", crlfPage), TypeError);
   });
 
   it("should throw TypeError when section title is empty", () => {
     const page: DocPage = {
-      sections: [{
-        title: "",
-        entries: [{
-          term: { type: "argument", metavar: "X" },
-          description: [{ type: "text", text: "desc" }],
-        }],
-      }],
+      sections: [
+        {
+          title: "",
+          entries: [
+            {
+              term: { type: "argument", metavar: "X" },
+              description: [{ type: "text", text: "desc" }],
+            },
+          ],
+        },
+      ],
     };
-    assert.throws(
-      () => formatDocPage("myapp", page),
-      TypeError,
-    );
+    assert.throws(() => formatDocPage("myapp", page), TypeError);
   });
 
   it("should throw TypeError when section title is whitespace-only", () => {
     const page: DocPage = {
-      sections: [{
-        title: "   ",
-        entries: [{
-          term: { type: "argument", metavar: "X" },
-          description: [{ type: "text", text: "desc" }],
-        }],
-      }],
+      sections: [
+        {
+          title: "   ",
+          entries: [
+            {
+              term: { type: "argument", metavar: "X" },
+              description: [{ type: "text", text: "desc" }],
+            },
+          ],
+        },
+      ],
     };
-    assert.throws(
-      () => formatDocPage("myapp", page),
-      TypeError,
-    );
+    assert.throws(() => formatDocPage("myapp", page), TypeError);
   });
 
   it("should not throw for empty title in empty section", () => {
@@ -2610,22 +2866,28 @@ describe("formatDocPage", () => {
 
   it("should not throw for newline in title of empty section", () => {
     const page: DocPage = {
-      sections: [{
-        title: "bad\nsection",
-        entries: [],
-      }],
+      sections: [
+        {
+          title: "bad\nsection",
+          entries: [],
+        },
+      ],
     };
     assert.doesNotThrow(() => formatDocPage("myapp", page));
   });
 
   describe("small maxWidth graceful degradation", () => {
     const simplePage: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-v", "--verbose"] },
-          description: [{ type: "text", text: "Enable verbose output" }],
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["-v", "--verbose"] },
+              description: [{ type: "text", text: "Enable verbose output" }],
+            },
+          ],
+        },
+      ],
     };
 
     it("should not exceed maxWidth when smaller than default layout budget", () => {
@@ -2637,12 +2899,16 @@ describe("formatDocPage", () => {
 
     it("should degrade gracefully with very small maxWidth", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "X" },
-            description: [{ type: "text", text: "abc def ghi" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "X" },
+                description: [{ type: "text", text: "abc def ghi" }],
+              },
+            ],
+          },
+        ],
       };
       const maxWidth = 15;
       const result = formatDocPage("app", page, { maxWidth });
@@ -2658,13 +2924,17 @@ describe("formatDocPage", () => {
 
     it("should not exceed small maxWidth with showDefault", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "option", names: ["--port"] },
-            description: [{ type: "text", text: "Port number" }],
-            default: [{ type: "text", text: "3000" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "option", names: ["--port"] },
+                description: [{ type: "text", text: "Port number" }],
+                default: [{ type: "text", text: "3000" }],
+              },
+            ],
+          },
+        ],
       };
       const maxWidth = 20;
       const result = formatDocPage("myapp", page, {
@@ -2676,12 +2946,16 @@ describe("formatDocPage", () => {
 
     it("should not add extra blank lines for long terms that fit in line", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "option", names: ["--longoption123"] },
-            description: [{ type: "text", text: "A long option" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "option", names: ["--longoption123"] },
+                description: [{ type: "text", text: "A long option" }],
+              },
+            ],
+          },
+        ],
       };
       const maxWidth = 20;
       const result = formatDocPage("myapp", page, { maxWidth });
@@ -2714,84 +2988,70 @@ describe("formatDocPage", () => {
 
     it("should throw RangeError when maxWidth is too small for any layout", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "X" },
-            description: [{ type: "text", text: "desc" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "X" },
+                description: [{ type: "text", text: "desc" }],
+              },
+            ],
+          },
+        ],
       };
       // default termIndent=2, minimum for desc entries = 2 + 4 = 6
-      assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 5 }),
-        {
-          name: "RangeError",
-          message: "maxWidth must be at least 6, got 5.",
-        },
-      );
-      assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 1 }),
-        {
-          name: "RangeError",
-          message: "maxWidth must be at least 6, got 1.",
-        },
-      );
+      assert.throws(() => formatDocPage("app", page, { maxWidth: 5 }), {
+        name: "RangeError",
+        message: "maxWidth must be at least 6, got 5.",
+      });
+      assert.throws(() => formatDocPage("app", page, { maxWidth: 1 }), {
+        name: "RangeError",
+        message: "maxWidth must be at least 6, got 1.",
+      });
       // maxWidth=6 is the minimum feasible value with default termIndent
-      assert.doesNotThrow(
-        () => formatDocPage("app", page, { maxWidth: 6 }),
-      );
+      assert.doesNotThrow(() => formatDocPage("app", page, { maxWidth: 6 }));
       // Pages without entries accept maxWidth=1
       const emptyPage: DocPage = {
         brief: [{ type: "text", text: "A brief description" }],
         sections: [],
       };
-      assert.doesNotThrow(
-        () => formatDocPage("app", emptyPage, { maxWidth: 1 }),
+      assert.doesNotThrow(() =>
+        formatDocPage("app", emptyPage, { maxWidth: 1 }),
       );
       // Bare-term entries (including empty description) need termIndent + 1 = 3
       const bareTermPage: DocPage = {
-        sections: [{
-          entries: [
-            { term: { type: "argument", metavar: "X" } },
-            { term: { type: "argument", metavar: "Y" }, description: [] },
-          ],
-        }],
+        sections: [
+          {
+            entries: [
+              { term: { type: "argument", metavar: "X" } },
+              { term: { type: "argument", metavar: "Y" }, description: [] },
+            ],
+          },
+        ],
       };
-      assert.doesNotThrow(
-        () => formatDocPage("app", bareTermPage, { maxWidth: 3 }),
+      assert.doesNotThrow(() =>
+        formatDocPage("app", bareTermPage, { maxWidth: 3 }),
       );
-      assert.throws(
-        () => formatDocPage("app", bareTermPage, { maxWidth: 2 }),
-        {
-          name: "RangeError",
-          message: "maxWidth must be at least 3, got 2.",
-        },
-      );
+      assert.throws(() => formatDocPage("app", bareTermPage, { maxWidth: 2 }), {
+        name: "RangeError",
+        message: "maxWidth must be at least 3, got 2.",
+      });
     });
 
     it("should throw TypeError for non-finite or non-integer maxWidth", () => {
       const page: DocPage = { sections: [] };
-      assert.throws(
-        () => formatDocPage("app", page, { maxWidth: NaN }),
-        {
-          name: "TypeError",
-          message: "maxWidth must be a finite integer, got NaN.",
-        },
-      );
-      assert.throws(
-        () => formatDocPage("app", page, { maxWidth: Infinity }),
-        {
-          name: "TypeError",
-          message: "maxWidth must be a finite integer, got Infinity.",
-        },
-      );
-      assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 20.5 }),
-        {
-          name: "TypeError",
-          message: "maxWidth must be a finite integer, got 20.5.",
-        },
-      );
+      assert.throws(() => formatDocPage("app", page, { maxWidth: NaN }), {
+        name: "TypeError",
+        message: "maxWidth must be a finite integer, got NaN.",
+      });
+      assert.throws(() => formatDocPage("app", page, { maxWidth: Infinity }), {
+        name: "TypeError",
+        message: "maxWidth must be a finite integer, got Infinity.",
+      });
+      assert.throws(() => formatDocPage("app", page, { maxWidth: 20.5 }), {
+        name: "TypeError",
+        message: "maxWidth must be a finite integer, got 20.5.",
+      });
     });
 
     it("should throw RangeError when maxWidth is too small for Usage label", () => {
@@ -2800,13 +3060,10 @@ describe("formatDocPage", () => {
         sections: [],
       };
       // 7 + max("app"(3), min("FILE"(4), 3+7=10)) = 7 + 4 = 11
-      assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 10 }),
-        {
-          name: "RangeError",
-          message: "maxWidth must be at least 11, got 10.",
-        },
-      );
+      assert.throws(() => formatDocPage("app", page, { maxWidth: 10 }), {
+        name: "RangeError",
+        message: "maxWidth must be at least 11, got 10.",
+      });
       // maxWidth=11: indent(7)+FILE(4) = 11 fits on continuation line
       const result = formatDocPage("app", page, { maxWidth: 11 });
       assertLinesWithinMaxWidth(result, 11);
@@ -2848,13 +3105,10 @@ describe("formatDocPage", () => {
         sections: [],
       };
       // "Examples:" label is 9 chars
-      assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 8 }),
-        {
-          name: "RangeError",
-          message: "maxWidth must be at least 9, got 8.",
-        },
-      );
+      assert.throws(() => formatDocPage("app", page, { maxWidth: 8 }), {
+        name: "RangeError",
+        message: "maxWidth must be at least 9, got 8.",
+      });
       // maxWidth=9 should work
       const result = formatDocPage("app", page, { maxWidth: 9 });
       assertLinesWithinMaxWidth(result, 9);
@@ -2866,13 +3120,10 @@ describe("formatDocPage", () => {
         sections: [],
       };
       // "Author:" label is 7 chars
-      assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 6 }),
-        {
-          name: "RangeError",
-          message: "maxWidth must be at least 7, got 6.",
-        },
-      );
+      assert.throws(() => formatDocPage("app", page, { maxWidth: 6 }), {
+        name: "RangeError",
+        message: "maxWidth must be at least 7, got 6.",
+      });
       const result = formatDocPage("app", page, { maxWidth: 7 });
       assertLinesWithinMaxWidth(result, 7);
     });
@@ -2883,26 +3134,27 @@ describe("formatDocPage", () => {
         sections: [],
       };
       // "Bugs:" label is 5 chars
-      assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 4 }),
-        {
-          name: "RangeError",
-          message: "maxWidth must be at least 5, got 4.",
-        },
-      );
+      assert.throws(() => formatDocPage("app", page, { maxWidth: 4 }), {
+        name: "RangeError",
+        message: "maxWidth must be at least 5, got 4.",
+      });
       const result = formatDocPage("app", page, { maxWidth: 5 });
       assertLinesWithinMaxWidth(result, 5);
     });
 
     it("should throw RangeError when maxWidth is too small for showDefault", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "X" },
-            description: [{ type: "text", text: "d" }],
-            default: [{ type: "text", text: "0" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "X" },
+                description: [{ type: "text", text: "d" }],
+                default: [{ type: "text", text: "0" }],
+              },
+            ],
+          },
+        ],
       };
       // showDefault prefix " [" (2), suffix wraps with content
       // minDescWidth=2, minimum = termIndent(2) + max(4, 2*2+1) = 2 + 5 = 7
@@ -2923,13 +3175,17 @@ describe("formatDocPage", () => {
 
     it("should throw RangeError when maxWidth is too small for showChoices", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "X" },
-            description: [{ type: "text", text: "d" }],
-            choices: valueSet(["a", "b"], ""),
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "X" },
+                description: [{ type: "text", text: "d" }],
+                choices: valueSet(["a", "b"], ""),
+              },
+            ],
+          },
+        ],
       };
       // Trimmed heading "(choices: " is 10 columns wide.
       // Split minimum = termIndent(2) + gap(2) + (2*10 - 1) = 23.
@@ -2949,13 +3205,17 @@ describe("formatDocPage", () => {
 
     it("should reject maxWidth in the gap between split and non-split ranges", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "X" },
-            description: [{ type: "text", text: "d" }],
-            choices: valueSet(["a", "b"], ""),
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "X" },
+                description: [{ type: "text", text: "d" }],
+                choices: valueSet(["a", "b"], ""),
+              },
+            ],
+          },
+        ],
       };
       // Default termWidth=26, termIndent=2.
       // Trimmed showChoices heading = 1+9 = 10.
@@ -2991,13 +3251,17 @@ describe("formatDocPage", () => {
     it("should treat empty-array defaults and choices as absent", () => {
       // Empty default: [] should not affect min width or produce output
       const defaultPage: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "X" },
-            description: [{ type: "text", text: "d" }],
-            default: [],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "X" },
+                description: [{ type: "text", text: "d" }],
+                default: [],
+              },
+            ],
+          },
+        ],
       };
       const defaultResult = formatDocPage("app", defaultPage, {
         showDefault: true,
@@ -3006,13 +3270,17 @@ describe("formatDocPage", () => {
       assert.ok(!defaultResult.includes("]"));
       // Empty choices: [] should not affect min width or produce output
       const choicesPage: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "X" },
-            description: [{ type: "text", text: "d" }],
-            choices: [],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "X" },
+                description: [{ type: "text", text: "d" }],
+                choices: [],
+              },
+            ],
+          },
+        ],
       };
       const choicesResult = formatDocPage("app", choicesPage, {
         showChoices: true,
@@ -3025,24 +3293,28 @@ describe("formatDocPage", () => {
         formatDocPage("app", defaultPage, {
           maxWidth: 8,
           showDefault: true,
-        })
+        }),
       );
       assert.doesNotThrow(() =>
         formatDocPage("app", choicesPage, {
           maxWidth: 8,
           showChoices: true,
-        })
+        }),
       );
     });
 
     it("should allow non-empty showDefault at narrow width", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "X" },
-            default: [{ type: "text", text: "0" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "X" },
+                default: [{ type: "text", text: "0" }],
+              },
+            ],
+          },
+        ],
       };
       // minDescWidth = prefix.length = 2
       // minimum = termIndent(2) + max(4, 2*2+1) = 7
@@ -3056,13 +3328,17 @@ describe("formatDocPage", () => {
 
     it("should use fixed-term minimum when termWidth is small", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "X" },
-            description: [{ type: "text", text: "d" }],
-            choices: valueSet(["a"], ""),
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "X" },
+                description: [{ type: "text", text: "d" }],
+                choices: valueSet(["a"], ""),
+              },
+            ],
+          },
+        ],
       };
       // Trimmed choices heading is 10 columns wide.
       // termWidth=1: fixed minimum is 2+2+1+10 = 15; split minimum is 23.
@@ -3089,22 +3365,23 @@ describe("formatDocPage", () => {
     it("should use max of all applicable minimums", () => {
       const page: DocPage = {
         usage: [{ type: "argument", metavar: "FILE" }],
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "X" },
-            description: [{ type: "text", text: "desc" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "X" },
+                description: [{ type: "text", text: "desc" }],
+              },
+            ],
+          },
+        ],
       };
       // usage requires 7 + max("app"(3), min("FILE"(4), 10)) = 11,
       // entries require termIndent(2) + 4 = 6; max(11, 6) = 11
-      assert.throws(
-        () => formatDocPage("app", page, { maxWidth: 10 }),
-        {
-          name: "RangeError",
-          message: "maxWidth must be at least 11, got 10.",
-        },
-      );
+      assert.throws(() => formatDocPage("app", page, { maxWidth: 10 }), {
+        name: "RangeError",
+        message: "maxWidth must be at least 11, got 10.",
+      });
       // maxWidth=11: indent(7)+FILE(4) = 11 fits on continuation line
       const result = formatDocPage("app", page, { maxWidth: 11 });
       assertLinesWithinMaxWidth(result, 11);
@@ -3112,13 +3389,17 @@ describe("formatDocPage", () => {
 
     it("should respect custom showDefault prefix in minWidth", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "X" },
-            description: [{ type: "text", text: "d" }],
-            default: [{ type: "text", text: "0" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "X" },
+                description: [{ type: "text", text: "d" }],
+                default: [{ type: "text", text: "0" }],
+              },
+            ],
+          },
+        ],
       };
       // Custom prefix "<<<" (3), suffix wraps with content
       // minDescWidth=3, minimum = termIndent(2) + max(4, 2*3+1) = 2 + 7 = 9
@@ -3142,13 +3423,17 @@ describe("formatDocPage", () => {
 
     it("should respect custom showChoices label in minWidth", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "X" },
-            description: [{ type: "text", text: "d" }],
-            choices: valueSet(["a"], ""),
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "X" },
+                description: [{ type: "text", text: "d" }],
+                choices: valueSet(["a"], ""),
+              },
+            ],
+          },
+        ],
       };
       // Trimmed heading "(v: " is 4 columns wide.
       // Split minimum = termIndent(2) + gap(2) + (2*4 - 1) = 11.
@@ -3174,13 +3459,17 @@ describe("formatDocPage", () => {
       // The ?? fallback for showDefault.prefix at line 631 is only reached
       // when maxWidth is set and needsDescColumn is true.
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "X" },
-            description: [{ type: "text", text: "d" }],
-            default: [{ type: "text", text: "0" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "X" },
+                description: [{ type: "text", text: "d" }],
+                default: [{ type: "text", text: "0" }],
+              },
+            ],
+          },
+        ],
       };
       // showDefault has suffix but no prefix → uses default " [" (2 chars).
       // minDescWidth = 2, minimum = termIndent(2) + max(4, 2*2+1) = 2 + 5 = 7
@@ -3196,13 +3485,17 @@ describe("formatDocPage", () => {
       // The ?? fallback for showChoices.label at line 643 is only reached
       // when maxWidth is set and needsDescColumn is true.
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "X" },
-            description: [{ type: "text", text: "d" }],
-            choices: valueSet(["a", "b"], { fallback: "", type: "unit" }),
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "X" },
+                description: [{ type: "text", text: "d" }],
+                choices: valueSet(["a", "b"], { fallback: "", type: "unit" }),
+              },
+            ],
+          },
+        ],
       };
       // showChoices has prefix but no label → uses default "choices: " (9 chars).
       // minDescWidth = prefix_width + label_width = 2 + 9 = 11
@@ -3218,12 +3511,16 @@ describe("formatDocPage", () => {
   describe("Unicode display width", () => {
     it("should align CJK terms correctly", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "한글" },
-            description: [{ type: "text", text: "설명" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "한글" },
+                description: [{ type: "text", text: "설명" }],
+              },
+            ],
+          },
+        ],
       };
       // "한글" = 4 display columns.  Verify the term is padded correctly.
       const result = formatDocPage("app", page, { maxWidth: 20 });
@@ -3233,32 +3530,40 @@ describe("formatDocPage", () => {
 
     it("should respect maxWidth with CJK content", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "한글" },
-            description: [{ type: "text", text: "설명 설명 설명" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "한글" },
+                description: [{ type: "text", text: "설명 설명 설명" }],
+              },
+            ],
+          },
+        ],
       };
       const result = formatDocPage("앱", page, { maxWidth: 20 });
       for (const line of result.split("\n")) {
         assert.ok(
           getDisplayWidth(line) <= 20,
-          `Line display width exceeds 20: "${line}" (${
-            getDisplayWidth(line)
-          } columns)`,
+          `Line display width exceeds 20: "${line}" (${getDisplayWidth(
+            line,
+          )} columns)`,
         );
       }
     });
 
     it("should handle emoji in descriptions", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "FILE" },
-            description: [{ type: "text", text: "😀 description" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "FILE" },
+                description: [{ type: "text", text: "😀 description" }],
+              },
+            ],
+          },
+        ],
       };
       const result = formatDocPage("app", page, { maxWidth: 30 });
       assert.ok(result.includes("😀"));
@@ -3308,12 +3613,16 @@ describe("branch coverage: doc.ts edge cases", () => {
   // the false branch of `typeof showDefault === "object"`.
   it("showDefault: true uses default prefix/suffix brackets", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--output"] },
-          default: message`stdout`,
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--output"] },
+              default: message`stdout`,
+            },
+          ],
+        },
+      ],
     };
     const result = formatDocPage("myapp", page, { showDefault: true });
     assert.ok(result.includes("["));
@@ -3327,13 +3636,17 @@ describe("branch coverage: doc.ts edge cases", () => {
     const longDesc =
       "A very long description that occupies almost all of the description column width";
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-v", "--verbose"] },
-          description: message`${longDesc}`,
-          default: message`false`,
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["-v", "--verbose"] },
+              description: message`${longDesc}`,
+              default: message`false`,
+            },
+          ],
+        },
+      ],
     };
     // maxWidth=60 gives a narrow descColumnWidth so the default wraps.
     const result = formatDocPage("myapp", page, {
@@ -3347,12 +3660,16 @@ describe("branch coverage: doc.ts edge cases", () => {
   // options—exercises the false-branch of the conditional default.
   it("showChoices: object with label uses provided label", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--fmt"] },
-          choices: valueSet(["json", "yaml", "csv"], ""),
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--fmt"] },
+              choices: valueSet(["json", "yaml", "csv"], ""),
+            },
+          ],
+        },
+      ],
     };
     const result = formatDocPage("myapp", page, {
       showChoices: { label: "one of: " },
@@ -3362,19 +3679,19 @@ describe("branch coverage: doc.ts edge cases", () => {
 
   it("showChoices: object with maxItems truncates long choice lists", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--color"] },
-          choices: valueSet([
-            "red",
-            "green",
-            "blue",
-            "cyan",
-            "magenta",
-            "yellow",
-          ], ""),
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--color"] },
+              choices: valueSet(
+                ["red", "green", "blue", "cyan", "magenta", "yellow"],
+                "",
+              ),
+            },
+          ],
+        },
+      ],
     };
     // maxItems: 2 → only first two choices displayed, rest truncated.
     const result = formatDocPage("myapp", page, {
@@ -3386,18 +3703,22 @@ describe("branch coverage: doc.ts edge cases", () => {
 
   it("showChoices: maxItems should count only value terms", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--color"] },
-          choices: [
-            { type: "text", text: "try " },
-            { type: "value", value: "red" },
-            { type: "text", text: " or " },
-            { type: "value", value: "green" },
-            { type: "text", text: " first" },
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--color"] },
+              choices: [
+                { type: "text", text: "try " },
+                { type: "value", value: "red" },
+                { type: "text", text: " or " },
+                { type: "value", value: "green" },
+                { type: "text", text: " first" },
+              ],
+            },
           ],
-        }],
-      }],
+        },
+      ],
     };
 
     const result = formatDocPage("myapp", page, {
@@ -3410,12 +3731,16 @@ describe("branch coverage: doc.ts edge cases", () => {
 
   it("showChoices: maxItems 0 throws RangeError", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--color"] },
-          choices: valueSet(["red", "green", "blue"], ""),
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--color"] },
+              choices: valueSet(["red", "green", "blue"], ""),
+            },
+          ],
+        },
+      ],
     };
     assert.throws(
       () =>
@@ -3431,12 +3756,16 @@ describe("branch coverage: doc.ts edge cases", () => {
 
   it("showChoices: negative maxItems throws RangeError", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--color"] },
-          choices: valueSet(["red", "green", "blue"], ""),
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--color"] },
+              choices: valueSet(["red", "green", "blue"], ""),
+            },
+          ],
+        },
+      ],
     };
     assert.throws(
       () =>
@@ -3452,11 +3781,15 @@ describe("branch coverage: doc.ts edge cases", () => {
 
   it("showChoices: maxItems 0 throws even without choices entries", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--verbose"] },
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--verbose"] },
+            },
+          ],
+        },
+      ],
     };
     assert.throws(
       () =>
@@ -3493,12 +3826,16 @@ describe("branch coverage: doc.ts edge cases", () => {
 
   it("showDefault object uses fallback prefix and suffix", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--name"] },
-          default: message`guest`,
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--name"] },
+              default: message`guest`,
+            },
+          ],
+        },
+      ],
     };
     const result = formatDocPage("myapp", page, {
       showDefault: {},
@@ -3508,13 +3845,17 @@ describe("branch coverage: doc.ts edge cases", () => {
 
   it("showChoices handles non-array choices value safely", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--mode"] },
-          // Runtime guard path: choices is non-null but not an array.
-          choices: "dev,prod" as never,
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--mode"] },
+              // Runtime guard path: choices is non-null but not an array.
+              choices: "dev,prod" as never,
+            },
+          ],
+        },
+      ],
     };
     // Non-array choices should be treated as absent
     const result = formatDocPage("myapp", page, {
@@ -3526,36 +3867,42 @@ describe("branch coverage: doc.ts edge cases", () => {
 
   it("showChoices non-array choices should not violate maxWidth", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-m"] },
-          choices: "dev,prod" as never,
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["-m"] },
+              choices: "dev,prod" as never,
+            },
+          ],
+        },
+      ],
     };
     assert.doesNotThrow(() =>
       formatDocPage("myapp", page, {
         showChoices: true,
         maxWidth: 8,
-      })
+      }),
     );
   });
 
   describe("degenerate and hidden entries", () => {
     it("should skip entries with hidden: true terms", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [
-            {
-              term: { type: "option", names: ["--secret"], hidden: true },
-              description: [{ type: "text", text: "Secret option" }],
-            },
-            {
-              term: { type: "option", names: ["--visible"] },
-              description: [{ type: "text", text: "Visible option" }],
-            },
-          ],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "option", names: ["--secret"], hidden: true },
+                description: [{ type: "text", text: "Secret option" }],
+              },
+              {
+                term: { type: "option", names: ["--visible"] },
+                description: [{ type: "text", text: "Visible option" }],
+              },
+            ],
+          },
+        ],
       };
       const result = formatDocPage("app", page, { colors: false });
       assert.ok(!result.includes("--secret"));
@@ -3565,16 +3912,20 @@ describe("branch coverage: doc.ts edge cases", () => {
 
     it("should skip entries with hidden: 'doc' terms", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: {
-              type: "command",
-              name: "internal",
-              hidden: "doc",
-            } as never,
-            description: [{ type: "text", text: "Internal command" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: {
+                  type: "command",
+                  name: "internal",
+                  hidden: "doc",
+                } as never,
+                description: [{ type: "text", text: "Internal command" }],
+              },
+            ],
+          },
+        ],
       };
       const result = formatDocPage("app", page, { colors: false });
       assert.ok(!result.includes("internal"));
@@ -3582,16 +3933,20 @@ describe("branch coverage: doc.ts edge cases", () => {
 
     it("should skip entries with hidden: 'help' terms", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: {
-              type: "option",
-              names: ["--debug"],
-              hidden: "help",
-            } as never,
-            description: [{ type: "text", text: "Debug mode" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: {
+                  type: "option",
+                  names: ["--debug"],
+                  hidden: "help",
+                } as never,
+                description: [{ type: "text", text: "Debug mode" }],
+              },
+            ],
+          },
+        ],
       };
       const result = formatDocPage("app", page, { colors: false });
       assert.ok(!result.includes("--debug"));
@@ -3600,16 +3955,20 @@ describe("branch coverage: doc.ts edge cases", () => {
 
     it("should show entries with hidden: 'usage' terms", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: {
-              type: "option",
-              names: ["--verbose"],
-              hidden: "usage",
-            } as never,
-            description: [{ type: "text", text: "Verbose output" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: {
+                  type: "option",
+                  names: ["--verbose"],
+                  hidden: "usage",
+                } as never,
+                description: [{ type: "text", text: "Verbose output" }],
+              },
+            ],
+          },
+        ],
       };
       const result = formatDocPage("app", page, { colors: false });
       assert.ok(result.includes("--verbose"));
@@ -3618,15 +3977,19 @@ describe("branch coverage: doc.ts edge cases", () => {
 
     it("should skip entries with option term having empty names", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: {
-              type: "option",
-              names: [] as never,
-              metavar: "X",
-            } as never,
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: {
+                  type: "option",
+                  names: [] as never,
+                  metavar: "X",
+                } as never,
+              },
+            ],
+          },
+        ],
       };
       const result = formatDocPage("app", page, { colors: false });
       // Should not contain any non-empty content lines in the section
@@ -3636,11 +3999,15 @@ describe("branch coverage: doc.ts edge cases", () => {
 
     it("should skip entries with empty command name", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "command", name: "" } as never,
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "command", name: "" } as never,
+              },
+            ],
+          },
+        ],
       };
       const result = formatDocPage("app", page, { colors: false });
       const lines = result.split("\n").filter((l) => l.trim() !== "");
@@ -3649,11 +4016,15 @@ describe("branch coverage: doc.ts edge cases", () => {
 
     it("should skip entries with empty argument metavar", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "argument", metavar: "" } as never,
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "argument", metavar: "" } as never,
+              },
+            ],
+          },
+        ],
       };
       const result = formatDocPage("app", page, { colors: false });
       const lines = result.split("\n").filter((l) => l.trim() !== "");
@@ -3662,11 +4033,15 @@ describe("branch coverage: doc.ts edge cases", () => {
 
     it("should skip entries with empty literal value", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "literal", value: "" } as never,
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "literal", value: "" } as never,
+              },
+            ],
+          },
+        ],
       };
       const result = formatDocPage("app", page, { colors: false });
       const lines = result.split("\n").filter((l) => l.trim() !== "");
@@ -3675,11 +4050,15 @@ describe("branch coverage: doc.ts edge cases", () => {
 
     it("should skip entries with exclusive term having empty branches", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "exclusive", terms: [] } as never,
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "exclusive", terms: [] } as never,
+              },
+            ],
+          },
+        ],
       };
       const result = formatDocPage("app", page, { colors: false });
       const lines = result.split("\n").filter((l) => l.trim() !== "");
@@ -3688,23 +4067,25 @@ describe("branch coverage: doc.ts edge cases", () => {
 
     it("should suppress section heading when all entries are filtered", () => {
       const page: DocPage = {
-        sections: [{
-          title: "Secrets",
-          entries: [
-            {
-              term: { type: "option", names: ["--key"], hidden: true },
-              description: [{ type: "text", text: "Secret key" }],
-            },
-            {
-              term: {
-                type: "option",
-                names: ["--token"],
-                hidden: "doc",
-              } as never,
-              description: [{ type: "text", text: "Secret token" }],
-            },
-          ],
-        }],
+        sections: [
+          {
+            title: "Secrets",
+            entries: [
+              {
+                term: { type: "option", names: ["--key"], hidden: true },
+                description: [{ type: "text", text: "Secret key" }],
+              },
+              {
+                term: {
+                  type: "option",
+                  names: ["--token"],
+                  hidden: "doc",
+                } as never,
+                description: [{ type: "text", text: "Secret token" }],
+              },
+            ],
+          },
+        ],
       };
       const result = formatDocPage("app", page, { colors: false });
       assert.ok(!result.includes("Secrets"));
@@ -3714,12 +4095,18 @@ describe("branch coverage: doc.ts edge cases", () => {
 
     it("should not reject maxWidth when all entries are filtered", () => {
       const page: DocPage = {
-        sections: [{
-          entries: [{
-            term: { type: "option", names: ["--secret"], hidden: true },
-            description: [{ type: "text", text: "This is a long description" }],
-          }],
-        }],
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "option", names: ["--secret"], hidden: true },
+                description: [
+                  { type: "text", text: "This is a long description" },
+                ],
+              },
+            ],
+          },
+        ],
       };
       // maxWidth: 1 would normally be too small for entries, but since all
       // entries are filtered out, it should not throw.
@@ -3764,10 +4151,13 @@ describe("cloneDocEntry", () => {
       term: { type: "option", names: ["-v", "--verbose"] },
       description: [{ type: "text", text: "Enable verbose output" }],
       default: [{ type: "value", value: "false" }],
-      choices: [{ type: "value", value: "true" }, {
-        type: "value",
-        value: "false",
-      }],
+      choices: [
+        { type: "value", value: "true" },
+        {
+          type: "value",
+          value: "false",
+        },
+      ],
     };
     const cloned = cloneDocEntry(entry);
     assert.deepEqual(cloned, entry);
@@ -3919,13 +4309,11 @@ describe("deduplicateDocEntries: hidden visibility preference", () => {
     const result = deduplicateDocEntries(entries);
     assert.equal(result.length, 2);
     assert.ok(
-      result[0].term.type === "option" &&
-        result[0].term.names.includes("--y"),
+      result[0].term.type === "option" && result[0].term.names.includes("--y"),
       "first visible entry should come first",
     );
     assert.ok(
-      result[1].term.type === "option" &&
-        result[1].term.names.includes("--x"),
+      result[1].term.type === "option" && result[1].term.names.includes("--x"),
       "visible --x should follow --y, not precede it",
     );
   });
@@ -3945,7 +4333,9 @@ describe("deduplicateDocFragments: hidden visibility preference", () => {
       },
     ]);
 
-    const entries = result.flatMap((f) => f.type === "entry" ? [f] : f.entries);
+    const entries = result.flatMap((f) =>
+      f.type === "entry" ? [f] : f.entries,
+    );
     assert.equal(entries.length, 1);
     assert.ok(
       entries[0].term.type === "option" && !entries[0].term.hidden,
@@ -3969,7 +4359,9 @@ describe("deduplicateDocFragments: hidden visibility preference", () => {
       },
     ]);
 
-    const entries = result.flatMap((f) => f.type === "entry" ? [f] : f.entries);
+    const entries = result.flatMap((f) =>
+      f.type === "entry" ? [f] : f.entries,
+    );
     assert.equal(entries.length, 2);
     assert.ok(
       entries[0].term.type === "option" &&
@@ -4006,8 +4398,8 @@ describe("deduplicateDocFragments: hidden visibility preference", () => {
       },
     ]);
 
-    const sections = result.filter((f) =>
-      f.type === "section" && f.title === "Opts"
+    const sections = result.filter(
+      (f) => f.type === "section" && f.title === "Opts",
     );
     assert.equal(sections.length, 1);
     const entries = (sections[0] as DocSection & { type: "section" }).entries;
@@ -4040,7 +4432,7 @@ describe("deduplicateDocFragments: hidden visibility preference", () => {
     ]);
 
     const entries = result.flatMap((f) =>
-      f.type === "entry" ? [f] : f.type === "section" ? f.entries : []
+      f.type === "entry" ? [f] : f.type === "section" ? f.entries : [],
     );
     assert.equal(entries.length, 1);
     assert.ok(
@@ -4054,23 +4446,17 @@ describe("deduplicateDocFragments: hidden visibility preference", () => {
       {
         type: "section",
         title: "A",
-        entries: [
-          { term: { type: "option", names: ["--x"], hidden: "doc" } },
-        ],
+        entries: [{ term: { type: "option", names: ["--x"], hidden: "doc" } }],
       },
       {
         type: "section",
         title: "B",
-        entries: [
-          { term: { type: "option", names: ["--y"] } },
-        ],
+        entries: [{ term: { type: "option", names: ["--y"] } }],
       },
       {
         type: "section",
         title: "A",
-        entries: [
-          { term: { type: "option", names: ["--x"] } },
-        ],
+        entries: [{ term: { type: "option", names: ["--x"] } }],
       },
     ]);
 
@@ -4089,16 +4475,12 @@ describe("deduplicateDocFragments: hidden visibility preference", () => {
       {
         type: "section",
         title: "Hidden",
-        entries: [
-          { term: { type: "option", names: ["--x"], hidden: true } },
-        ],
+        entries: [{ term: { type: "option", names: ["--x"], hidden: true } }],
       },
       {
         type: "section",
         title: "Visible",
-        entries: [
-          { term: { type: "option", names: ["--y"] } },
-        ],
+        entries: [{ term: { type: "option", names: ["--y"] } }],
       },
     ]);
 
@@ -4114,17 +4496,21 @@ describe("formatDocPage() showAliases", () => {
     entry: Partial<DocEntry> = {},
     aliases: readonly string[] | null = ["i", "add"],
   ): DocPage => ({
-    sections: [{
-      entries: [{
-        term: {
-          type: "command",
-          name: "install",
-          ...(aliases != null && { aliases }),
-        },
-        description: message`Install a package.`,
-        ...entry,
-      }],
-    }],
+    sections: [
+      {
+        entries: [
+          {
+            term: {
+              type: "command",
+              name: "install",
+              ...(aliases != null && { aliases }),
+            },
+            description: message`Install a package.`,
+            ...entry,
+          },
+        ],
+      },
+    ],
   });
 
   it("does not show aliases by default", () => {
@@ -4206,13 +4592,17 @@ describe("formatDocPage() showAliases", () => {
 
   it("ignores showAliases on non-command entries", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--verbose"] },
-          description: message`Be verbose.`,
-          showAliases: true,
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--verbose"] },
+              description: message`Be verbose.`,
+              showAliases: true,
+            },
+          ],
+        },
+      ],
     };
     assert.equal(
       formatDocPage("app", page, { showAliases: true }),
@@ -4222,12 +4612,16 @@ describe("formatDocPage() showAliases", () => {
 
   it("does not render hidden aliases", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "command", name: "help", hiddenAliases: ["h"] },
-          description: message`Show help.`,
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "command", name: "help", hiddenAliases: ["h"] },
+              description: message`Show help.`,
+            },
+          ],
+        },
+      ],
     };
     assert.equal(
       formatDocPage("app", page, { showAliases: true }),
@@ -4237,11 +4631,15 @@ describe("formatDocPage() showAliases", () => {
 
   it("renders the annotation alone for entries without a description", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "command", name: "install", aliases: ["i"] },
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "command", name: "install", aliases: ["i"] },
+            },
+          ],
+        },
+      ],
     };
     assert.ok(!formatDocPage("app", page).includes("aliases"));
     assert.equal(
@@ -4286,8 +4684,8 @@ describe("formatDocPage() showAliases", () => {
           term.kind === "aliasesPrefix"
             ? { type: "text", text: " <<" }
             : term.kind === "aliasesSuffix"
-            ? { type: "text", text: ">>" }
-            : { type: "text", text: ctx.text },
+              ? { type: "text", text: ">>" }
+              : { type: "text", text: ctx.text },
       },
     });
     assert.ok(result.includes("Install a package. <<ALIASES=i, add>>"));
@@ -4295,14 +4693,18 @@ describe("formatDocPage() showAliases", () => {
 
   it("orders aliases before default and choices annotations", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "command", name: "install", aliases: ["i"] },
-          description: message`Install.`,
-          default: message`${"x"}`,
-          choices: valueSet(["a", "b"], { fallback: "", type: "unit" }),
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "command", name: "install", aliases: ["i"] },
+              description: message`Install.`,
+              default: message`${"x"}`,
+              choices: valueSet(["a", "b"], { fallback: "", type: "unit" }),
+            },
+          ],
+        },
+      ],
     };
     const result = formatDocPage("app", page, {
       showAliases: true,
@@ -4325,22 +4727,24 @@ describe("formatDocPage() showAliases", () => {
       assert.ok(getDisplayWidth(line) <= 50, `${line} exceeds 50`);
     }
     assert.ok(
-      result.replace(/\s+/g, " ").includes(
-        "(aliases: i, add, get, fetch, obtain)",
-      ),
+      result
+        .replace(/\s+/g, " ")
+        .includes("(aliases: i, add, get, fetch, obtain)"),
     );
   });
 
   it("counts annotation-only entries for automatic term width", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [
-          { term: { type: "command", name: "a-very-long-command" } },
-          {
-            term: { type: "command", name: "install", aliases: ["i"] },
-          },
-        ],
-      }],
+      sections: [
+        {
+          entries: [
+            { term: { type: "command", name: "a-very-long-command" } },
+            {
+              term: { type: "command", name: "install", aliases: ["i"] },
+            },
+          ],
+        },
+      ],
     };
     assert.equal(
       formatDocPage("app", page, { termWidth: "auto", showAliases: true }),
@@ -4398,16 +4802,13 @@ describe("cloneDocEntry() showAliases", () => {
 
 // Helpers
 
-function assertLinesWithinMaxWidth(
-  result: string,
-  maxWidth: number,
-): void {
+function assertLinesWithinMaxWidth(result: string, maxWidth: number): void {
   for (const line of result.split("\n")) {
     assert.ok(
       getDisplayWidth(line) <= maxWidth,
-      `Line exceeds maxWidth ${maxWidth}: "${line}" (${
-        getDisplayWidth(line)
-      } columns)`,
+      `Line exceeds maxWidth ${maxWidth}: "${line}" (${getDisplayWidth(
+        line,
+      )} columns)`,
     );
   }
 }

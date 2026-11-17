@@ -30,19 +30,19 @@ const hasReliableSubprocess = await isSubprocessReliable();
 const cli = createCliRunner(
   "Deno" in globalThis
     ? {
-      entrypoint: cliPathTs,
-      runtimeArgs: ["--allow-read", "--allow-write", "--allow-env"],
-      cwd: __dirname,
-      timeout: 60_000,
-    }
+        entrypoint: cliPathTs,
+        runtimeArgs: ["--allow-read", "--allow-write", "--allow-env"],
+        cwd: __dirname,
+        timeout: 60_000,
+      }
     : "Bun" in globalThis
-    ? { entrypoint: cliPathJs, cwd: __dirname, timeout: 60_000 }
-    : {
-      entrypoint: cliPathJs,
-      runtimeArgs: ["--no-warnings"],
-      cwd: __dirname,
-      timeout: 60_000,
-    },
+      ? { entrypoint: cliPathJs, cwd: __dirname, timeout: 60_000 }
+      : {
+          entrypoint: cliPathJs,
+          runtimeArgs: ["--no-warnings"],
+          cwd: __dirname,
+          timeout: 60_000,
+        },
 );
 
 describe("optique-discover CLI", { skip: !hasReliableSubprocess }, () => {
@@ -97,27 +97,31 @@ describe("optique-discover CLI", { skip: !hasReliableSubprocess }, () => {
     }
   });
 
-  it("should report a missing output option", {
-    skip: !hasReliableSubprocess,
-  }, async () => {
-    if (!hasReliableSubprocess) return;
+  it(
+    "should report a missing output option",
+    {
+      skip: !hasReliableSubprocess,
+    },
+    async () => {
+      if (!hasReliableSubprocess) return;
 
-    const dir = await makeTempDir();
-    try {
-      const commandsDir = join(dir, "commands");
-      await writeText(join(commandsDir, "build.ts"), "");
+      const dir = await makeTempDir();
+      try {
+        const commandsDir = join(dir, "commands");
+        await writeText(join(commandsDir, "build.ts"), "");
 
-      const result = await cli.invoke(commandsDir, "--extension", ".ts");
+        const result = await cli.invoke(commandsDir, "--extension", ".ts");
 
-      assert.equal(result.exitCode, 1);
-      assert.equal(result.stdout, "");
-      assert.match(result.stderr, /Usage: optique-discover/);
-      assert.match(result.stderr, /Missing option `-o`\/`--output`\./);
-      assert.doesNotMatch(result.stderr, /TypeError/);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
+        assert.equal(result.exitCode, 1);
+        assert.equal(result.stdout, "");
+        assert.match(result.stderr, /Usage: optique-discover/);
+        assert.match(result.stderr, /Missing option `-o`\/`--output`\./);
+        assert.doesNotMatch(result.stderr, /TypeError/);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    },
+  );
 });
 
 describe("package exports", () => {

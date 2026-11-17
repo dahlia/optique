@@ -62,7 +62,9 @@ try {
     stdio: "pipe",
   });
   const contents = execFileSync("tar", ["-tzf", tarball], { encoding: "utf8" })
-    .trim().split("\n").sort();
+    .trim()
+    .split("\n")
+    .sort();
   assert.deepEqual(contents, ["package/cli.js", "package/package.json"]);
   const packed: {
     readonly private: boolean;
@@ -144,33 +146,29 @@ try {
   assert.equal(standalone.outputSha256, hash(await readFile(binary)));
   const bin = join(consumer, "node_modules/.bin/file-inspect");
   const checks: string[] = [];
-  for (
-    const [kind, command, extraEnv] of [
-      ["npm", bin, {}],
-      ["standalone", binary, { PATH: "" }],
-    ] as const
-  ) {
+  for (const [kind, command, extraEnv] of [
+    ["npm", bin, {}],
+    ["standalone", binary, { PATH: "" }],
+  ] as const) {
     const cli = createCliRunner({
       command: [command],
       cwd: consumer,
       env: { ...env, ...extraEnv },
     });
-    for (
-      const [args, stdin, expected, exitCode] of [
-        [["--version"], undefined, `${manifest.version}\n`, 0],
-        [
-          ["file", "info", "sample.txt"],
-          undefined,
-          '{"path":"sample.txt","bytes":8}\n',
-          0,
-        ],
-        [["file", "lines", "sample.txt"], undefined, "2\n", 0],
-        [["file", "lines", "-"], "one\ntwo", "2\n", 0],
-        [["--help"], undefined, "Usage: file-inspect", 0],
-        [["file", "lines", "sample.txt", "extra"], undefined, "Error:", 1],
-        [["file", "info", "missing.txt"], undefined, "file-inspect:", 1],
-      ] as const
-    ) {
+    for (const [args, stdin, expected, exitCode] of [
+      [["--version"], undefined, `${manifest.version}\n`, 0],
+      [
+        ["file", "info", "sample.txt"],
+        undefined,
+        '{"path":"sample.txt","bytes":8}\n',
+        0,
+      ],
+      [["file", "lines", "sample.txt"], undefined, "2\n", 0],
+      [["file", "lines", "-"], "one\ntwo", "2\n", 0],
+      [["--help"], undefined, "Usage: file-inspect", 0],
+      [["file", "lines", "sample.txt", "extra"], undefined, "Error:", 1],
+      [["file", "info", "missing.txt"], undefined, "file-inspect:", 1],
+    ] as const) {
       const result = await cli.invoke({ args, stdin });
       assert.equal(result.exitCode, exitCode, JSON.stringify(result));
       assert.ok(!(result.stdout + result.stderr).includes("\x1b["));
@@ -257,9 +255,10 @@ printf '%s\\n' "\${COMPREPLY[@]}"
   assert.ok(Buffer.byteLength(serialized) < 256 * 1024);
   await writeFile(join(dist, "evidence.json"), serialized);
   console.log(
-    `Verified ${checks.length} packaging checks; evidence: ${
-      join(dist, "evidence.json")
-    }`,
+    `Verified ${checks.length} packaging checks; evidence: ${join(
+      dist,
+      "evidence.json",
+    )}`,
   );
 } finally {
   await rm(temporary, { recursive: true, force: true });

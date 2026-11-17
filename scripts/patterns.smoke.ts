@@ -9,19 +9,17 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../", import.meta.url));
 
 describe("Node pattern examples", () => {
-  for (
-    const name of [
-      "async-completion",
-      "async-validation",
-      "command-discovery",
-      "grouping-mutually-exclusive-options",
-      "ordered-sequence",
-      "pass-through-options",
-      "program-hooks",
-      "shared-options",
-      "subcommands",
-    ]
-  ) {
+  for (const name of [
+    "async-completion",
+    "async-validation",
+    "command-discovery",
+    "grouping-mutually-exclusive-options",
+    "ordered-sequence",
+    "pass-through-options",
+    "program-hooks",
+    "shared-options",
+    "subcommands",
+  ]) {
     it(`should show ${name} help without interactive or network input`, () => {
       const result = run(name, ["--help"]);
       assert.match(result, /Usage:/);
@@ -46,24 +44,22 @@ describe("Node pattern examples", () => {
     assert.match(result, /API key length: "9"/);
   });
 
-  for (
-    const [name, args, output] of [
-      ["conditional-defaults", [], /help mode/],
-      ["conditional-options", ["--reporter", "console"], /Console output/],
-      ["deferred-values", ["--service-name", "api"], /Service: "api"/],
-      ["dependent-options", [], /normalFlag/],
-      [
-        "inter-option-dependencies",
-        ["--mode", "dev", "--log-level", "debug"],
-        /debug/,
-      ],
-      ["key-value-options", ["--env", "HOST=node.example"], /node.example/],
-      ["mutually-exclusive-flags", [], /Mode selected/],
-      ["mutually-exclusive-options", ["--port", "4321"], /4321/],
-      ["negatable-boolean-options", [], /Code fences/],
-      ["verbosity-levels", [], /Verbosity level/],
-    ] as const
-  ) {
+  for (const [name, args, output] of [
+    ["conditional-defaults", [], /help mode/],
+    ["conditional-options", ["--reporter", "console"], /Console output/],
+    ["deferred-values", ["--service-name", "api"], /Service: "api"/],
+    ["dependent-options", [], /normalFlag/],
+    [
+      "inter-option-dependencies",
+      ["--mode", "dev", "--log-level", "debug"],
+      /debug/,
+    ],
+    ["key-value-options", ["--env", "HOST=node.example"], /node.example/],
+    ["mutually-exclusive-flags", [], /Mode selected/],
+    ["mutually-exclusive-options", ["--port", "4321"], /4321/],
+    ["negatable-boolean-options", [], /Code fences/],
+    ["verbosity-levels", [], /Verbosity level/],
+  ] as const) {
     it(`should run ${name} with bounded noninteractive input`, () => {
       assert.match(run(name, args), output);
     });
@@ -109,21 +105,25 @@ function run(name: string, args: readonly string[], status = 0): string {
     ...process.env,
     NO_COLOR: "1",
   };
-  for (
-    const key of ["MYAPP_HOST", "MYAPP_PORT", "MYAPP_DEBUG", "MYAPP_API_KEY"]
-  ) {
+  for (const key of [
+    "MYAPP_HOST",
+    "MYAPP_PORT",
+    "MYAPP_DEBUG",
+    "MYAPP_API_KEY",
+  ]) {
     delete env[key];
   }
-  const result = spawnSync("node", [
-    join(root, "examples/patterns", `${name}.ts`),
-    ...args,
-  ], {
-    cwd: root,
-    env,
-    input: "",
-    encoding: "utf8",
-    timeout: 10_000,
-  });
+  const result = spawnSync(
+    "node",
+    [join(root, "examples/patterns", `${name}.ts`), ...args],
+    {
+      cwd: root,
+      env,
+      input: "",
+      encoding: "utf8",
+      timeout: 10_000,
+    },
+  );
   assert.ifError(result.error);
   assert.equal(result.status, status, result.stderr);
   return result.stdout + result.stderr;

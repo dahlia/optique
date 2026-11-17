@@ -35,9 +35,7 @@ export type ParseArgsResult<T> = DetailedParseResult<T>;
  * @returns A promise resolving to the parsed value or structured failure.
  * @since 1.3.0
  */
-export async function parseArgs<
-  TParser extends Parser<Mode, unknown, unknown>,
->(
+export async function parseArgs<TParser extends Parser<Mode, unknown, unknown>>(
   parser: TParser,
   args: readonly string[],
   options?: ParseOptions,
@@ -64,9 +62,7 @@ export async function parseArgs<
  * @throws {TypeError} When called with an asynchronous parser at runtime.
  * @since 1.3.0
  */
-export function parseArgsSync<
-  TParser extends Parser<"sync", unknown, unknown>,
->(
+export function parseArgsSync<TParser extends Parser<"sync", unknown, unknown>>(
   parser: TParser,
   args: readonly string[],
   options?: ParseOptions,

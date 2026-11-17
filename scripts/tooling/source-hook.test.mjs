@@ -24,28 +24,26 @@ test("registered hook preserves source ownership, ESM identity and isolated CJS 
   const entry = resolve(temporary, "consumer.mjs");
   writeFileSync(entry, "");
   const root = process.cwd();
-  const result = spawnSync("node", [
-    "--experimental-import-meta-resolve",
-    "--import",
-    "./scripts/tooling/source-hook.mjs",
-    "--input-type=module",
-    "--eval",
-    `
+  const result = spawnSync(
+    "node",
+    [
+      "--experimental-import-meta-resolve",
+      "--import",
+      "./scripts/tooling/source-hook.mjs",
+      "--input-type=module",
+      "--eval",
+      `
       import assert from "node:assert/strict";
       import { createRequire } from "node:module";
       import { Temporal } from "@js-temporal/polyfill";
       assert.equal(globalThis.Temporal, Temporal);
       assert.ok(Temporal.Instant.from("2020-01-01T00:00Z") instanceof Temporal.Instant);
-      const parent = ${
-      JSON.stringify(
+      const parent = ${JSON.stringify(
         pathToFileURL(resolve(root, "packages/core/src/index.test.ts")).href,
-      )
-    };
-      const expected = ${
-      JSON.stringify(
+      )};
+      const expected = ${JSON.stringify(
         pathToFileURL(resolve(root, "packages/core/src/parser.ts")).href,
-      )
-    };
+      )};
       for (const name of ["@optique/core/parser", "#src/parser.ts"]) {
         const load = (suffix) => {
           const url = import.meta.resolve(name + suffix, parent);
@@ -59,17 +57,19 @@ test("registered hook preserves source ownership, ESM identity and isolated CJS 
         assert.equal(typeof first.parseSync, "function");
       }
       const owned = createRequire(parent);
-      assert.equal(owned.resolve("#src/parser.ts"), ${
-      JSON.stringify(resolve(root, "packages/core/src/parser.ts"))
-    });
-      const isolated = createRequire(${
-      JSON.stringify(pathToFileURL(entry).href)
-    });
-      assert.equal(isolated.resolve("@optique/core/parser"), ${
-      JSON.stringify(resolve(root, "packages/core/dist/parser.cjs"))
-    });
+      assert.equal(owned.resolve("#src/parser.ts"), ${JSON.stringify(
+        resolve(root, "packages/core/src/parser.ts"),
+      )});
+      const isolated = createRequire(${JSON.stringify(
+        pathToFileURL(entry).href,
+      )});
+      assert.equal(isolated.resolve("@optique/core/parser"), ${JSON.stringify(
+        resolve(root, "packages/core/dist/parser.cjs"),
+      )});
     `,
-  ], { encoding: "utf8", timeout: 30_000 });
+    ],
+    { encoding: "utf8", timeout: 30_000 },
+  );
   try {
     assert.equal(result.status, 0, result.stdout + result.stderr);
   } finally {

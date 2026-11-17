@@ -70,14 +70,17 @@ function runCommand(
   } = {},
 ): string {
   try {
-    return execFileSync(command, [...args], {
-      encoding: "utf8",
-      cwd: options.cwd,
-      input: options.input,
-      stdio: options.stdio,
-      env: options.env == null ? undefined : { ...process.env, ...options.env },
-      timeout: options.timeout,
-    }) ?? "";
+    return (
+      execFileSync(command, [...args], {
+        encoding: "utf8",
+        cwd: options.cwd,
+        input: options.input,
+        stdio: options.stdio,
+        env:
+          options.env == null ? undefined : { ...process.env, ...options.env },
+        timeout: options.timeout,
+      }) ?? ""
+    );
   } catch (error) {
     const stdout = getStdoutFromExecError(error);
     if (stdout !== undefined) return stdout;
@@ -174,22 +177,22 @@ function testInteractiveZshCompletion(
   directive: string,
   files: readonly (
     | {
-      readonly path: string;
-      readonly type?: "file";
-    }
+        readonly path: string;
+        readonly type?: "file";
+      }
     | {
-      readonly path: string;
-      readonly type: "directory";
-    }
+        readonly path: string;
+        readonly type: "directory";
+      }
     | {
-      readonly path: string;
-      readonly type: "fifo";
-    }
+        readonly path: string;
+        readonly type: "fifo";
+      }
     | {
-      readonly path: string;
-      readonly type: "symlink";
-      readonly target: string;
-    }
+        readonly path: string;
+        readonly type: "symlink";
+        readonly target: string;
+      }
   )[],
   options: {
     readonly deadlineMs?: number;
@@ -234,13 +237,15 @@ function testInteractiveZshCompletion(
     const bufferPath = join(binDir, ".buffer");
     writeFileSync(
       cliPath,
-      options.cliScript ?? `#!/bin/bash
+      options.cliScript ??
+        `#!/bin/bash
 printf '%s\\0' "$@" > '${argsPath}'
 ${
-        options.backend ?? (options.payload == null
-          ? `printf '%b' '${directive.replaceAll("'", "'\\''")}'`
-          : `cat ${JSON.stringify(payloadPath)}`)
-      }
+  options.backend ??
+  (options.payload == null
+    ? `printf '%b' '${directive.replaceAll("'", "'\\''")}'`
+    : `cat ${JSON.stringify(payloadPath)}`)
+}
 `,
       { mode: 0o755 },
     );
@@ -306,10 +311,10 @@ bindkey '^Xq' __optique_capture_completion
 ${options.autoload ? `fpath=(${JSON.stringify(binDir)} $fpath)` : ""}
 unsetopt zle_bracketed_paste 2>/dev/null || true
 ${
-      options.withInsecureFpath === true
-        ? `fpath=(${JSON.stringify(insecureFpathDir)} $fpath)`
-        : ""
-    }
+  options.withInsecureFpath === true
+    ? `fpath=(${JSON.stringify(insecureFpathDir)} $fpath)`
+    : ""
+}
 autoload -U compinit && compinit -i -D || return 1
 zmodload zsh/complist || return 1
 setopt auto_list list_ambiguous
@@ -317,9 +322,9 @@ unsetopt list_beep
 LISTMAX=0
 ${options.setup ?? ""}
 ${
-      options.afterCompletion == null
-        ? ""
-        : `function __optique_after_completion() {
+  options.afterCompletion == null
+    ? ""
+    : `function __optique_after_completion() {
   zle -I
   ${options.afterCompletion}
   zle reset-prompt
@@ -327,28 +332,28 @@ ${
 }
 zle -N __optique_after_completion
 bindkey '^Y' __optique_after_completion`
-    }
+}
 export PATH=${JSON.stringify(binDir)}:$PATH
 ${options.autoload ? "" : `source ${JSON.stringify(scriptPath)} || return 1`}
 cd ${JSON.stringify(workDir)} || return 1
 ${
-      options.captureBuffer === true
-        ? `function __optique_capture_buffer() {
+  options.captureBuffer === true
+    ? `function __optique_capture_buffer() {
   print -rn -- "$BUFFER" > '${bufferPath}' || return 1
   __optique_ack
 }
 zle -N __optique_capture_buffer
 bindkey '^Xq' __optique_capture_buffer`
-        : ""
-    }
+    : ""
+}
 print -rn -- $'\\x1eOPTIQUE_ZSH_COMPLETION_START\\x1e\\n'
 `;
     writeFileSync(initPath, init);
     const quoteInput = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 
     const programNames = options.programNames ?? ["extapp"];
-    const deadlineMs = options.deadlineMs ??
-      (programNames.length > 1 ? 15_000 : 6_000);
+    const deadlineMs =
+      options.deadlineMs ?? (programNames.length > 1 ? 15_000 : 6_000);
     const driver = `
 zmodload zsh/zpty || exit 1
 zmodload zsh/zselect || exit 1
@@ -412,37 +417,42 @@ __optique_write ${quoteInput(`source ${JSON.stringify(initPath)} || exit 1\n`)}
 # This chord is consumed only once sourcing has finished and ZLE is active.
 __optique_write $'\\x18r'
 __optique_wait 1
-${
-      programNames.map((programName, index) => {
-        const input = options.input ?? `${programName} ${
-          options.absolutePrefix
-            ? join(workDir, options.prefix ?? options.currentWord ?? "")
-            : options.prefix ?? options.currentWord ?? ""
-        }`;
-        const tabCount = options.tabCount ??
-          (options.captureBuffer === true || options.tabPresses === 1 ? 1 : 2);
-        return `
+${programNames
+  .map((programName, index) => {
+    const input =
+      options.input ??
+      `${programName} ${
+        options.absolutePrefix
+          ? join(workDir, options.prefix ?? options.currentWord ?? "")
+          : (options.prefix ?? options.currentWord ?? "")
+      }`;
+    const tabCount =
+      options.tabCount ??
+      (options.captureBuffer === true || options.tabPresses === 1 ? 1 : 2);
+    return `
 __optique_phase=${quoteInput(`completion-${index + 1} (${programName})`)}
-__optique_write ${
-          quoteInput(
-            input + "\x02".repeat(options.moveLeft ?? 0) +
-              "\t".repeat(tabCount) + "\x18q",
-          )
-        }
+__optique_write ${quoteInput(
+      input +
+        "\x02".repeat(options.moveLeft ?? 0) +
+        "\t".repeat(tabCount) +
+        "\x18q",
+    )}
 __optique_wait ${index * 2 + 2}
 __optique_phase=${quoteInput(`reset-${index + 1} (${programName})`)}
 __optique_write $'\\x18r'
 __optique_wait ${index * 2 + 3}
 `;
-      }).join("\n")
-    }
+  })
+  .join("\n")}
 ${
-      options.afterCompletion == null ? "" : `
+  options.afterCompletion == null
+    ? ""
+    : `
 __optique_phase=after-completion
 __optique_write $'\\x19'
 __optique_wait ${programNames.length * 2 + 2}
 `
-    }
+}
 (( __optique_truncated == 0 )) || __optique_fail output-limit
 __optique_cleanup
 print -rn -- $'\\x1eOPTIQUE_ZSH_COMPLETION_END\\x1e\\n'
@@ -461,9 +471,9 @@ print -rn -- $'\\x1eOPTIQUE_ZSH_COMPLETION_END\\x1e\\n'
       throw new Error(
         `Zsh PTY driver failed (status=${result.status}, signal=${result.signal}, ${
           result.error?.message ?? "nonzero exit"
-        }):\n${result.stderr ?? ""}\n${
-          normalizeTerminalOutput(rawOutput.slice(-32_768))
-        }`,
+        }):\n${result.stderr ?? ""}\n${normalizeTerminalOutput(
+          rawOutput.slice(-32_768),
+        )}`,
       );
     }
     // Keep the established buffer framing, but hide this session's protocol.
@@ -473,15 +483,12 @@ print -rn -- $'\\x1eOPTIQUE_ZSH_COMPLETION_END\\x1e\\n'
     );
 
     const startIndex = output.indexOf(startMarker);
-    const endIndex = output.indexOf(
-      endMarker,
-      startIndex + startMarker.length,
-    );
+    const endIndex = output.indexOf(endMarker, startIndex + startMarker.length);
     ok(
       startIndex >= 0 && endIndex >= 0,
-      `Missing completion markers in output:\n${
-        normalizeTerminalOutput(output)
-      }`,
+      `Missing completion markers in output:\n${normalizeTerminalOutput(
+        output,
+      )}`,
     );
 
     if (options.expectedArgs != null) {
@@ -505,34 +512,41 @@ print -rn -- $'\\x1eOPTIQUE_ZSH_COMPLETION_END\\x1e\\n'
 }
 
 describe("zsh PTY synchronization", () => {
-  it("waits for delayed completion before capturing the buffer", {
-    skip: !isInteractiveZshCompletionAvailable(),
-    timeout: 10_000,
-  }, () => {
-    if (!isInteractiveZshCompletionAvailable()) return;
-    const buffer = testInteractiveZshCompletion(
-      zsh.generateScript("extapp"),
-      "",
-      [],
-      {
-        backend: "sleep 3; printf 'alpha\\0\\0\\n'",
-        captureBuffer: true,
-      },
-    );
-    deepStrictEqual(buffer, "extapp alpha ");
-  });
+  it(
+    "waits for delayed completion before capturing the buffer",
+    {
+      skip: !isInteractiveZshCompletionAvailable(),
+      timeout: 10_000,
+    },
+    () => {
+      if (!isInteractiveZshCompletionAvailable()) return;
+      const buffer = testInteractiveZshCompletion(
+        zsh.generateScript("extapp"),
+        "",
+        [],
+        {
+          backend: "sleep 3; printf 'alpha\\0\\0\\n'",
+          captureBuffer: true,
+        },
+      );
+      deepStrictEqual(buffer, "extapp alpha ");
+    },
+  );
 
-  it("preserves text and acknowledgments split across PTY reads", {
-    skip: !isInteractiveZshCompletionAvailable(),
-    timeout: 10_000,
-  }, () => {
-    if (!isInteractiveZshCompletionAvailable()) return;
-    const output = testInteractiveZshCompletion(
-      zsh.generateScript("extapp"),
-      "",
-      [],
-      {
-        setup: `zmodload zsh/zselect
+  it(
+    "preserves text and acknowledgments split across PTY reads",
+    {
+      skip: !isInteractiveZshCompletionAvailable(),
+      timeout: 10_000,
+    },
+    () => {
+      if (!isInteractiveZshCompletionAvailable()) return;
+      const output = testInteractiveZshCompletion(
+        zsh.generateScript("extapp"),
+        "",
+        [],
+        {
+          setup: `zmodload zsh/zselect
 function __optique_ack() {
   (( ++__optique_sequence ))
   print -rn -- $'\\x1eOPTIQUE_ACK:'
@@ -547,168 +561,172 @@ function __optique_capture_completion() {
   __optique_ack
   zle reset-prompt
 }`,
-      },
-    );
-    ok(
-      output.includes(
-        "__OPTIQUE_ZSH_BUFFER__splitread__OPTIQUE_ZSH_BUFFER_END__",
-      ),
-      output,
-    );
-    ok(!output.includes("OPTIQUE_ACK:"), output);
-  });
-  it("waits for prompt reset before sending another request", {
-    skip: !isInteractiveZshCompletionAvailable(),
-    timeout: 20_000,
-  }, () => {
-    if (!isInteractiveZshCompletionAvailable()) return;
-    const requests = Array.from({ length: 8 }, () => "extapp");
-    const output = testInteractiveZshCompletion(
-      zsh.generateScript("extapp"),
-      "",
-      [],
-      {
-        programNames: requests,
-        backend: "printf 'alpha\\0\\0\\n'",
-        tabPresses: 1,
-        // Widen the redraw boundary so an early acknowledgment reliably
-        // lets the next request arrive before the editor is ready for it.
-        setup: `zmodload zsh/zselect
+        },
+      );
+      ok(
+        output.includes(
+          "__OPTIQUE_ZSH_BUFFER__splitread__OPTIQUE_ZSH_BUFFER_END__",
+        ),
+        output,
+      );
+      ok(!output.includes("OPTIQUE_ACK:"), output);
+    },
+  );
+  it(
+    "waits for prompt reset before sending another request",
+    {
+      skip: !isInteractiveZshCompletionAvailable(),
+      timeout: 20_000,
+    },
+    () => {
+      if (!isInteractiveZshCompletionAvailable()) return;
+      const requests = Array.from({ length: 8 }, () => "extapp");
+      const output = testInteractiveZshCompletion(
+        zsh.generateScript("extapp"),
+        "",
+        [],
+        {
+          programNames: requests,
+          backend: "printf 'alpha\\0\\0\\n'",
+          tabPresses: 1,
+          // Widen the redraw boundary so an early acknowledgment reliably
+          // lets the next request arrive before the editor is ready for it.
+          setup: `zmodload zsh/zselect
 function zle() {
   if [[ "$1" == reset-prompt ]]; then zselect -t 5; fi
   builtin zle "$@"
 }`,
-      },
-    );
-    deepStrictEqual(
-      Array.from(
-        output.matchAll(
-          /__OPTIQUE_ZSH_BUFFER__(.*?)__OPTIQUE_ZSH_BUFFER_END__/g,
-        ),
-        (match) => match[1].trim(),
-      ),
-      requests.map(() => "extapp alpha"),
-      output,
-    );
-  });
-
-  for (
-    const scenario of [
-      {
-        name: "silent initialization",
-        setup: "zmodload zsh/zselect; zselect -t 1000",
-        phase: "initialization",
-        reason: "deadline",
-      },
-      {
-        name: "continuous initialization output",
-        setup:
-          "zmodload zsh/zselect; repeat 250; do print -r -- NOISY_INITIALIZATION; zselect -t 2; done",
-        phase: "initialization",
-        reason: "deadline",
-        transcript: "NOISY_INITIALIZATION",
-      },
-      {
-        name: "early shell exit",
-        setup: "print -r -- EARLY_EXIT; exit 7",
-        phase: "initialization",
-        reason: "child-exited",
-        transcript: "EARLY_EXIT",
-      },
-      {
-        name: "missing capture acknowledgment",
-        setup:
-          "function __optique_capture_completion() { print -r -- MISSING_CAPTURE_ACK; }",
-        phase: "completion-1 (extapp)",
-        reason: "deadline",
-        transcript: "MISSING_CAPTURE_ACK",
-      },
-      {
-        name: "subprocess timeout",
-        setup: "zmodload zsh/zselect; zselect -t 1000",
-        phase: "initialization",
-        // The sync subprocess API can close its pipes before the signal
-        // handler prints, so only require the already-streamed phase here.
-        reason: undefined,
-        subprocessTimeoutMs: 3_000,
-        deadlineMs: 6_000,
-      },
-      {
-        name: "normal completion",
-        setup: "",
-        phase: undefined,
-        reason: undefined,
-      },
-    ]
-  ) {
-    it(`cleans up the child after ${scenario.name}`, {
-      skip: !isInteractiveZshCompletionAvailable(),
-      timeout: ZSH_PTY_TEST_TIMEOUT,
-    }, async () => {
-      if (!isInteractiveZshCompletionAvailable()) return;
-      const observationDir = mkdtempSync(
-        join(tmpdir(), "zsh-pty-observation-"),
+        },
       );
-      const pidPath = join(observationDir, "pid");
-      const rootPath = join(observationDir, "root");
-      try {
-        const run = () =>
-          testInteractiveZshCompletion(
-            zsh.generateScript("extapp"),
-            "",
-            [],
-            {
+      deepStrictEqual(
+        Array.from(
+          output.matchAll(
+            /__OPTIQUE_ZSH_BUFFER__(.*?)__OPTIQUE_ZSH_BUFFER_END__/g,
+          ),
+          (match) => match[1].trim(),
+        ),
+        requests.map(() => "extapp alpha"),
+        output,
+      );
+    },
+  );
+
+  for (const scenario of [
+    {
+      name: "silent initialization",
+      setup: "zmodload zsh/zselect; zselect -t 1000",
+      phase: "initialization",
+      reason: "deadline",
+    },
+    {
+      name: "continuous initialization output",
+      setup:
+        "zmodload zsh/zselect; repeat 250; do print -r -- NOISY_INITIALIZATION; zselect -t 2; done",
+      phase: "initialization",
+      reason: "deadline",
+      transcript: "NOISY_INITIALIZATION",
+    },
+    {
+      name: "early shell exit",
+      setup: "print -r -- EARLY_EXIT; exit 7",
+      phase: "initialization",
+      reason: "child-exited",
+      transcript: "EARLY_EXIT",
+    },
+    {
+      name: "missing capture acknowledgment",
+      setup:
+        "function __optique_capture_completion() { print -r -- MISSING_CAPTURE_ACK; }",
+      phase: "completion-1 (extapp)",
+      reason: "deadline",
+      transcript: "MISSING_CAPTURE_ACK",
+    },
+    {
+      name: "subprocess timeout",
+      setup: "zmodload zsh/zselect; zselect -t 1000",
+      phase: "initialization",
+      // The sync subprocess API can close its pipes before the signal
+      // handler prints, so only require the already-streamed phase here.
+      reason: undefined,
+      subprocessTimeoutMs: 3_000,
+      deadlineMs: 6_000,
+    },
+    {
+      name: "normal completion",
+      setup: "",
+      phase: undefined,
+      reason: undefined,
+    },
+  ]) {
+    it(
+      `cleans up the child after ${scenario.name}`,
+      {
+        skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
+      },
+      async () => {
+        if (!isInteractiveZshCompletionAvailable()) return;
+        const observationDir = mkdtempSync(
+          join(tmpdir(), "zsh-pty-observation-"),
+        );
+        const pidPath = join(observationDir, "pid");
+        const rootPath = join(observationDir, "root");
+        try {
+          const run = () =>
+            testInteractiveZshCompletion(zsh.generateScript("extapp"), "", [], {
               setup: `print -r -- "$$" > ${JSON.stringify(pidPath)}
 print -r -- "$PWD" > ${JSON.stringify(rootPath)}
 ${scenario.setup}`,
               deadlineMs: scenario.deadlineMs ?? 2_000,
               subprocessTimeoutMs: scenario.subprocessTimeoutMs,
-            },
-          );
-        if (scenario.phase == null) {
-          run();
-        } else {
-          throws(run, (error: unknown) => {
-            ok(error instanceof Error);
-            ok(
-              error.message.includes(`phase=${scenario.phase}`),
-              error.message,
-            );
-            if (scenario.reason != null) {
+            });
+          if (scenario.phase == null) {
+            run();
+          } else {
+            throws(run, (error: unknown) => {
+              ok(error instanceof Error);
               ok(
-                error.message.includes(`reason=${scenario.reason}`),
+                error.message.includes(`phase=${scenario.phase}`),
                 error.message,
               );
-            }
-            if (scenario.transcript != null) {
-              ok(error.message.includes(scenario.transcript), error.message);
-            }
-            return true;
-          });
-        }
-        const childPid = Number(readFileSync(pidPath, "utf8").trim());
-        ok(Number.isSafeInteger(childPid) && childPid > 0);
-        // zpty deletion signals the shell; allow time for the OS to reap it.
-        const until = Date.now() + 3_000;
-        let alive = true;
-        while (alive && Date.now() < until) {
-          try {
-            process.kill(childPid, 0);
-            await new Promise((resolve) => setTimeout(resolve, 20));
-          } catch (error) {
-            if (
-              error instanceof Error && "code" in error &&
-              error.code === "ESRCH"
-            ) alive = false;
-            else throw error;
+              if (scenario.reason != null) {
+                ok(
+                  error.message.includes(`reason=${scenario.reason}`),
+                  error.message,
+                );
+              }
+              if (scenario.transcript != null) {
+                ok(error.message.includes(scenario.transcript), error.message);
+              }
+              return true;
+            });
           }
+          const childPid = Number(readFileSync(pidPath, "utf8").trim());
+          ok(Number.isSafeInteger(childPid) && childPid > 0);
+          // zpty deletion signals the shell; allow time for the OS to reap it.
+          const until = Date.now() + 3_000;
+          let alive = true;
+          while (alive && Date.now() < until) {
+            try {
+              process.kill(childPid, 0);
+              await new Promise((resolve) => setTimeout(resolve, 20));
+            } catch (error) {
+              if (
+                error instanceof Error &&
+                "code" in error &&
+                error.code === "ESRCH"
+              )
+                alive = false;
+              else throw error;
+            }
+          }
+          ok(!alive, `Zsh PTY child ${childPid} survived ${scenario.name}.`);
+          ok(!existsSync(readFileSync(rootPath, "utf8").trim()));
+        } finally {
+          rmSync(observationDir, { recursive: true, force: true });
         }
-        ok(!alive, `Zsh PTY child ${childPid} survived ${scenario.name}.`);
-        ok(!existsSync(readFileSync(rootPath, "utf8").trim()));
-      } finally {
-        rmSync(observationDir, { recursive: true, force: true });
-      }
-    });
+      },
+    );
   }
 });
 
@@ -772,7 +790,10 @@ printf "%s\\n" "\${COMPREPLY[@]}"
       cwd: tempDir,
     });
 
-    return result.trim().split("\n").filter((line) => line.length > 0);
+    return result
+      .trim()
+      .split("\n")
+      .filter((line) => line.length > 0);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -906,7 +927,10 @@ ${functionName}
 
     const result = runCommand("fish", [testScriptPath], { cwd: tempDir });
 
-    return result.trim().split("\n").filter((line) => line.length > 0);
+    return result
+      .trim()
+      .split("\n")
+      .filter((line) => line.length > 0);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -1021,9 +1045,9 @@ function runNuFileCompletion(
 $env.PATH = ($env.PATH | prepend ${JSON.stringify(tempDir)})
 source ${JSON.stringify(scriptPath)}
 ${nuCwd == null ? "" : `cd ${JSON.stringify(nuCwd)}`}
-print (nu-complete-linkapp ${
-        JSON.stringify(`linkapp ${prefix}`)
-      } | get value | to json -r)
+print (nu-complete-linkapp ${JSON.stringify(
+        `linkapp ${prefix}`,
+      )} | get value | to json -r)
 `,
     );
     const output = runCommand("nu", [testScriptPath], { cwd: workDir });
@@ -1129,9 +1153,9 @@ function runNuCompleter(
     testScriptPath,
     `$env.PATH = ($env.PATH | prepend ${JSON.stringify(fixture.binDir)})
 source ${JSON.stringify(fixture.scriptPath)}
-nu-complete-${fixture.programName} (open --raw ${
-      JSON.stringify(contextPath)
-    }) | to json --raw
+nu-complete-${fixture.programName} (open --raw ${JSON.stringify(
+      contextPath,
+    )}) | to json --raw
 `,
   );
   const output = runCommand("nu", ["--no-config-file", testScriptPath], {
@@ -1179,26 +1203,33 @@ function testInteractiveNuCompletion(
   const scriptPath = JSON.stringify(fixture.scriptPath);
   // The readiness marker is built by concatenation so that the echoed
   // command line does not contain it:
-  const init = `$env.PATH = ($env.PATH | prepend ${binDir}); ` +
+  const init =
+    `$env.PATH = ($env.PATH | prepend ${binDir}); ` +
     `source ${scriptPath}; print ("OPTIQUE_NU_" + "READY")`;
-  const typeInteractions = interactions.map((chunks) =>
-    chunks.map((chunk) =>
-      chunk === "\t"
-        ? `
+  const typeInteractions = interactions
+    .map(
+      (chunks) =>
+        chunks
+          .map((chunk) =>
+            chunk === "\t"
+              ? `
 __optique_before="$(__optique_completion_count)"
 zpty -w -n child $'\\t'
 __optique_wait_completion "$__optique_before"
 `
-        : `
+              : `
 zpty -w -n child ${quoteForZsh(chunk)}
 __optique_drain_nu "" 20 >/dev/null
-`
-    ).join("") + `
+`,
+          )
+          .join("") +
+        `
 zpty -w -n child $'\\r'
 __output+="$(__optique_drain_nu ':END' 400)"
 __optique_drain_nu "" 10 >/dev/null
-`
-  ).join("");
+`,
+    )
+    .join("");
   const driver = `
 zmodload zsh/zpty
 
@@ -1303,16 +1334,18 @@ function testNuFileCompletion(
   const tempDir = mkdtempSync(join(tmpdir(), "nu-file-completion-"));
 
   try {
-    const directive = Array.from(nu.encodeSuggestions([
-      {
-        kind: "file",
-        type: "file",
-        extensions: [".txt"],
-        pattern,
-        includeHidden: false,
-        description: message`File`,
-      },
-    ])).join("");
+    const directive = Array.from(
+      nu.encodeSuggestions([
+        {
+          kind: "file",
+          type: "file",
+          extensions: [".txt"],
+          pattern,
+          includeHidden: false,
+          description: message`File`,
+        },
+      ]),
+    ).join("");
     const directivePath = join(tempDir, "directive.txt");
     writeFileSync(directivePath, `${directive}\n`);
     writeFileSync(
@@ -1336,9 +1369,10 @@ print (nu-complete-${programName} '${context}' | to json -r)
     );
 
     const result = runCommand("nu", [testScriptPath], { cwd });
-    const json = result.trim().split("\n").findLast((line) =>
-      line.startsWith("[")
-    );
+    const json = result
+      .trim()
+      .split("\n")
+      .findLast((line) => line.startsWith("["));
     ok(json != null, `Expected JSON output from Nushell, got: ${result}`);
     const items: readonly { readonly value: string }[] = JSON.parse(json);
     return items.map((item) => item.value).sort();
@@ -1413,24 +1447,29 @@ describe("completion function name collisions", () => {
                 fish.generateScript(name),
               );
             }
-            const definitions = programs.map((name, index) => `
+            const definitions = programs
+              .map(
+                (name, index) => `
 function ${name}
   if test (count $argv) -eq 1
     printf '${literals[index]}\\t${literals[index]}\\n'
   end
 end
-`).join("\n");
+`,
+              )
+              .join("\n");
             const loading = autoload
               ? `set fish_complete_path '${tempDir}' $fish_complete_path`
-              : order.map((name) => `source '${join(tempDir, `${name}.fish`)}'`)
-                .join("\n");
+              : order
+                  .map((name) => `source '${join(tempDir, `${name}.fish`)}'`)
+                  .join("\n");
             const requests = [...order, ...order];
             const output = runCommand("fish", [
               "--no-config",
               "-c",
-              `${definitions}\n${loading}\n${
-                requests.map((name) => `complete -C '${name} '`).join("\n")
-              }`,
+              `${definitions}\n${loading}\n${requests
+                .map((name) => `complete -C '${name} '`)
+                .join("\n")}`,
             ]);
             deepStrictEqual(
               output.trim().split("\n"),
@@ -1455,13 +1494,17 @@ end
         },
         () => {
           if (!isInteractiveZshCompletionAvailable()) return;
-          const setup = programs.map((name, index) => `
+          const setup = programs
+            .map(
+              (name, index) => `
 function ${name}() {
   if (( $# == 1 )); then
     printf '${literals[index]}\\0${literals[index]}\\0'
   fi
 }
-`).join("\n");
+`,
+            )
+            .join("\n");
           const requests = [...order, ...order];
           const output = testInteractiveZshCompletion(
             autoload
@@ -1476,9 +1519,9 @@ function ${name}() {
               tabPresses: 1,
               additionalScripts: autoload
                 ? order.slice(1).map((programName) => ({
-                  programName,
-                  script: zsh.generateScript(programName),
-                }))
+                    programName,
+                    script: zsh.generateScript(programName),
+                  }))
                 : [],
             },
           );
@@ -1490,8 +1533,8 @@ function ${name}() {
           );
           deepStrictEqual(
             buffers,
-            requests.map((name) =>
-              `${name} ${literals[programs.indexOf(name)]}`
+            requests.map(
+              (name) => `${name} ${literals[programs.indexOf(name)]}`,
             ),
             output,
           );
@@ -1512,9 +1555,8 @@ describe("compound extensions", () => {
         },
         () => {
           // Bun ignores the skip option, so it also needs an early return.
-          if (
-            process.platform === "win32" || !isShellAvailable(shell.name)
-          ) return;
+          if (process.platform === "win32" || !isShellAvailable(shell.name))
+            return;
 
           const scratchRoot = fileURLToPath(
             new URL("../../../tmp/", import.meta.url),
@@ -1551,14 +1593,15 @@ describe("compound extensions", () => {
               tempDir,
               `test.${shell === pwsh ? "ps1" : "nu"}`,
             );
-            const testScript = shell === pwsh
-              ? `$env:PATH = '${tempDir}' + [IO.Path]::PathSeparator + $env:PATH
+            const testScript =
+              shell === pwsh
+                ? `$env:PATH = '${tempDir}' + [IO.Path]::PathSeparator + $env:PATH
 . '${scriptPath}'
 $line = '${programName} --archive __PREFIX__'
 $result = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $line.Length, $null)
 ConvertTo-Json -Compress -InputObject @($result.CompletionMatches | ForEach-Object { $_.CompletionText })
 `
-              : `$env.PATH = ($env.PATH | prepend '${tempDir}')
+                : `$env.PATH = ($env.PATH | prepend '${tempDir}')
 source '${scriptPath}'
 nu-complete-${programName} '${programName} --archive __PREFIX__' | get value | to json --raw
 `;
@@ -1573,17 +1616,21 @@ nu-complete-${programName} '${programName} --archive __PREFIX__' | get value | t
                 testPath,
                 testScript.replaceAll("__PREFIX__", prefix),
               );
-              let directive = Array.from(shell.encodeSuggestions([{
-                kind: "file",
-                type,
-                extensions,
-                pattern: prefix,
-              }])).join("");
+              let directive = Array.from(
+                shell.encodeSuggestions([
+                  {
+                    kind: "file",
+                    type,
+                    extensions,
+                    pattern: prefix,
+                  },
+                ]),
+              ).join("");
               if (rawDots) {
                 directive = directive.replace(
-                  `:${
-                    extensions.map((ext) => ext.replace(/^\./, "")).join(",")
-                  }:`,
+                  `:${extensions
+                    .map((ext) => ext.replace(/^\./, ""))
+                    .join(",")}:`,
                   `:${extensions.join(",")}:`,
                 );
               }
@@ -1621,31 +1668,26 @@ nu-complete-${programName} '${programName} --archive __PREFIX__' | get value | t
               );
               deepStrictEqual(
                 complete([".tar[1].gz"], rawDots),
-                [
-                  "bdir/",
-                  "'bundle.tar[1].gz'",
-                ].sort(),
+                ["bdir/", "'bundle.tar[1].gz'"].sort(),
               );
             }
-            for (
-              const file of [
-                "inner.tar.gz",
-                "inner.txt",
-                "inner.gz",
-                "x.tar.gz",
-              ]
-            ) {
+            for (const file of [
+              "inner.tar.gz",
+              "inner.txt",
+              "inner.gz",
+              "x.tar.gz",
+            ]) {
               writeFileSync(join(tempDir, "bdir", file), "");
             }
             mkdirSync(join(tempDir, "bdir", "sub"));
-            deepStrictEqual(
-              complete([".tar.gz"], false, "bdir/"),
-              ["bdir/inner.tar.gz", "bdir/sub/", "bdir/x.tar.gz"],
-            );
-            deepStrictEqual(
-              complete([".tar.gz"], false, "bdir/i"),
-              ["bdir/inner.tar.gz"],
-            );
+            deepStrictEqual(complete([".tar.gz"], false, "bdir/"), [
+              "bdir/inner.tar.gz",
+              "bdir/sub/",
+              "bdir/x.tar.gz",
+            ]);
+            deepStrictEqual(complete([".tar.gz"], false, "bdir/i"), [
+              "bdir/inner.tar.gz",
+            ]);
             // With no matching directory, exercise PowerShell's fallback path.
             rmSync(join(tempDir, "bdir"), { recursive: true });
             deepStrictEqual(complete(["tar.gz"]), archives.sort());
@@ -1914,9 +1956,10 @@ fi
         ok(!result.includes("invalid option"));
         ok(!result.includes("compgen"));
         // Should have found files in src/
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
         ok(completions.length > 0);
         ok(completions.some((c) => c.includes("main.ts")));
       } finally {
@@ -1930,9 +1973,7 @@ fi
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "bash-pattern-completion-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-pattern-completion-"));
 
       try {
         // CLI emits __FILE__ with pattern=src/ so completions should
@@ -1972,9 +2013,10 @@ fi
           cwd: tempDir,
         });
 
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
         // Should find files under src/ (from pattern), not root-level files
         ok(completions.some((c) => c.includes("main.ts")));
         ok(completions.some((c) => c.includes("util.ts")));
@@ -2027,9 +2069,10 @@ printf "%s\\n" "\${COMPREPLY[@]}"
           cwd: tempDir,
         });
 
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
         // Should find the file via tilde-expanded pattern
         ok(completions.some((c) => c.includes("testfile.txt")));
         // Results should use tilde prefix, not expanded home
@@ -2085,9 +2128,10 @@ printf "%s\\n" "\${COMPREPLY[@]}"
           cwd: tempDir,
         });
 
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
         // Should find file via absolute pattern
         ok(completions.some((c) => c.includes("app.ts")));
         // Results must NOT be rewritten to tilde prefix
@@ -2103,9 +2147,7 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "bash-incremental-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-incremental-"));
 
       try {
         // CLI emits __FILE__ with pattern=src/
@@ -2144,9 +2186,10 @@ fi
           cwd: tempDir,
         });
 
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
         ok(completions.some((c) => c.includes("main.ts")));
         // util.ts and model.ts should NOT appear
         ok(!completions.some((c) => c.includes("util.ts")));
@@ -2162,9 +2205,7 @@ fi
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "bash-dotslash-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-dotslash-"));
 
       try {
         const srcDir = join(tempDir, "src");
@@ -2202,9 +2243,10 @@ fi
           cwd: tempDir,
         });
 
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
         ok(completions.some((c) => c.includes("main.ts")));
         ok(!completions.some((c) => c.includes("util.ts")));
         // Should preserve the user's ./ prefix
@@ -2253,9 +2295,10 @@ printf "%s\\n" "\${COMPREPLY[@]}"
           cwd: tempDir,
         });
 
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
         ok(completions.some((c) => c.includes(".hidden")));
         ok(completions.some((c) => c.includes(".env")));
         ok(completions.some((c) => c.includes("visible.txt")));
@@ -2270,9 +2313,7 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "bash-hidden-dir-filter-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-hidden-dir-filter-"));
 
       try {
         // CLI that emits __FILE__:directory with includeHidden=0
@@ -2306,9 +2347,10 @@ printf "%s\\n" "\${COMPREPLY[@]}"
           cwd: tempDir,
         });
 
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
         ok(completions.some((c) => c.includes("visible")));
         ok(!completions.some((c) => c.includes(".hidden-dir")));
       } finally {
@@ -2356,9 +2398,10 @@ printf "%s\\n" "\${COMPREPLY[@]}"
           cwd: tempDir,
         });
 
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
         // Should find visible files inside the hidden directory
         ok(completions.some((c) => c.includes("settings.json")));
         // Hidden files inside a hidden directory should also appear
@@ -2377,9 +2420,7 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "bash-nested-hidden-dir-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-nested-hidden-dir-"));
 
       try {
         const cliScript = `#!/bin/bash
@@ -2412,9 +2453,10 @@ printf "%s\\n" "\${COMPREPLY[@]}"
           cwd: tempDir,
         });
 
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
         ok(completions.some((c) => c.includes("init.lua")));
         ok(completions.some((c) => c.includes(".hidden-plugin")));
         deepStrictEqual(completions.length, 2);
@@ -2429,9 +2471,7 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "bash-dot-prefix-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-dot-prefix-"));
 
       try {
         // CLI that emits __FILE__:file without includeHidden
@@ -2463,9 +2503,10 @@ printf "%s\\n" "\${COMPREPLY[@]}"
           cwd: tempDir,
         });
 
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
         ok(completions.some((c) => c.includes(".env")));
         ok(completions.some((c) => c.includes(".gitignore")));
       } finally {
@@ -2652,9 +2693,7 @@ _globignore-cli 2>/dev/null
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "bash-globignore-empty-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-globignore-empty-"));
 
       try {
         const cliScript = `#!/bin/bash
@@ -2738,9 +2777,10 @@ printf "%s\\n" "\${COMPREPLY[@]}"
           cwd: tempDir,
         });
 
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
         ok(completions.some((c) => c.includes("regular.txt")));
         ok(completions.some((c) => c.includes("myfifo")));
       } finally {
@@ -2790,9 +2830,10 @@ printf "%s\\n" "\${COMPREPLY[@]}"
           cwd: tempDir,
         });
 
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
         // Should find the file
         ok(completions.some((c) => c.includes("testfile.txt")));
         // Results should use tilde prefix, not expanded home
@@ -2847,9 +2888,10 @@ printf "%s\\n" "\${COMPREPLY[@]}"
           cwd: hiddenDir,
         });
 
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
         // Should find files inside the hidden directory
         ok(completions.some((c) => c.includes("target.txt")));
       } finally {
@@ -2889,9 +2931,7 @@ printf "%s\\n" "\${COMPREPLY[@]}"
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "bash-ext-dot-filter-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "bash-ext-dot-filter-"));
 
       try {
         // CLI emits __FILE__ with dot-prefixed extensions (.json,.yaml)
@@ -2929,33 +2969,34 @@ fi
         const result = runCommand("bash", ["-c", testScript], {
           cwd: tempDir,
         });
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
 
         ok(
           completions.some((c) => c.includes("data.json")),
-          `Expected data.json in completions, got: ${
-            JSON.stringify(completions)
-          }`,
+          `Expected data.json in completions, got: ${JSON.stringify(
+            completions,
+          )}`,
         );
         ok(
           completions.some((c) => c.includes("config.yaml")),
-          `Expected config.yaml in completions, got: ${
-            JSON.stringify(completions)
-          }`,
+          `Expected config.yaml in completions, got: ${JSON.stringify(
+            completions,
+          )}`,
         );
         ok(
           !completions.some((c) => c.includes("readme.txt")),
-          `Should not include readme.txt in completions, got: ${
-            JSON.stringify(completions)
-          }`,
+          `Should not include readme.txt in completions, got: ${JSON.stringify(
+            completions,
+          )}`,
         );
         ok(
           completions.some((c) => c.includes("subdir")),
-          `Expected subdir/ in completions for navigation, got: ${
-            JSON.stringify(completions)
-          }`,
+          `Expected subdir/ in completions for navigation, got: ${JSON.stringify(
+            completions,
+          )}`,
         );
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
@@ -2987,179 +3028,184 @@ fi
   });
 
   describe("zsh shell completion", () => {
-    for (
-      const testCase of [
+    for (const testCase of [
+      {
+        name: "complete a literal in the middle of a word",
+        input: "extapp --format jn",
+        moveLeft: 1,
+        enabled: true,
+        expected: "extapp --format json ",
+      },
+      {
+        name: "complete an ordinary literal prefix",
+        input: "extapp --format j",
+        moveLeft: 0,
+        enabled: true,
+        expected: "extapp --format json ",
+      },
+      {
+        name: "reject an incompatible literal suffix",
+        input: "extapp --format jx",
+        moveLeft: 1,
+        enabled: true,
+        expected: "extapp --format jx",
+      },
+      {
+        name: "complete a literal with an empty prefix",
+        input: "extapp --format son",
+        moveLeft: 3,
+        enabled: true,
+        expected: "extapp --format json ",
+      },
+      {
+        name: "complete an opening-quoted literal",
+        input: "extapp --format 'jn",
+        moveLeft: 1,
+        enabled: true,
+        expected: "extapp --format 'json' ",
+      },
+      {
+        name: "preserve whole-word matching when disabled",
+        input: "extapp --format jn",
+        moveLeft: 1,
+        enabled: false,
+        expected: "extapp --format jn",
+      },
+      {
+        name: "complete quoted literals when disabled",
+        input: "extapp --format 'j",
+        moveLeft: 0,
+        enabled: false,
+        expected: "extapp --format 'json' ",
+      },
+    ]) {
+      it(
+        `should ${testCase.name} with COMPLETE_IN_WORD`,
         {
-          name: "complete a literal in the middle of a word",
-          input: "extapp --format jn",
-          moveLeft: 1,
-          enabled: true,
-          expected: "extapp --format json ",
+          skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
         },
-        {
-          name: "complete an ordinary literal prefix",
-          input: "extapp --format j",
-          moveLeft: 0,
-          enabled: true,
-          expected: "extapp --format json ",
-        },
-        {
-          name: "reject an incompatible literal suffix",
-          input: "extapp --format jx",
-          moveLeft: 1,
-          enabled: true,
-          expected: "extapp --format jx",
-        },
-        {
-          name: "complete a literal with an empty prefix",
-          input: "extapp --format son",
-          moveLeft: 3,
-          enabled: true,
-          expected: "extapp --format json ",
-        },
-        {
-          name: "complete an opening-quoted literal",
-          input: "extapp --format 'jn",
-          moveLeft: 1,
-          enabled: true,
-          expected: "extapp --format 'json' ",
-        },
-        {
-          name: "preserve whole-word matching when disabled",
-          input: "extapp --format jn",
-          moveLeft: 1,
-          enabled: false,
-          expected: "extapp --format jn",
-        },
-        {
-          name: "complete quoted literals when disabled",
-          input: "extapp --format 'j",
-          moveLeft: 0,
-          enabled: false,
-          expected: "extapp --format 'json' ",
-        },
-      ]
-    ) {
-      it(`should ${testCase.name} with COMPLETE_IN_WORD`, {
-        skip: !isInteractiveZshCompletionAvailable(),
-        timeout: ZSH_PTY_TEST_TIMEOUT,
-      }, (t) => {
-        if (!isInteractiveZshCompletionAvailable()) {
-          t.skip("interactive zsh completion not available");
-          return;
-        }
+        (t) => {
+          if (!isInteractiveZshCompletionAvailable()) {
+            t.skip("interactive zsh completion not available");
+            return;
+          }
 
-        const buffer = testInteractiveZshCompletion(
-          zsh.generateScript("extapp"),
-          "",
-          [],
-          {
-            setup: `${
-              testCase.enabled ? "setopt" : "unsetopt"
-            } complete_in_word`,
-            // Like choice(["json"]), the backend filters by the supplied
-            // prefix. Also require the previous option argument to survive.
-            cliScript: `#!/bin/bash
+          const buffer = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [],
+            {
+              setup: `${
+                testCase.enabled ? "setopt" : "unsetopt"
+              } complete_in_word`,
+              // Like choice(["json"]), the backend filters by the supplied
+              // prefix. Also require the previous option argument to survive.
+              cliScript: `#!/bin/bash
 if [[ $# == 2 && "$1" == --format && json == "$2"* ]]; then
   printf 'json\\0\\0\\n'
 fi
 `,
-            input: testCase.input,
-            moveLeft: testCase.moveLeft,
-            tabCount: 1,
-            captureBuffer: true,
-          },
-        );
-        deepStrictEqual(buffer, testCase.expected);
-      });
+              input: testCase.input,
+              moveLeft: testCase.moveLeft,
+              tabCount: 1,
+              captureBuffer: true,
+            },
+          );
+          deepStrictEqual(buffer, testCase.expected);
+        },
+      );
     }
 
     for (const quote of ["'", '"']) {
       for (const closed of [false, true]) {
-        it(`should retain joined Zsh quote prefix ${quote} closed=${closed}`, {
+        it(
+          `should retain joined Zsh quote prefix ${quote} closed=${closed}`,
+          {
+            skip: !isInteractiveZshCompletionAvailable(),
+            timeout: ZSH_PTY_TEST_TIMEOUT,
+          },
+          () => {
+            if (!isInteractiveZshCompletionAvailable()) return;
+            const output = testInteractiveZshCompletion(
+              zsh.generateScript("extapp"),
+              "",
+              [],
+              {
+                setup: "setopt complete_in_word",
+                input: `extapp --format=${quote}j${closed ? quote : ""}`,
+                backend: `[[ "$1" == --format=j ]] && printf '%s\\0\\0\\n' --format=json`,
+                expectedArgs: ["--format=j"],
+                captureBuffer: true,
+              },
+            );
+            deepStrictEqual(output, "extapp --format=json ");
+          },
+        );
+      }
+      it(
+        `should retain mixed Zsh quote prefix ${quote}`,
+        {
           skip: !isInteractiveZshCompletionAvailable(),
           timeout: ZSH_PTY_TEST_TIMEOUT,
-        }, () => {
+        },
+        () => {
           if (!isInteractiveZshCompletionAvailable()) return;
           const output = testInteractiveZshCompletion(
             zsh.generateScript("extapp"),
             "",
             [],
             {
-              setup: "setopt complete_in_word",
-              input: `extapp --format=${quote}j${closed ? quote : ""}`,
-              backend:
-                `[[ "$1" == --format=j ]] && printf '%s\\0\\0\\n' --format=json`,
-              expectedArgs: ["--format=j"],
+              input: `extapp --format j${quote}s`,
+              backend: `[[ "$1" == --format && "$2" == js ]] && printf '%s\\0\\0\\n' json`,
+              expectedArgs: ["--format", "js"],
               captureBuffer: true,
             },
           );
-          deepStrictEqual(output, "extapp --format=json ");
-        });
-      }
-      it(`should retain mixed Zsh quote prefix ${quote}`, {
-        skip: !isInteractiveZshCompletionAvailable(),
-        timeout: ZSH_PTY_TEST_TIMEOUT,
-      }, () => {
-        if (!isInteractiveZshCompletionAvailable()) return;
-        const output = testInteractiveZshCompletion(
-          zsh.generateScript("extapp"),
-          "",
-          [],
-          {
-            input: `extapp --format j${quote}s`,
-            backend:
-              `[[ "$1" == --format && "$2" == js ]] && printf '%s\\0\\0\\n' json`,
-            expectedArgs: ["--format", "js"],
-            captureBuffer: true,
-          },
-        );
-        deepStrictEqual(output, "extapp --format json ");
-      });
+          deepStrictEqual(output, "extapp --format json ");
+        },
+      );
     }
 
-    for (
-      const [pattern, file, completed] of [
-        ["src/*[$]x", "src/a$x", "src/a\\$x "],
-        ["src/*[`]x", "src/a`x", "src/a\\`x "],
-        ["src/*[q$]x", "src/a$x", "src/a\\$x "],
-        ["src/*[q`]x", "src/a`x", "src/a\\`x "],
-      ]
-    ) {
-      it(`should preserve protected Zsh marker classes ${pattern}`, {
-        skip: !isInteractiveZshCompletionAvailable(),
-        timeout: ZSH_PTY_TEST_TIMEOUT,
-      }, () => {
-        if (!isInteractiveZshCompletionAvailable()) return;
-        const output = testInteractiveZshCompletion(
-          zsh.generateScript("extapp"),
-          "",
-          [
-            { path: "src", type: "directory" },
-            { path: file },
-          ],
-          {
-            input: "extapp --format ",
-            backend: `printf '%s\\0\\0\\n' '__FILE__:file::${pattern}:0'`,
-            captureBuffer: true,
-          },
-        );
-        deepStrictEqual(output, `extapp --format ${completed}`);
-      });
+    for (const [pattern, file, completed] of [
+      ["src/*[$]x", "src/a$x", "src/a\\$x "],
+      ["src/*[`]x", "src/a`x", "src/a\\`x "],
+      ["src/*[q$]x", "src/a$x", "src/a\\$x "],
+      ["src/*[q`]x", "src/a`x", "src/a\\`x "],
+    ]) {
+      it(
+        `should preserve protected Zsh marker classes ${pattern}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
+        },
+        () => {
+          if (!isInteractiveZshCompletionAvailable()) return;
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [{ path: "src", type: "directory" }, { path: file }],
+            {
+              input: "extapp --format ",
+              backend: `printf '%s\\0\\0\\n' '__FILE__:file::${pattern}:0'`,
+              captureBuffer: true,
+            },
+          );
+          deepStrictEqual(output, `extapp --format ${completed}`);
+        },
+      );
     }
 
-    for (
-      const [typed, pattern, file, completed, oldFile] of [
-        ["\\$", "src/*[$]x", "src/a$x", "src/a\\$x ", false],
-        ["\\`", "src/*[`]x", "src/a`x", "src/a\\`x ", false],
-        ["\\[", "src/*[ab]x", "src/aax", "src/aax ", false],
-        ["@\\[a\\]", "src/*[a]*", "src/x[a]y.txt", "src/x\\[a\\]y.txt ", false],
-        ["\\[", "src/*[ab]x[", "src/aax[", "src/aax\\[ ", false],
-        ["x\\)", "src/*(m+1)", "src/old.txt", "src/old.txt ", true],
-        ["x1\\)", "src/*(m+1)", "src/old.txt", "src/old.txt ", true],
-        ["x+1\\)", "src/*(m+1)", "src/old.txt", "src/old.txt ", true],
-      ] as const
-    ) {
+    for (const [typed, pattern, file, completed, oldFile] of [
+      ["\\$", "src/*[$]x", "src/a$x", "src/a\\$x ", false],
+      ["\\`", "src/*[`]x", "src/a`x", "src/a\\`x ", false],
+      ["\\[", "src/*[ab]x", "src/aax", "src/aax ", false],
+      ["@\\[a\\]", "src/*[a]*", "src/x[a]y.txt", "src/x\\[a\\]y.txt ", false],
+      ["\\[", "src/*[ab]x[", "src/aax[", "src/aax\\[ ", false],
+      ["x\\)", "src/*(m+1)", "src/old.txt", "src/old.txt ", true],
+      ["x1\\)", "src/*(m+1)", "src/old.txt", "src/old.txt ", true],
+      ["x+1\\)", "src/*(m+1)", "src/old.txt", "src/old.txt ", true],
+    ] as const) {
       it(
         `should preserve fixed Zsh syntax overlapping input ${typed}: ${pattern}`,
         {
@@ -3168,10 +3214,9 @@ fi
         },
         () => {
           if (!isInteractiveZshCompletionAvailable()) return;
-          const encodedPattern = pattern.replaceAll("%", "%25").replaceAll(
-            ":",
-            "%3A",
-          );
+          const encodedPattern = pattern
+            .replaceAll("%", "%25")
+            .replaceAll(":", "%3A");
           const output = testInteractiveZshCompletion(
             zsh.generateScript("extapp"),
             "",
@@ -3194,16 +3239,14 @@ fi
       );
     }
 
-    for (
-      const [typed, pattern, file, completed] of [
-        ["x\\)", "src/*.(txt|md)", "src/a.txt", "src/a.txt "],
-        ["x\\|", "src/*.(txt|md)", "src/a.txt", "src/a.txt "],
-        ["x\\(", "src/*.(txt|md)", "src/a.txt", "src/a.txt "],
-        ["xmd\\)", "src/*.(txt|(md|rst))", "src/a.txt", "src/a.txt "],
-        ["@\\(a\\|b\\)", "src/*(a|b)*", "src/x(a|b)y", "src/x\\(a\\|b\\)y "],
-        ["x\\)", "src/*.(txt|md))", "src/a.txt)", "src/a.txt\\) "],
-      ] as const
-    ) {
+    for (const [typed, pattern, file, completed] of [
+      ["x\\)", "src/*.(txt|md)", "src/a.txt", "src/a.txt "],
+      ["x\\|", "src/*.(txt|md)", "src/a.txt", "src/a.txt "],
+      ["x\\(", "src/*.(txt|md)", "src/a.txt", "src/a.txt "],
+      ["xmd\\)", "src/*.(txt|(md|rst))", "src/a.txt", "src/a.txt "],
+      ["@\\(a\\|b\\)", "src/*(a|b)*", "src/x(a|b)y", "src/x\\(a\\|b\\)y "],
+      ["x\\)", "src/*.(txt|md))", "src/a.txt)", "src/a.txt\\) "],
+    ] as const) {
       it(
         `should preserve fixed Zsh glob groups overlapping input ${typed}: ${pattern}`,
         {
@@ -3228,45 +3271,48 @@ fi
       );
     }
 
-    for (
-      const pattern of [
-        "src/*(#qm+1)",
-        "src/*(#q.)(#qm+1)",
-        "src/*(#qm+1)(#q.)",
-      ]
-    ) {
-      it(`should preserve normalized chained Zsh qualifiers ${pattern}`, {
-        skip: !isInteractiveZshCompletionAvailable(),
-        timeout: ZSH_PTY_TEST_TIMEOUT,
-      }, () => {
-        if (!isInteractiveZshCompletionAvailable()) return;
-        const output = testInteractiveZshCompletion(
-          zsh.generateScript("extapp"),
-          "",
-          [{ path: "src", type: "directory" }, { path: "src/old.txt" }, {
-            path: "src/fresh.txt",
-          }],
-          {
-            input: "extapp --format x\\)",
-            backend:
-              `touch -t 200001010000 src/old.txt\nprintf '%s\\0\\0\\n' '__FILE__:file::${pattern}:0'`,
-            expectedArgs: ["--format", "x)"],
-            captureBuffer: true,
-          },
-        );
-        deepStrictEqual(output, "extapp --format src/old.txt ");
-      });
+    for (const pattern of [
+      "src/*(#qm+1)",
+      "src/*(#q.)(#qm+1)",
+      "src/*(#qm+1)(#q.)",
+    ]) {
+      it(
+        `should preserve normalized chained Zsh qualifiers ${pattern}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
+        },
+        () => {
+          if (!isInteractiveZshCompletionAvailable()) return;
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [
+              { path: "src", type: "directory" },
+              { path: "src/old.txt" },
+              {
+                path: "src/fresh.txt",
+              },
+            ],
+            {
+              input: "extapp --format x\\)",
+              backend: `touch -t 200001010000 src/old.txt\nprintf '%s\\0\\0\\n' '__FILE__:file::${pattern}:0'`,
+              expectedArgs: ["--format", "x)"],
+              captureBuffer: true,
+            },
+          );
+          deepStrictEqual(output, "extapp --format src/old.txt ");
+        },
+      );
     }
 
     for (const type of ["file", "any", "directory"]) {
-      for (
-        const qualifiers of [
-          "(#qe:touch MARK:)(#qm+1)",
-          "(#q+mark)(#q.)(#qm+1)",
-          "(#qe!touch MARK!)(#q.)",
-          "(#qm+1)(#qe!touch MARK!)",
-        ]
-      ) {
+      for (const qualifiers of [
+        "(#qe:touch MARK:)(#qm+1)",
+        "(#q+mark)(#q.)(#qm+1)",
+        "(#qe!touch MARK!)(#q.)",
+        "(#qm+1)(#qe!touch MARK!)",
+      ]) {
         it(
           `should block chained executable Zsh qualifiers ${type}: ${qualifiers}`,
           {
@@ -3278,19 +3324,24 @@ fi
             const output = testInteractiveZshCompletion(
               zsh.generateScript("extapp"),
               "",
-              [{ path: "src", type: "directory" }, {
-                path: "src/old",
-                ...(type === "directory" ? { type: "directory" as const } : {}),
-              }],
+              [
+                { path: "src", type: "directory" },
+                {
+                  path: "src/old",
+                  ...(type === "directory"
+                    ? { type: "directory" as const }
+                    : {}),
+                },
+              ],
               {
                 setup: `setopt globcomplete extendedglob; ${
                   type === "file" ? "" : "unsetopt bareglobqual; "
                 }mark() { touch MARK; }`,
                 input: "extapp --format ",
-                backend:
-                  `touch -t 200001010000 src/old\nprintf '%s\\0\\0\\n' '__FILE__:${type}::src/*${
-                    qualifiers.replaceAll(":", "%3A")
-                  }:0'`,
+                backend: `touch -t 200001010000 src/old\nprintf '%s\\0\\0\\n' '__FILE__:${type}::src/*${qualifiers.replaceAll(
+                  ":",
+                  "%3A",
+                )}:0'`,
                 expectedArgs: ["--format", ""],
                 captureBuffer: true,
                 absentFiles: ["MARK"],
@@ -3302,12 +3353,12 @@ fi
       }
     }
 
-    for (
-      const [tilde, typed] of [["~+", "x~+"], ["~0", "x~0"], [
-        "~audit",
-        "x~audit",
-      ], ["~+", "\\~+"]]
-    ) {
+    for (const [tilde, typed] of [
+      ["~+", "x~+"],
+      ["~0", "x~0"],
+      ["~audit", "x~audit"],
+      ["~+", "\\~+"],
+    ]) {
       it(
         `should preserve a fixed Zsh tilde prefix overlapping input ${typed}`,
         {
@@ -3355,13 +3406,11 @@ fi
                 { path: "src/report-pipe.txt", type: "fifo" },
               ],
               {
-                setup:
-                  `setopt globcomplete extendedglob; zstyle ':completion:*' tag-order '${firstTag}' '${
-                    firstTag === "files" ? "directories" : "files"
-                  }'`,
+                setup: `setopt globcomplete extendedglob; zstyle ':completion:*' tag-order '${firstTag}' '${
+                  firstTag === "files" ? "directories" : "files"
+                }'`,
                 input: "extapp --format @",
-                backend:
-                  `touch -t 200001010000 src/old.txt\nprintf '%s\\0\\0\\n' '__FILE__:file:txt:src/*${qualifiers}:0'`,
+                backend: `touch -t 200001010000 src/old.txt\nprintf '%s\\0\\0\\n' '__FILE__:file:txt:src/*${qualifiers}:0'`,
                 expectedArgs: ["--format", "@"],
                 captureBuffer: true,
               },
@@ -3381,74 +3430,78 @@ fi
 pattern="\${pattern//%/%25}"
 pattern="\${pattern//:/%3A}"
 printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
-    for (
-      const [typed, value, completed] of [
-        ["j", "j", "json "],
-        ['"', "", '"json" '],
-        ["'", "", "'json' "],
-        ['"j', "j", '"json" '],
-        ["'j", "j", "'json' "],
-        ['"j"', "j", '"json"'],
-        ['j"s', "js", "json "],
-        ["j\\s", "js", "json "],
-        ["'a\\b", "a\\b", "'a\\bc' "],
-        ['"a\\b', "a\\b", '"a\\\\bc" '],
-        ['"a\\b"', "a\\b", '"a\\\\bc"'],
-        ['"a\\$b', "a$b", '"a\\$bc" '],
-        ['"a\\\\b', "a\\b", '"a\\\\bc" '],
-        ['"a\\"b', 'a"b', '"a\\"bc" '],
-        ["'a:b", "a:b", "'a:bc' "],
-        ['\'a"b"', 'a"b"', "'a\"b\"c' "],
-      ]
-    ) {
-      it(`should complete quoted Zsh literal ${typed}`, {
+    for (const [typed, value, completed] of [
+      ["j", "j", "json "],
+      ['"', "", '"json" '],
+      ["'", "", "'json' "],
+      ['"j', "j", '"json" '],
+      ["'j", "j", "'json' "],
+      ['"j"', "j", '"json"'],
+      ['j"s', "js", "json "],
+      ["j\\s", "js", "json "],
+      ["'a\\b", "a\\b", "'a\\bc' "],
+      ['"a\\b', "a\\b", '"a\\\\bc" '],
+      ['"a\\b"', "a\\b", '"a\\\\bc"'],
+      ['"a\\$b', "a$b", '"a\\$bc" '],
+      ['"a\\\\b', "a\\b", '"a\\\\bc" '],
+      ['"a\\"b', 'a"b', '"a\\"bc" '],
+      ["'a:b", "a:b", "'a:bc' "],
+      ['\'a"b"', 'a"b"', "'a\"b\"c' "],
+    ]) {
+      it(
+        `should complete quoted Zsh literal ${typed}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
+        },
+        (t) => {
+          if (!isInteractiveZshCompletionAvailable()) {
+            t.skip("interactive zsh completion not available");
+            return;
+          }
+          const candidate = value.startsWith("a") ? `${value}c` : "json";
+          const quotedCandidate = `'${candidate.replaceAll("'", "'\\''")}'`;
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [],
+            {
+              input: `extapp --format ${typed}`,
+              backend: `[[ "$1" == --format && ${quotedCandidate} == "$2"* ]] && printf '%s\\0\\0\\n' ${quotedCandidate}`,
+              expectedArgs: ["--format", value],
+              captureBuffer: true,
+            },
+          );
+          deepStrictEqual(output, `extapp --format ${completed}`);
+        },
+      );
+    }
+
+    it(
+      "should match double-quoted Zsh file input in the completion backend",
+      {
         skip: !isInteractiveZshCompletionAvailable(),
         timeout: ZSH_PTY_TEST_TIMEOUT,
-      }, (t) => {
+      },
+      (t) => {
         if (!isInteractiveZshCompletionAvailable()) {
           t.skip("interactive zsh completion not available");
           return;
         }
-        const candidate = value.startsWith("a") ? `${value}c` : "json";
-        const quotedCandidate = `'${candidate.replaceAll("'", "'\\''")}'`;
         const output = testInteractiveZshCompletion(
           zsh.generateScript("extapp"),
           "",
-          [],
+          [{ path: "a\\bc.txt" }],
           {
-            input: `extapp --format ${typed}`,
-            backend:
-              `[[ "$1" == --format && ${quotedCandidate} == "$2"* ]] && printf '%s\\0\\0\\n' ${quotedCandidate}`,
-            expectedArgs: ["--format", value],
+            input: 'extapp --format "a\\b',
+            backend: `compgen -f -- "$2" | while IFS= read -r file; do printf '%s\\0\\0\\n' "$file"; done`,
+            expectedArgs: ["--format", "a\\b"],
             captureBuffer: true,
           },
         );
-        deepStrictEqual(output, `extapp --format ${completed}`);
-      });
-    }
-
-    it("should match double-quoted Zsh file input in the completion backend", {
-      skip: !isInteractiveZshCompletionAvailable(),
-      timeout: ZSH_PTY_TEST_TIMEOUT,
-    }, (t) => {
-      if (!isInteractiveZshCompletionAvailable()) {
-        t.skip("interactive zsh completion not available");
-        return;
-      }
-      const output = testInteractiveZshCompletion(
-        zsh.generateScript("extapp"),
-        "",
-        [{ path: "a\\bc.txt" }],
-        {
-          input: 'extapp --format "a\\b',
-          backend:
-            `compgen -f -- "$2" | while IFS= read -r file; do printf '%s\\0\\0\\n' "$file"; done`,
-          expectedArgs: ["--format", "a\\b"],
-          captureBuffer: true,
-        },
-      );
-      deepStrictEqual(output, 'extapp --format "a\\\\bc.txt" ');
-    });
+        deepStrictEqual(output, 'extapp --format "a\\\\bc.txt" ');
+      },
+    );
 
     it(
       "should dequote previous Zsh arguments and preserve quoted empty values",
@@ -3481,160 +3534,170 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
     );
 
     for (const quote of ['"', "'"]) {
-      it(`should complete quoted Zsh file values with ${quote}`, {
-        skip: !isInteractiveZshCompletionAvailable(),
-        timeout: ZSH_PTY_TEST_TIMEOUT,
-      }, (t) => {
-        if (!isInteractiveZshCompletionAvailable()) {
-          t.skip("interactive zsh completion not available");
-          return;
-        }
-        const output = testInteractiveZshCompletion(
-          zsh.generateScript("extapp"),
-          "",
-          [
-            { path: "a file.txt" },
-            { path: "a file.md" },
-          ],
-          {
-            input: `extapp --format ${quote}a f`,
-            backend: fileCompletionBackend,
-            expectedArgs: ["--format", "a f"],
-            captureBuffer: true,
-          },
-        );
-        deepStrictEqual(output, `extapp --format ${quote}a file.txt${quote} `);
-      });
+      it(
+        `should complete quoted Zsh file values with ${quote}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
+        },
+        (t) => {
+          if (!isInteractiveZshCompletionAvailable()) {
+            t.skip("interactive zsh completion not available");
+            return;
+          }
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [{ path: "a file.txt" }, { path: "a file.md" }],
+            {
+              input: `extapp --format ${quote}a f`,
+              backend: fileCompletionBackend,
+              expectedArgs: ["--format", "a f"],
+              captureBuffer: true,
+            },
+          );
+          deepStrictEqual(
+            output,
+            `extapp --format ${quote}a file.txt${quote} `,
+          );
+        },
+      );
     }
 
-    for (
-      const [typed, prefix, completed] of [
-        ["\\~li", "~li", "\\~literal.txt "],
-        [
-          "\\$(touch\\ MARK)/f",
-          "$(touch MARK)/f",
-          "\\$\\(touch\\ MARK\\)/file.txt ",
-        ],
-        [
-          '"\\$(touch MARK)/f',
-          "$(touch MARK)/f",
-          '"\\$(touch MARK)/file.txt" ',
-        ],
-      ]
-    ) {
-      it(`should preserve literal Zsh file prefix ${typed}`, {
-        skip: !isInteractiveZshCompletionAvailable(),
-        timeout: ZSH_PTY_TEST_TIMEOUT,
-      }, (t) => {
-        if (!isInteractiveZshCompletionAvailable()) {
-          t.skip("interactive zsh completion not available");
-          return;
-        }
-        const output = testInteractiveZshCompletion(
-          zsh.generateScript("extapp"),
-          "",
-          [
-            { path: "~literal.txt" },
-            { path: "$(touch MARK)", type: "directory" },
-            { path: "$(touch MARK)/file.txt" },
-          ],
-          {
-            input: `extapp --format ${typed}`,
-            backend: fileCompletionBackend,
-            expectedArgs: ["--format", prefix],
-            captureBuffer: true,
-            absentFiles: ["MARK"],
-          },
-        );
-        deepStrictEqual(output, `extapp --format ${completed}`);
-      });
+    for (const [typed, prefix, completed] of [
+      ["\\~li", "~li", "\\~literal.txt "],
+      [
+        "\\$(touch\\ MARK)/f",
+        "$(touch MARK)/f",
+        "\\$\\(touch\\ MARK\\)/file.txt ",
+      ],
+      ['"\\$(touch MARK)/f', "$(touch MARK)/f", '"\\$(touch MARK)/file.txt" '],
+    ]) {
+      it(
+        `should preserve literal Zsh file prefix ${typed}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
+        },
+        (t) => {
+          if (!isInteractiveZshCompletionAvailable()) {
+            t.skip("interactive zsh completion not available");
+            return;
+          }
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [
+              { path: "~literal.txt" },
+              { path: "$(touch MARK)", type: "directory" },
+              { path: "$(touch MARK)/file.txt" },
+            ],
+            {
+              input: `extapp --format ${typed}`,
+              backend: fileCompletionBackend,
+              expectedArgs: ["--format", prefix],
+              captureBuffer: true,
+              absentFiles: ["MARK"],
+            },
+          );
+          deepStrictEqual(output, `extapp --format ${completed}`);
+        },
+      );
     }
 
-    for (
-      const [typed, pattern, completed] of [
-        ["@my\\ dir/f", "my dir/f", "my\\ dir/file.txt "],
-        [
-          "@\\$(touch\\ MARK)/f",
-          "$(touch MARK)/f",
-          "\\$\\(touch\\ MARK\\)/file.txt ",
-        ],
-        [
-          "@\\`touch\\ MARK\\`/f",
-          "`touch MARK`/f",
-          "\\`touch\\ MARK\\`/file.txt ",
-        ],
-        [
-          "@~+\\;touch\\ MARK\\;/f",
-          "~+;touch MARK;/f",
-          "\\~+\\;touch\\ MARK\\;/file.txt ",
-        ],
-        [
-          "@~+\\;touch\\ MARK\\;\\$x/f",
-          "~+;touch MARK;$x/f",
-          "\\~+\\;touch\\ MARK\\;\\$x/file.txt ",
-        ],
-      ]
-    ) {
-      it(`should keep transformed Zsh file pattern literal ${typed}`, {
-        skip: !isInteractiveZshCompletionAvailable(),
-        timeout: ZSH_PTY_TEST_TIMEOUT,
-      }, (t) => {
-        if (!isInteractiveZshCompletionAvailable()) {
-          t.skip("interactive zsh completion not available");
-          return;
-        }
-        const directory = pattern.slice(0, pattern.lastIndexOf("/"));
-        const output = testInteractiveZshCompletion(
-          zsh.generateScript("extapp"),
-          "",
-          [
-            { path: directory, type: "directory" },
-            { path: `${directory}/file.txt` },
-          ],
-          {
-            input: `extapp --format ${typed}`,
-            backend: fileCompletionBackend,
-            captureBuffer: true,
-            absentFiles: ["MARK"],
-          },
-        );
-        deepStrictEqual(output, `extapp --format ${completed}`);
-      });
+    for (const [typed, pattern, completed] of [
+      ["@my\\ dir/f", "my dir/f", "my\\ dir/file.txt "],
+      [
+        "@\\$(touch\\ MARK)/f",
+        "$(touch MARK)/f",
+        "\\$\\(touch\\ MARK\\)/file.txt ",
+      ],
+      [
+        "@\\`touch\\ MARK\\`/f",
+        "`touch MARK`/f",
+        "\\`touch\\ MARK\\`/file.txt ",
+      ],
+      [
+        "@~+\\;touch\\ MARK\\;/f",
+        "~+;touch MARK;/f",
+        "\\~+\\;touch\\ MARK\\;/file.txt ",
+      ],
+      [
+        "@~+\\;touch\\ MARK\\;\\$x/f",
+        "~+;touch MARK;$x/f",
+        "\\~+\\;touch\\ MARK\\;\\$x/file.txt ",
+      ],
+    ]) {
+      it(
+        `should keep transformed Zsh file pattern literal ${typed}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
+        },
+        (t) => {
+          if (!isInteractiveZshCompletionAvailable()) {
+            t.skip("interactive zsh completion not available");
+            return;
+          }
+          const directory = pattern.slice(0, pattern.lastIndexOf("/"));
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [
+              { path: directory, type: "directory" },
+              { path: `${directory}/file.txt` },
+            ],
+            {
+              input: `extapp --format ${typed}`,
+              backend: fileCompletionBackend,
+              captureBuffer: true,
+              absentFiles: ["MARK"],
+            },
+          );
+          deepStrictEqual(output, `extapp --format ${completed}`);
+        },
+      );
     }
 
-    for (
-      const qualifier of [
-        "e!touch MARK!",
-        "#qe!touch MARK!",
-        "oe!touch MARK!",
-        "+mark",
-      ]
-    ) {
-      it(`should keep transformed Zsh qualifier ${qualifier} literal`, {
-        skip: !isInteractiveZshCompletionAvailable(),
-        timeout: ZSH_PTY_TEST_TIMEOUT,
-      }, (t) => {
-        if (!isInteractiveZshCompletionAvailable()) {
-          t.skip("interactive zsh completion not available");
-          return;
-        }
-        const filename = `a(${qualifier})`;
-        const typed = filename.replaceAll("(", "\\(").replaceAll(")", "\\)")
-          .replaceAll(" ", "\\ ").replaceAll("!", "\\!").replaceAll("#", "\\#");
-        const output = testInteractiveZshCompletion(
-          zsh.generateScript("extapp"),
-          "",
-          [{ path: filename }, { path: "a" }],
-          {
-            setup: "setopt globcomplete extendedglob; mark() { touch MARK; }",
-            input: `extapp --format @${typed}`,
-            backend: fileCompletionBackend.replace(":file:txt:", ":file::"),
-            captureBuffer: true,
-            absentFiles: ["MARK"],
-          },
-        );
-        deepStrictEqual(output, `extapp --format ${typed} `);
-      });
+    for (const qualifier of [
+      "e!touch MARK!",
+      "#qe!touch MARK!",
+      "oe!touch MARK!",
+      "+mark",
+    ]) {
+      it(
+        `should keep transformed Zsh qualifier ${qualifier} literal`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
+        },
+        (t) => {
+          if (!isInteractiveZshCompletionAvailable()) {
+            t.skip("interactive zsh completion not available");
+            return;
+          }
+          const filename = `a(${qualifier})`;
+          const typed = filename
+            .replaceAll("(", "\\(")
+            .replaceAll(")", "\\)")
+            .replaceAll(" ", "\\ ")
+            .replaceAll("!", "\\!")
+            .replaceAll("#", "\\#");
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [{ path: filename }, { path: "a" }],
+            {
+              setup: "setopt globcomplete extendedglob; mark() { touch MARK; }",
+              input: `extapp --format @${typed}`,
+              backend: fileCompletionBackend.replace(":file:txt:", ":file::"),
+              captureBuffer: true,
+              absentFiles: ["MARK"],
+            },
+          );
+          deepStrictEqual(output, `extapp --format ${typed} `);
+        },
+      );
     }
 
     for (const qualifier of ["+mark", "e!touch MARK!", "#qe!touch MARK!"]) {
@@ -3653,16 +3716,19 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
           const output = testInteractiveZshCompletion(
             zsh.generateScript("extapp"),
             "",
-            [{ path: "src", type: "directory" }, { path: `src/x${filename}` }, {
-              path: "src/xa",
-            }],
+            [
+              { path: "src", type: "directory" },
+              { path: `src/x${filename}` },
+              {
+                path: "src/xa",
+              },
+            ],
             {
               setup: "setopt globcomplete extendedglob; mark() { touch MARK; }",
               input: `extapp --format '@${filename}`,
-              backend: fileCompletionBackend.replace(
-                'pattern="${2#@}"',
-                'pattern="src/*${2#@}"',
-              ).replace(":file:txt:", ":file::"),
+              backend: fileCompletionBackend
+                .replace('pattern="${2#@}"', 'pattern="src/*${2#@}"')
+                .replace(":file:txt:", ":file::"),
               captureBuffer: true,
               expectedArgs: ["--format", `@${filename}`],
               absentFiles: ["MARK"],
@@ -3673,12 +3739,10 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
       );
     }
 
-    for (
-      const [typed, completed] of [
-        ["@a\\\\b", "src/xa\\\\b.txt "],
-        ['"@a\\b', '"src/xa\\\\b.txt" '],
-      ]
-    ) {
+    for (const [typed, completed] of [
+      ["@a\\\\b", "src/xa\\\\b.txt "],
+      ['"@a\\b', '"src/xa\\\\b.txt" '],
+    ]) {
       it(
         `should retain backslashes in transformed Zsh file patterns ${typed}`,
         {
@@ -3693,17 +3757,20 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
           const output = testInteractiveZshCompletion(
             zsh.generateScript("extapp"),
             "",
-            [{ path: "src", type: "directory" }, { path: "src/xa\\b.txt" }, {
-              path: "src/xab.txt",
-            }],
+            [
+              { path: "src", type: "directory" },
+              { path: "src/xa\\b.txt" },
+              {
+                path: "src/xab.txt",
+              },
+            ],
             {
               setup:
                 'setopt globcomplete extendedglob; autoload -Uz +X _path_files; functions[_optique_native_files]=$functions[_path_files]; _path_files() { touch PREFIXCHECK; [[ "$PREFIX" == \'src/*a\\\\b*\' ]] || touch MARK; _optique_native_files "$@"; }',
               input: `extapp --format ${typed}`,
-              backend: fileCompletionBackend.replace(
-                'pattern="${2#@}"',
-                'pattern="src/*${2#@}*"',
-              ).replace(":file:txt:", ":file::"),
+              backend: fileCompletionBackend
+                .replace('pattern="${2#@}"', 'pattern="src/*${2#@}*"')
+                .replace(":file:txt:", ":file::"),
               captureBuffer: true,
               expectedArgs: ["--format", "@a\\b"],
               afterCompletion: "[[ -f PREFIXCHECK ]] || touch MARK",
@@ -3715,42 +3782,42 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
       );
     }
 
-    for (
-      const [typed, setup] of [["@x\\(b", ""], [
-        "@x\\(b\\)",
-        "setopt globcomplete",
-      ]]
-    ) {
-      it(`should keep transformed Zsh parentheses literal ${typed}`, {
-        skip: !isInteractiveZshCompletionAvailable(),
-        timeout: ZSH_PTY_TEST_TIMEOUT,
-      }, (t) => {
-        if (!isInteractiveZshCompletionAvailable()) {
-          t.skip("interactive zsh completion not available");
-          return;
-        }
-        const output = testInteractiveZshCompletion(
-          zsh.generateScript("extapp"),
-          "",
-          [{ path: "x(b)" }],
-          {
-            setup,
-            input: `extapp --format ${typed}`,
-            backend: fileCompletionBackend.replace(":file:txt:", ":file::"),
-            captureBuffer: true,
-          },
-        );
-        deepStrictEqual(output, "extapp --format x\\(b\\) ");
-      });
+    for (const [typed, setup] of [
+      ["@x\\(b", ""],
+      ["@x\\(b\\)", "setopt globcomplete"],
+    ]) {
+      it(
+        `should keep transformed Zsh parentheses literal ${typed}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
+        },
+        (t) => {
+          if (!isInteractiveZshCompletionAvailable()) {
+            t.skip("interactive zsh completion not available");
+            return;
+          }
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [{ path: "x(b)" }],
+            {
+              setup,
+              input: `extapp --format ${typed}`,
+              backend: fileCompletionBackend.replace(":file:txt:", ":file::"),
+              captureBuffer: true,
+            },
+          );
+          deepStrictEqual(output, "extapp --format x\\(b\\) ");
+        },
+      );
     }
 
-    for (
-      const [prefix, suffix, setup] of [
-        ["src/", "", ""],
-        ["src/*", "", "setopt globcomplete extendedglob"],
-        ["src/", "*", "setopt globcomplete extendedglob"],
-      ]
-    ) {
+    for (const [prefix, suffix, setup] of [
+      ["src/", "", ""],
+      ["src/*", "", "setopt globcomplete extendedglob"],
+      ["src/", "*", "setopt globcomplete extendedglob"],
+    ]) {
       it(
         `should separate literal Zsh text from backend pattern ${prefix}${suffix}`,
         {
@@ -3765,17 +3832,16 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
           const output = testInteractiveZshCompletion(
             zsh.generateScript("extapp"),
             "",
-            [
-              { path: "src", type: "directory" },
-              { path: "src/x(b)" },
-            ],
+            [{ path: "src", type: "directory" }, { path: "src/x(b)" }],
             {
               setup,
               input: "extapp --format @x\\(b",
-              backend: fileCompletionBackend.replace(
-                'pattern="${2#@}"',
-                `pattern="${prefix}\${2#@}${suffix}"`,
-              ).replace(":file:txt:", ":file::"),
+              backend: fileCompletionBackend
+                .replace(
+                  'pattern="${2#@}"',
+                  `pattern="${prefix}\${2#@}${suffix}"`,
+                )
+                .replace(":file:txt:", ":file::"),
               captureBuffer: true,
             },
           );
@@ -3784,51 +3850,13 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
       );
     }
 
-    it("should keep a typed Zsh qualifier literal inside a backend path", {
-      skip: !isInteractiveZshCompletionAvailable(),
-      timeout: ZSH_PTY_TEST_TIMEOUT,
-    }, (t) => {
-      if (!isInteractiveZshCompletionAvailable()) {
-        t.skip("interactive zsh completion not available");
-        return;
-      }
-      const output = testInteractiveZshCompletion(
-        zsh.generateScript("extapp"),
-        "",
-        [
-          { path: "src", type: "directory" },
-          { path: "src/a(e!touch MARK!)", type: "directory" },
-          { path: "src/a(e!touch MARK!)/file" },
-        ],
-        {
-          setup: "setopt globcomplete extendedglob",
-          input: "extapp --format @a\\(e\\!touch\\ MARK\\!\\)",
-          backend: fileCompletionBackend.replace(
-            'pattern="${2#@}"',
-            'pattern="src/${2#@}/file"',
-          ).replace(":file:txt:", ":file::"),
-          captureBuffer: true,
-          absentFiles: ["MARK"],
-        },
-      );
-      deepStrictEqual(
-        output,
-        "extapp --format src/a\\(e\\!touch\\ MARK\\!\\)/file ",
-      );
-    });
-
-    for (
-      const [typed, filename, completed] of [
-        ["@a\\#", "a#b", "a\\#b "],
-        ["@a\\|", "a|b", "a\\|b "],
-        ["@a\\^", "a^b", "a\\^b "],
-        ["@k\\[1\\]", "k[1]", "k\\[1\\] "],
-      ]
-    ) {
-      it(`should keep transformed Zsh glob character literal ${typed}`, {
+    it(
+      "should keep a typed Zsh qualifier literal inside a backend path",
+      {
         skip: !isInteractiveZshCompletionAvailable(),
         timeout: ZSH_PTY_TEST_TIMEOUT,
-      }, (t) => {
+      },
+      (t) => {
         if (!isInteractiveZshCompletionAvailable()) {
           t.skip("interactive zsh completion not available");
           return;
@@ -3836,72 +3864,110 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
         const output = testInteractiveZshCompletion(
           zsh.generateScript("extapp"),
           "",
-          [{ path: filename }, { path: "a" }],
-          {
-            setup: "setopt globcomplete",
-            input: `extapp --format ${typed}`,
-            backend: fileCompletionBackend.replace(":file:txt:", ":file::"),
-            captureBuffer: true,
-          },
-        );
-        deepStrictEqual(output, `extapp --format ${completed}`);
-      });
-    }
-
-    for (
-      const [typed, filename, completed] of [
-        ["@\\#a", "#abc", "\\#abc "],
-        ["@\\[a", "[abc", "\\[abc "],
-        ["@\\(a", "(abc", "\\(abc "],
-      ]
-    ) {
-      it(`should quote leading Zsh literal text after a wildcard ${typed}`, {
-        skip: !isInteractiveZshCompletionAvailable(),
-        timeout: ZSH_PTY_TEST_TIMEOUT,
-      }, (t) => {
-        if (!isInteractiveZshCompletionAvailable()) {
-          t.skip("interactive zsh completion not available");
-          return;
-        }
-        const output = testInteractiveZshCompletion(
-          zsh.generateScript("extapp"),
-          "",
-          [{ path: "src", type: "directory" }, { path: `src/${filename}` }],
+          [
+            { path: "src", type: "directory" },
+            { path: "src/a(e!touch MARK!)", type: "directory" },
+            { path: "src/a(e!touch MARK!)/file" },
+          ],
           {
             setup: "setopt globcomplete extendedglob",
-            input: `extapp --format ${typed}`,
-            backend: fileCompletionBackend.replace(
-              'pattern="${2#@}"',
-              'pattern="src/*${2#@}"',
-            ).replace(":file:txt:", ":file::"),
+            input: "extapp --format @a\\(e\\!touch\\ MARK\\!\\)",
+            backend: fileCompletionBackend
+              .replace('pattern="${2#@}"', 'pattern="src/${2#@}/file"')
+              .replace(":file:txt:", ":file::"),
             captureBuffer: true,
+            absentFiles: ["MARK"],
           },
         );
-        deepStrictEqual(output, `extapp --format src/${completed}`);
-      });
+        deepStrictEqual(
+          output,
+          "extapp --format src/a\\(e\\!touch\\ MARK\\!\\)/file ",
+        );
+      },
+    );
+
+    for (const [typed, filename, completed] of [
+      ["@a\\#", "a#b", "a\\#b "],
+      ["@a\\|", "a|b", "a\\|b "],
+      ["@a\\^", "a^b", "a\\^b "],
+      ["@k\\[1\\]", "k[1]", "k\\[1\\] "],
+    ]) {
+      it(
+        `should keep transformed Zsh glob character literal ${typed}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
+        },
+        (t) => {
+          if (!isInteractiveZshCompletionAvailable()) {
+            t.skip("interactive zsh completion not available");
+            return;
+          }
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [{ path: filename }, { path: "a" }],
+            {
+              setup: "setopt globcomplete",
+              input: `extapp --format ${typed}`,
+              backend: fileCompletionBackend.replace(":file:txt:", ":file::"),
+              captureBuffer: true,
+            },
+          );
+          deepStrictEqual(output, `extapp --format ${completed}`);
+        },
+      );
     }
 
-    for (
-      const [typed, filename, completed] of [
-        ["@\\$x", "a$x", "a\\$x "],
-        ["@\\`x\\`", "a`x`", "a\\`x\\` "],
-        ["@\\`touch\\ MARK\\`", "a`touch MARK`", "a\\`touch\\ MARK\\` "],
-        [
-          "@\\$(touch\\ MARK)",
-          "a$(touch MARK)",
-          "a\\$\\(touch\\ MARK\\) ",
-        ],
-        [
-          "@a\\(e\\!touch\\ MARK\\!\\)",
-          "za(e!touch MARK!)b",
-          "za\\(e\\!touch\\ MARK\\!\\)b ",
-        ],
-        ["@\\#", "a#b", "a\\#b "],
-        ["@\\[", "a[b", "a\\[b "],
-        ["@\\?", "a?b", "a\\?b "],
-        ["@\\*", "a*b", "a\\*b "],
-      ]
-    ) {
+    for (const [typed, filename, completed] of [
+      ["@\\#a", "#abc", "\\#abc "],
+      ["@\\[a", "[abc", "\\[abc "],
+      ["@\\(a", "(abc", "\\(abc "],
+    ]) {
+      it(
+        `should quote leading Zsh literal text after a wildcard ${typed}`,
+        {
+          skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
+        },
+        (t) => {
+          if (!isInteractiveZshCompletionAvailable()) {
+            t.skip("interactive zsh completion not available");
+            return;
+          }
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [{ path: "src", type: "directory" }, { path: `src/${filename}` }],
+            {
+              setup: "setopt globcomplete extendedglob",
+              input: `extapp --format ${typed}`,
+              backend: fileCompletionBackend
+                .replace('pattern="${2#@}"', 'pattern="src/*${2#@}"')
+                .replace(":file:txt:", ":file::"),
+              captureBuffer: true,
+            },
+          );
+          deepStrictEqual(output, `extapp --format src/${completed}`);
+        },
+      );
+    }
+
+    for (const [typed, filename, completed] of [
+      ["@\\$x", "a$x", "a\\$x "],
+      ["@\\`x\\`", "a`x`", "a\\`x\\` "],
+      ["@\\`touch\\ MARK\\`", "a`touch MARK`", "a\\`touch\\ MARK\\` "],
+      ["@\\$(touch\\ MARK)", "a$(touch MARK)", "a\\$\\(touch\\ MARK\\) "],
+      [
+        "@a\\(e\\!touch\\ MARK\\!\\)",
+        "za(e!touch MARK!)b",
+        "za\\(e\\!touch\\ MARK\\!\\)b ",
+      ],
+      ["@\\#", "a#b", "a\\#b "],
+      ["@\\[", "a[b", "a\\[b "],
+      ["@\\?", "a?b", "a\\?b "],
+      ["@\\*", "a*b", "a\\*b "],
+    ]) {
       it(
         `should preserve backend wildcards around literal Zsh input ${typed}`,
         {
@@ -3920,10 +3986,9 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
             {
               setup: "setopt globcomplete extendedglob",
               input: `extapp --format ${typed}`,
-              backend: fileCompletionBackend.replace(
-                'pattern="${2#@}"',
-                'pattern="src/*${2#@}*"',
-              ).replace(":file:txt:", ":file::"),
+              backend: fileCompletionBackend
+                .replace('pattern="${2#@}"', 'pattern="src/*${2#@}*"')
+                .replace(":file:txt:", ":file::"),
               captureBuffer: true,
               absentFiles: ["MARK"],
             },
@@ -3933,30 +3998,28 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
       );
     }
 
-    for (
-      const [typed, pattern, filename, completed, setup] of [
-        ["", "src/*$x", "a$x", "a\\$x", "setopt globcomplete"],
-        ["@unrelated", "src/*$x", "a$x", "a\\$x", "setopt globcomplete"],
-        ["@x", "src/*$x", "a$x", "a\\$x", "setopt globcomplete"],
-        ["", "src/*$x", "a$x", "a\\$x", ""],
-        ["", "src/[ab]*$x", "ab$x", "ab\\$x", "setopt globcomplete"],
-        ["", "src/*.(txt|md)$x", "a.txt$x", "a.txt\\$x", "setopt globcomplete"],
-        [
-          "",
-          "src/*`touch MARK`",
-          "a`touch MARK`",
-          "a\\`touch\\ MARK\\`",
-          "setopt globcomplete",
-        ],
-        [
-          "",
-          "src/*$x(m+1)",
-          "a$x",
-          "a\\$x",
-          "setopt globcomplete; touch -t 202001010000 work/src/a\\$x",
-        ],
-      ]
-    ) {
+    for (const [typed, pattern, filename, completed, setup] of [
+      ["", "src/*$x", "a$x", "a\\$x", "setopt globcomplete"],
+      ["@unrelated", "src/*$x", "a$x", "a\\$x", "setopt globcomplete"],
+      ["@x", "src/*$x", "a$x", "a\\$x", "setopt globcomplete"],
+      ["", "src/*$x", "a$x", "a\\$x", ""],
+      ["", "src/[ab]*$x", "ab$x", "ab\\$x", "setopt globcomplete"],
+      ["", "src/*.(txt|md)$x", "a.txt$x", "a.txt\\$x", "setopt globcomplete"],
+      [
+        "",
+        "src/*`touch MARK`",
+        "a`touch MARK`",
+        "a\\`touch\\ MARK\\`",
+        "setopt globcomplete",
+      ],
+      [
+        "",
+        "src/*$x(m+1)",
+        "a$x",
+        "a\\$x",
+        "setopt globcomplete; touch -t 202001010000 work/src/a\\$x",
+      ],
+    ]) {
       it(
         `should preserve fixed Zsh globs without retained input ${typed}/${pattern}/${setup}`,
         {
@@ -3985,105 +4048,92 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
       );
     }
 
-    it("should quote a retained closing Zsh parenthesis between wildcards", {
-      skip: !isInteractiveZshCompletionAvailable(),
-      timeout: ZSH_PTY_TEST_TIMEOUT,
-    }, () => {
-      if (!isInteractiveZshCompletionAvailable()) return;
-      const output = testInteractiveZshCompletion(
-        zsh.generateScript("extapp"),
-        "",
-        [
-          { path: "src", type: "directory" },
-          { path: "src/xa)b" },
-        ],
-        {
-          input: "extapp --format @a\\)",
-          backend: "printf '__FILE__:file::src/*a)*:0\\0\\0\\n'",
-          captureBuffer: true,
-        },
-      );
-      deepStrictEqual(output, "extapp --format src/xa\\)b ");
-    });
-
-    it("should combine negated Zsh attributes with the regular-file filter", {
-      skip: !isInteractiveZshCompletionAvailable(),
-      timeout: ZSH_PTY_TEST_TIMEOUT,
-    }, () => {
-      if (!isInteractiveZshCompletionAvailable()) return;
-      const output = testInteractiveZshCompletion(
-        zsh.generateScript("extapp"),
-        "",
-        [
-          { path: "src", type: "directory" },
-          { path: "src/fresh.txt" },
-          { path: "src/stale.txt" },
-          { path: "src/pipe", type: "fifo" },
-        ],
-        {
-          setup:
-            "setopt globcomplete; touch -t 202001010000 work/src/stale.txt",
-          input: "extapp --format ",
-          backend: "printf '__FILE__:file::src/*(^m+1):0\\0\\0\\n'",
-          captureBuffer: true,
-        },
-      );
-      deepStrictEqual(output, "extapp --format src/fresh.txt ");
-    });
-
-    it("should preserve backend Zsh qualifiers around literal dollar input", {
-      skip: !isInteractiveZshCompletionAvailable(),
-      timeout: ZSH_PTY_TEST_TIMEOUT,
-    }, (t) => {
-      if (!isInteractiveZshCompletionAvailable()) {
-        t.skip("interactive zsh completion not available");
-        return;
-      }
-      const output = testInteractiveZshCompletion(
-        zsh.generateScript("extapp"),
-        "",
-        [{ path: "src", type: "directory" }, { path: "src/a$x" }],
-        {
-          setup: "setopt globcomplete; touch -t 202001010000 work/src/a\\$x",
-          input: "extapp --format @\\$x",
-          backend: fileCompletionBackend.replace(
-            'pattern="${2#@}"',
-            'pattern="src/*${2#@}*(m+1)"',
-          ).replace(":file:txt:", ":file::"),
-          captureBuffer: true,
-        },
-      );
-      deepStrictEqual(output, "extapp --format src/a\\$x ");
-    });
-
-    it("should preserve safe Zsh qualifiers with EXTENDED_GLOB unset", {
-      skip: !isInteractiveZshCompletionAvailable(),
-      timeout: ZSH_PTY_TEST_TIMEOUT,
-    }, (t) => {
-      if (!isInteractiveZshCompletionAvailable()) {
-        t.skip("interactive zsh completion not available");
-        return;
-      }
-      const output = testInteractiveZshCompletion(
-        zsh.generateScript("extapp"),
-        "",
-        [{ path: "file.txt" }],
-        {
-          setup:
-            "setopt globcomplete; unsetopt extendedglob; touch -t 202001010000 work/file.txt",
-          input: "extapp --format ",
-          backend: "printf '__FILE__:file::*(m+1):0\\0\\0\\n'",
-          captureBuffer: true,
-        },
-      );
-      deepStrictEqual(output, "extapp --format file.txt ");
-    });
-
-    for (const pattern of ["*.txt", "*.(txt|md)", "~+/", "*(-.)", "*(m+1)"]) {
-      it(`should preserve fixed Zsh pattern ${pattern}`, {
+    it(
+      "should quote a retained closing Zsh parenthesis between wildcards",
+      {
         skip: !isInteractiveZshCompletionAvailable(),
         timeout: ZSH_PTY_TEST_TIMEOUT,
-      }, (t) => {
+      },
+      () => {
+        if (!isInteractiveZshCompletionAvailable()) return;
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          "",
+          [{ path: "src", type: "directory" }, { path: "src/xa)b" }],
+          {
+            input: "extapp --format @a\\)",
+            backend: "printf '__FILE__:file::src/*a)*:0\\0\\0\\n'",
+            captureBuffer: true,
+          },
+        );
+        deepStrictEqual(output, "extapp --format src/xa\\)b ");
+      },
+    );
+
+    it(
+      "should combine negated Zsh attributes with the regular-file filter",
+      {
+        skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
+      },
+      () => {
+        if (!isInteractiveZshCompletionAvailable()) return;
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          "",
+          [
+            { path: "src", type: "directory" },
+            { path: "src/fresh.txt" },
+            { path: "src/stale.txt" },
+            { path: "src/pipe", type: "fifo" },
+          ],
+          {
+            setup:
+              "setopt globcomplete; touch -t 202001010000 work/src/stale.txt",
+            input: "extapp --format ",
+            backend: "printf '__FILE__:file::src/*(^m+1):0\\0\\0\\n'",
+            captureBuffer: true,
+          },
+        );
+        deepStrictEqual(output, "extapp --format src/fresh.txt ");
+      },
+    );
+
+    it(
+      "should preserve backend Zsh qualifiers around literal dollar input",
+      {
+        skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
+      },
+      (t) => {
+        if (!isInteractiveZshCompletionAvailable()) {
+          t.skip("interactive zsh completion not available");
+          return;
+        }
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          "",
+          [{ path: "src", type: "directory" }, { path: "src/a$x" }],
+          {
+            setup: "setopt globcomplete; touch -t 202001010000 work/src/a\\$x",
+            input: "extapp --format @\\$x",
+            backend: fileCompletionBackend
+              .replace('pattern="${2#@}"', 'pattern="src/*${2#@}*(m+1)"')
+              .replace(":file:txt:", ":file::"),
+            captureBuffer: true,
+          },
+        );
+        deepStrictEqual(output, "extapp --format src/a\\$x ");
+      },
+    );
+
+    it(
+      "should preserve safe Zsh qualifiers with EXTENDED_GLOB unset",
+      {
+        skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
+      },
+      (t) => {
         if (!isInteractiveZshCompletionAvailable()) {
           t.skip("interactive zsh completion not available");
           return;
@@ -4094,41 +4144,74 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
           [{ path: "file.txt" }],
           {
             setup:
-              "setopt globcomplete extendedglob; touch -t 202001010000 work/file.txt",
+              "setopt globcomplete; unsetopt extendedglob; touch -t 202001010000 work/file.txt",
             input: "extapp --format ",
-            backend: `printf '__FILE__:file::${pattern}:0\\0\\0\\n'`,
+            backend: "printf '__FILE__:file::*(m+1):0\\0\\0\\n'",
             captureBuffer: true,
           },
         );
-        deepStrictEqual(
-          output,
-          `extapp --format ${pattern === "~+/" ? "~+/" : ""}file.txt `,
-        );
-      });
-    }
+        deepStrictEqual(output, "extapp --format file.txt ");
+      },
+    );
 
-    it("should preserve a fixed Zsh qualifier with partial input overlap", {
-      skip: !isInteractiveZshCompletionAvailable(),
-      timeout: ZSH_PTY_TEST_TIMEOUT,
-    }, (t) => {
-      if (!isInteractiveZshCompletionAvailable()) {
-        t.skip("interactive zsh completion not available");
-        return;
-      }
-      const output = testInteractiveZshCompletion(
-        zsh.generateScript("extapp"),
-        "",
-        [{ path: "src", type: "directory" }, { path: "src/file.txt" }],
+    for (const pattern of ["*.txt", "*.(txt|md)", "~+/", "*(-.)", "*(m+1)"]) {
+      it(
+        `should preserve fixed Zsh pattern ${pattern}`,
         {
-          setup:
-            "setopt globcomplete extendedglob; touch -t 202001010000 work/src/file.txt",
-          input: "extapp --format x\\(m",
-          backend: "printf '__FILE__:file::src/*(m+1):0\\0\\0\\n'",
-          captureBuffer: true,
+          skip: !isInteractiveZshCompletionAvailable(),
+          timeout: ZSH_PTY_TEST_TIMEOUT,
+        },
+        (t) => {
+          if (!isInteractiveZshCompletionAvailable()) {
+            t.skip("interactive zsh completion not available");
+            return;
+          }
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript("extapp"),
+            "",
+            [{ path: "file.txt" }],
+            {
+              setup:
+                "setopt globcomplete extendedglob; touch -t 202001010000 work/file.txt",
+              input: "extapp --format ",
+              backend: `printf '__FILE__:file::${pattern}:0\\0\\0\\n'`,
+              captureBuffer: true,
+            },
+          );
+          deepStrictEqual(
+            output,
+            `extapp --format ${pattern === "~+/" ? "~+/" : ""}file.txt `,
+          );
         },
       );
-      deepStrictEqual(output, "extapp --format src/file.txt ");
-    });
+    }
+
+    it(
+      "should preserve a fixed Zsh qualifier with partial input overlap",
+      {
+        skip: !isInteractiveZshCompletionAvailable(),
+        timeout: ZSH_PTY_TEST_TIMEOUT,
+      },
+      (t) => {
+        if (!isInteractiveZshCompletionAvailable()) {
+          t.skip("interactive zsh completion not available");
+          return;
+        }
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          "",
+          [{ path: "src", type: "directory" }, { path: "src/file.txt" }],
+          {
+            setup:
+              "setopt globcomplete extendedglob; touch -t 202001010000 work/src/file.txt",
+            input: "extapp --format x\\(m",
+            backend: "printf '__FILE__:file::src/*(m+1):0\\0\\0\\n'",
+            captureBuffer: true,
+          },
+        );
+        deepStrictEqual(output, "extapp --format src/file.txt ");
+      },
+    );
 
     it(
       "should quote Zsh literal text between backend wildcards and a qualifier",
@@ -4149,10 +4232,9 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
             setup:
               "setopt globcomplete extendedglob; touch -t 202001010000 work/src/x\\(m-file.txt",
             input: "extapp --format @x\\(m",
-            backend: fileCompletionBackend.replace(
-              'pattern="${2#@}"',
-              'pattern="src/*${2#@}*(m+1)"',
-            ).replace(":file:txt:", ":file::"),
+            backend: fileCompletionBackend
+              .replace('pattern="${2#@}"', 'pattern="src/*${2#@}*(m+1)"')
+              .replace(":file:txt:", ":file::"),
             captureBuffer: true,
           },
         );
@@ -4174,10 +4256,7 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
         true,
       );
       ok(script.includes('local current="$IPREFIX$PREFIX$SUFFIX$ISUFFIX"'));
-      deepStrictEqual(
-        script.includes("_describe 'commands' matches"),
-        true,
-      );
+      deepStrictEqual(script.includes("_describe 'commands' matches"), true);
       deepStrictEqual(script.includes("compdef _myapp myapp"), true);
     });
 
@@ -4194,455 +4273,444 @@ printf '__FILE__:file:txt:%s:0\\0\\0\\n' "$pattern"`;
       ok(script.includes("compdef _myapp myapp"));
     });
 
-    for (
-      const testCase of [
+    for (const testCase of [
+      {
+        name: "directory-only relative glob",
+        type: "directory" as const,
+        pattern: "tmp/foo*",
+        files: [
+          { path: "tmp/foobar", type: "directory" as const },
+          { path: "tmp/other", type: "directory" as const },
+          { path: "tmp/foofile" },
+        ],
+        expected: "extapp --file tmp/foobar/",
+      },
+      {
+        name: "directory-only root glob",
+        type: "directory" as const,
+        pattern: "foo?",
+        files: [
+          { path: "foo1", type: "directory" as const },
+          { path: "other", type: "directory" as const },
+          { path: "foo2" },
+        ],
+        expected: "extapp --file foo1/",
+      },
+      {
+        name: "directory-only unmatched glob",
+        type: "directory" as const,
+        pattern: "tmp/foo*",
+        files: [
+          { path: "tmp/other", type: "directory" as const },
+          { path: "tmp/foofile" },
+        ],
+        expected: "extapp --file ",
+      },
+      {
+        name: "directory-only glob ignores file extensions",
+        type: "directory" as const,
+        pattern: "tmp/foo*",
+        extensions: [".txt"],
+        files: [
+          { path: "tmp/foobar", type: "directory" as const },
+          { path: "tmp/other", type: "directory" as const },
+        ],
+        expected: "extapp --file tmp/foobar/",
+      },
+      {
+        name: "directory-only directories-tag ignored pattern",
+        type: "directory" as const,
+        pattern: "foo*",
+        files: [
+          { path: "foobar", type: "directory" as const },
+          { path: "foobaz", type: "directory" as const },
+          { path: "other", type: "directory" as const },
+        ],
+        setup: "zstyle ':completion:*:directories' ignored-patterns 'foobaz'",
+        expected: "extapp --file foobar/",
+      },
+      {
+        name: "directory-only glob in a directory with spaces",
+        type: "directory" as const,
+        pattern: "my docs/foo*",
+        files: [
+          { path: "my docs/foobar", type: "directory" as const },
+          { path: "my docs/other", type: "directory" as const },
+        ],
+        expected: "extapp --file my\\ docs/foobar/",
+      },
+      {
+        name: "any entry directory glob",
+        type: "any" as const,
+        pattern: "tmp/fixtures/*.txt",
+        files: [
+          { path: "tmp/fixtures", type: "directory" as const },
+          { path: "tmp/fixtures/a.txt" },
+          { path: "tmp/fixtures/b.json" },
+        ],
+        expected: "extapp --file tmp/fixtures/a.txt ",
+      },
+      {
+        name: "any entry with a punctuated program name",
+        programName: "audit-cli",
+        type: "any" as const,
+        pattern: "tmp/fixtures/*.txt",
+        input: "audit-cli --file ",
+        setup: 'audit-cli() { extapp "$@"; }',
+        files: [
+          { path: "tmp/fixtures", type: "directory" as const },
+          { path: "tmp/fixtures/a.txt" },
+          { path: "tmp/fixtures/b.json" },
+        ],
+        expected: "audit-cli --file tmp/fixtures/a.txt ",
+      },
+      {
+        name: "any entry FIFO glob",
+        type: "any" as const,
+        pattern: "*.txt",
+        files: [{ path: "a.txt", type: "fifo" as const }, { path: "b.json" }],
+        expected: "extapp --file a.txt ",
+      },
+      {
+        name: "any entry FIFO glob with extensions",
+        type: "any" as const,
+        pattern: "*",
+        extensions: [".txt"],
+        files: [{ path: "a.txt", type: "fifo" as const }, { path: "b.json" }],
+        expected: "extapp --file a.txt ",
+      },
+      {
+        name: "any entry disjoint glob and extensions",
+        type: "any" as const,
+        pattern: "*.json",
+        extensions: [".txt"],
+        files: [{ path: "a.txt" }, { path: "b.json" }],
+        expected: "extapp --file ",
+      },
+      {
+        name: "any entry directory navigation",
+        type: "any" as const,
+        pattern: "*.txt",
+        files: [
+          { path: "b.json" },
+          { path: "sub", type: "directory" as const },
+        ],
+        expected: "extapp --file sub/",
+      },
+      {
+        name: "directory glob",
+        pattern: "tmp/fixtures/*.txt",
+        files: [
+          { path: "tmp/fixtures", type: "directory" as const },
+          { path: "tmp/fixtures/a.txt" },
+          { path: "tmp/fixtures/b.json" },
+          { path: "tmp/fixtures/sub", type: "directory" as const },
+        ],
+        expected: "extapp --file tmp/fixtures/",
+      },
+      {
+        name: "directory navigation without matching files",
+        pattern: "tmp/fixtures/*.txt",
+        files: [
+          { path: "tmp/fixtures", type: "directory" as const },
+          { path: "tmp/fixtures/b.json" },
+          { path: "tmp/fixtures/sub", type: "directory" as const },
+        ],
+        expected: "extapp --file tmp/fixtures/sub/",
+      },
+      {
+        name: "directory navigation with disjoint extensions",
+        pattern: "tmp/fixtures/*.json",
+        extensions: [".txt"],
+        files: [
+          { path: "tmp/fixtures", type: "directory" as const },
+          { path: "tmp/fixtures/a.txt" },
+          { path: "tmp/fixtures/b.json" },
+          { path: "tmp/fixtures/sub", type: "directory" as const },
+        ],
+        expected: "extapp --file tmp/fixtures/sub/",
+      },
+      {
+        name: "root directory navigation",
+        pattern: "*.txt",
+        files: [
+          { path: "b.json" },
+          { path: "sub", type: "directory" as const },
+        ],
+        expected: "extapp --file sub/",
+      },
+      {
+        name: "directories-tag ignored pattern",
+        pattern: "*.txt",
+        files: [{ path: "a.txt" }, { path: "sub", type: "directory" as const }],
+        setup: "zstyle ':completion:*:directories' ignored-patterns 'sub'",
+        expected: "extapp --file a.txt ",
+      },
+      {
+        name: "root glob",
+        pattern: "*.txt",
+        files: [{ path: "a.txt" }, { path: "b.json" }],
+        expected: "extapp --file a.txt ",
+      },
+      {
+        name: "unmatched glob",
+        pattern: "*.txt",
+        files: [{ path: "b.json" }],
+        expected: "extapp --file ",
+      },
+      {
+        name: "glob with extensions",
+        pattern: "tmp/fixtures/*",
+        extensions: [".txt"],
+        files: [
+          { path: "tmp/fixtures", type: "directory" as const },
+          { path: "tmp/fixtures/a.txt" },
+          { path: "tmp/fixtures/b.json" },
+        ],
+        expected: "extapp --file tmp/fixtures/a.txt ",
+      },
+      {
+        name: "disjoint glob and extensions",
+        pattern: "*.json",
+        extensions: [".txt"],
+        files: [{ path: "a.txt" }, { path: "b.json" }],
+        expected: "extapp --file ",
+      },
+      {
+        name: "multiple extensions",
+        pattern: "*",
+        extensions: [".txt", ".md"],
+        files: [{ path: "a.txt" }, { path: "b.json" }],
+        expected: "extapp --file a.txt ",
+      },
+      {
+        name: "globcomplete enabled",
+        pattern: "tmp/fixtures/*.txt",
+        setup: "setopt glob_complete",
+        files: [
+          { path: "tmp/fixtures", type: "directory" as const },
+          { path: "tmp/fixtures/a.txt" },
+          { path: "tmp/fixtures/b.json" },
+        ],
+        expected: "extapp --file tmp/fixtures/a.txt ",
+      },
+      {
+        name: "typed matching prefix",
+        pattern: "tmp/fixtures/*.txt",
+        input: "extapp --file tmp/fixtures/a",
+        files: [
+          { path: "tmp/fixtures", type: "directory" as const },
+          { path: "tmp/fixtures/a.txt" },
+          { path: "tmp/fixtures/b.json" },
+        ],
+        expected: "extapp --file tmp/fixtures/a.txt ",
+      },
+      {
+        name: "multiple matches",
+        pattern: "tmp/fixtures/*.txt",
+        files: [
+          { path: "tmp/fixtures", type: "directory" as const },
+          { path: "tmp/fixtures/a.txt" },
+          { path: "tmp/fixtures/c.txt" },
+          { path: "tmp/fixtures/b.json" },
+        ],
+        expected: "extapp --file tmp/fixtures/",
+      },
+      {
+        name: "directory with spaces",
+        pattern: "my docs/*.txt",
+        files: [
+          { path: "my docs", type: "directory" as const },
+          { path: "my docs/a.txt" },
+        ],
+        expected: "extapp --file my\\ docs/a.txt ",
+      },
+      {
+        name: "directory with a glob operator",
+        pattern: "C#/*.txt",
+        files: [
+          { path: "C#", type: "directory" as const },
+          { path: "C#/a.txt" },
+        ],
+        expected: "extapp --file C\\#/a.txt ",
+      },
+      {
+        name: "directory with a quote",
+        pattern: "it's/*.txt",
+        files: [
+          { path: "it's", type: "directory" as const },
+          { path: "it's/a.txt" },
+        ],
+        expected: "extapp --file it\\'s/a.txt ",
+      },
+      {
+        name: "dot relative directory",
+        pattern: "./tmp/fixtures/*.txt",
+        files: [
+          { path: "tmp/fixtures", type: "directory" as const },
+          { path: "tmp/fixtures/a.txt" },
+        ],
+        expected: "extapp --file ./tmp/fixtures/a.txt ",
+      },
+      {
+        name: "files-tag ignored pattern",
+        pattern: "*.txt",
+        files: [{ path: "a.txt" }, { path: "b.json" }],
+        setup: "zstyle ':completion:*:files' ignored-patterns 'a.txt'",
+        expected: "extapp --file ",
+      },
+      {
+        name: "excluded filename brackets (file)",
+        type: "file" as const,
+        pattern: "foo[1]*.txt",
+        files: [{ path: "foo[1]-a.txt" }, { path: "foo1-b.txt" }],
+        expected: "extapp --file ",
+      },
+      {
+        name: "excluded filename backslash (file)",
+        type: "file" as const,
+        pattern: "foo\\name*.txt",
+        files: [{ path: "foo\\name-a.txt" }, { path: "fooname-b.txt" }],
+        expected: "extapp --file ",
+      },
+      {
+        name: "excluded filename brackets (any)",
+        type: "any" as const,
+        pattern: "foo[1]*.txt",
+        files: [{ path: "foo[1]-a.txt" }, { path: "foo1-b.txt" }],
+        expected: "extapp --file ",
+      },
+      {
+        name: "excluded filename backslash (any)",
+        type: "any" as const,
+        pattern: "foo\\name*.txt",
+        files: [{ path: "foo\\name-a.txt" }, { path: "fooname-b.txt" }],
+        expected: "extapp --file ",
+      },
+      {
+        name: "excluded filename brackets (directory)",
+        type: "directory" as const,
+        pattern: "foo[1]*.txt",
+        files: [
+          { path: "foo[1]-a.txt", type: "directory" as const },
+          { path: "foo1-b.txt", type: "directory" as const },
+        ],
+        expected: "extapp --file ",
+      },
+      {
+        name: "excluded filename backslash (directory)",
+        type: "directory" as const,
+        pattern: "foo\\name*.txt",
+        files: [
+          { path: "foo\\name-a.txt", type: "directory" as const },
+          { path: "fooname-b.txt", type: "directory" as const },
+        ],
+        expected: "extapp --file ",
+      },
+      {
+        name: "excluded filename glob operator",
+        pattern: "report(1)*.txt",
+        files: [{ path: "report1b.txt" }],
+        expected: "extapp --file ",
+      },
+      {
+        name: "excluded filename token separator",
+        pattern: "a;*.txt",
+        files: [{ path: "zzz.txt" }],
+        expected: "extapp --file ",
+      },
+      {
+        name: "excluded filename whitespace",
+        pattern: "my *.txt",
+        files: [{ path: "my a.txt" }, { path: "other.txt" }],
+        expected: "extapp --file ",
+      },
+      {
+        name: "excluded directory wildcard",
+        pattern: "tmp/fix*/*.txt",
+        files: [
+          { path: "tmp/fixtures", type: "directory" as const },
+          { path: "tmp/fixtures/a.txt" },
+        ],
+        expected: "extapp --file ",
+      },
+      {
+        name: "bracket directory globcomplete",
+        pattern: "tmp/[ab]/*.txt",
+        setup: "setopt glob_complete",
+        files: [
+          { path: "tmp/a", type: "directory" as const },
+          { path: "tmp/a/foo.txt" },
+        ],
+        expected: "extapp --file tmp/a/foo.txt ",
+      },
+      {
+        name: "grouped directory globcomplete",
+        pattern: "tmp/(a|b)/*.txt",
+        setup: "setopt glob_complete",
+        files: [
+          { path: "tmp/a", type: "directory" as const },
+          { path: "tmp/a/foo.txt" },
+        ],
+        expected: "extapp --file tmp/a/foo.txt ",
+      },
+      {
+        name: "no pattern",
+        files: [{ path: "a.txt" }],
+        expected: "extapp --file a.txt ",
+      },
+    ]) {
+      it(
+        `should complete initial zsh file values: ${testCase.name}`,
         {
-          name: "directory-only relative glob",
-          type: "directory" as const,
-          pattern: "tmp/foo*",
-          files: [
-            { path: "tmp/foobar", type: "directory" as const },
-            { path: "tmp/other", type: "directory" as const },
-            { path: "tmp/foofile" },
-          ],
-          expected: "extapp --file tmp/foobar/",
+          skip:
+            !isInteractiveZshCompletionAvailable() ||
+            (testCase.files.some(
+              (file) => "type" in file && file.type === "fifo",
+            ) &&
+              !isShellAvailable("mkfifo")),
+          timeout: 10000,
         },
-        {
-          name: "directory-only root glob",
-          type: "directory" as const,
-          pattern: "foo?",
-          files: [
-            { path: "foo1", type: "directory" as const },
-            { path: "other", type: "directory" as const },
-            { path: "foo2" },
-          ],
-          expected: "extapp --file foo1/",
-        },
-        {
-          name: "directory-only unmatched glob",
-          type: "directory" as const,
-          pattern: "tmp/foo*",
-          files: [
-            { path: "tmp/other", type: "directory" as const },
-            { path: "tmp/foofile" },
-          ],
-          expected: "extapp --file ",
-        },
-        {
-          name: "directory-only glob ignores file extensions",
-          type: "directory" as const,
-          pattern: "tmp/foo*",
-          extensions: [".txt"],
-          files: [
-            { path: "tmp/foobar", type: "directory" as const },
-            { path: "tmp/other", type: "directory" as const },
-          ],
-          expected: "extapp --file tmp/foobar/",
-        },
-        {
-          name: "directory-only directories-tag ignored pattern",
-          type: "directory" as const,
-          pattern: "foo*",
-          files: [
-            { path: "foobar", type: "directory" as const },
-            { path: "foobaz", type: "directory" as const },
-            { path: "other", type: "directory" as const },
-          ],
-          setup: "zstyle ':completion:*:directories' ignored-patterns 'foobaz'",
-          expected: "extapp --file foobar/",
-        },
-        {
-          name: "directory-only glob in a directory with spaces",
-          type: "directory" as const,
-          pattern: "my docs/foo*",
-          files: [
-            { path: "my docs/foobar", type: "directory" as const },
-            { path: "my docs/other", type: "directory" as const },
-          ],
-          expected: "extapp --file my\\ docs/foobar/",
-        },
-        {
-          name: "any entry directory glob",
-          type: "any" as const,
-          pattern: "tmp/fixtures/*.txt",
-          files: [
-            { path: "tmp/fixtures", type: "directory" as const },
-            { path: "tmp/fixtures/a.txt" },
-            { path: "tmp/fixtures/b.json" },
-          ],
-          expected: "extapp --file tmp/fixtures/a.txt ",
-        },
-        {
-          name: "any entry with a punctuated program name",
-          programName: "audit-cli",
-          type: "any" as const,
-          pattern: "tmp/fixtures/*.txt",
-          input: "audit-cli --file ",
-          setup: 'audit-cli() { extapp "$@"; }',
-          files: [
-            { path: "tmp/fixtures", type: "directory" as const },
-            { path: "tmp/fixtures/a.txt" },
-            { path: "tmp/fixtures/b.json" },
-          ],
-          expected: "audit-cli --file tmp/fixtures/a.txt ",
-        },
-        {
-          name: "any entry FIFO glob",
-          type: "any" as const,
-          pattern: "*.txt",
-          files: [
-            { path: "a.txt", type: "fifo" as const },
-            { path: "b.json" },
-          ],
-          expected: "extapp --file a.txt ",
-        },
-        {
-          name: "any entry FIFO glob with extensions",
-          type: "any" as const,
-          pattern: "*",
-          extensions: [".txt"],
-          files: [
-            { path: "a.txt", type: "fifo" as const },
-            { path: "b.json" },
-          ],
-          expected: "extapp --file a.txt ",
-        },
-        {
-          name: "any entry disjoint glob and extensions",
-          type: "any" as const,
-          pattern: "*.json",
-          extensions: [".txt"],
-          files: [{ path: "a.txt" }, { path: "b.json" }],
-          expected: "extapp --file ",
-        },
-        {
-          name: "any entry directory navigation",
-          type: "any" as const,
-          pattern: "*.txt",
-          files: [
-            { path: "b.json" },
-            { path: "sub", type: "directory" as const },
-          ],
-          expected: "extapp --file sub/",
-        },
-        {
-          name: "directory glob",
-          pattern: "tmp/fixtures/*.txt",
-          files: [
-            { path: "tmp/fixtures", type: "directory" as const },
-            { path: "tmp/fixtures/a.txt" },
-            { path: "tmp/fixtures/b.json" },
-            { path: "tmp/fixtures/sub", type: "directory" as const },
-          ],
-          expected: "extapp --file tmp/fixtures/",
-        },
-        {
-          name: "directory navigation without matching files",
-          pattern: "tmp/fixtures/*.txt",
-          files: [
-            { path: "tmp/fixtures", type: "directory" as const },
-            { path: "tmp/fixtures/b.json" },
-            { path: "tmp/fixtures/sub", type: "directory" as const },
-          ],
-          expected: "extapp --file tmp/fixtures/sub/",
-        },
-        {
-          name: "directory navigation with disjoint extensions",
-          pattern: "tmp/fixtures/*.json",
-          extensions: [".txt"],
-          files: [
-            { path: "tmp/fixtures", type: "directory" as const },
-            { path: "tmp/fixtures/a.txt" },
-            { path: "tmp/fixtures/b.json" },
-            { path: "tmp/fixtures/sub", type: "directory" as const },
-          ],
-          expected: "extapp --file tmp/fixtures/sub/",
-        },
-        {
-          name: "root directory navigation",
-          pattern: "*.txt",
-          files: [
-            { path: "b.json" },
-            { path: "sub", type: "directory" as const },
-          ],
-          expected: "extapp --file sub/",
-        },
-        {
-          name: "directories-tag ignored pattern",
-          pattern: "*.txt",
-          files: [
-            { path: "a.txt" },
-            { path: "sub", type: "directory" as const },
-          ],
-          setup: "zstyle ':completion:*:directories' ignored-patterns 'sub'",
-          expected: "extapp --file a.txt ",
-        },
-        {
-          name: "root glob",
-          pattern: "*.txt",
-          files: [{ path: "a.txt" }, { path: "b.json" }],
-          expected: "extapp --file a.txt ",
-        },
-        {
-          name: "unmatched glob",
-          pattern: "*.txt",
-          files: [{ path: "b.json" }],
-          expected: "extapp --file ",
-        },
-        {
-          name: "glob with extensions",
-          pattern: "tmp/fixtures/*",
-          extensions: [".txt"],
-          files: [
-            { path: "tmp/fixtures", type: "directory" as const },
-            { path: "tmp/fixtures/a.txt" },
-            { path: "tmp/fixtures/b.json" },
-          ],
-          expected: "extapp --file tmp/fixtures/a.txt ",
-        },
-        {
-          name: "disjoint glob and extensions",
-          pattern: "*.json",
-          extensions: [".txt"],
-          files: [{ path: "a.txt" }, { path: "b.json" }],
-          expected: "extapp --file ",
-        },
-        {
-          name: "multiple extensions",
-          pattern: "*",
-          extensions: [".txt", ".md"],
-          files: [{ path: "a.txt" }, { path: "b.json" }],
-          expected: "extapp --file a.txt ",
-        },
-        {
-          name: "globcomplete enabled",
-          pattern: "tmp/fixtures/*.txt",
-          setup: "setopt glob_complete",
-          files: [
-            { path: "tmp/fixtures", type: "directory" as const },
-            { path: "tmp/fixtures/a.txt" },
-            { path: "tmp/fixtures/b.json" },
-          ],
-          expected: "extapp --file tmp/fixtures/a.txt ",
-        },
-        {
-          name: "typed matching prefix",
-          pattern: "tmp/fixtures/*.txt",
-          input: "extapp --file tmp/fixtures/a",
-          files: [
-            { path: "tmp/fixtures", type: "directory" as const },
-            { path: "tmp/fixtures/a.txt" },
-            { path: "tmp/fixtures/b.json" },
-          ],
-          expected: "extapp --file tmp/fixtures/a.txt ",
-        },
-        {
-          name: "multiple matches",
-          pattern: "tmp/fixtures/*.txt",
-          files: [
-            { path: "tmp/fixtures", type: "directory" as const },
-            { path: "tmp/fixtures/a.txt" },
-            { path: "tmp/fixtures/c.txt" },
-            { path: "tmp/fixtures/b.json" },
-          ],
-          expected: "extapp --file tmp/fixtures/",
-        },
-        {
-          name: "directory with spaces",
-          pattern: "my docs/*.txt",
-          files: [
-            { path: "my docs", type: "directory" as const },
-            { path: "my docs/a.txt" },
-          ],
-          expected: "extapp --file my\\ docs/a.txt ",
-        },
-        {
-          name: "directory with a glob operator",
-          pattern: "C#/*.txt",
-          files: [
-            { path: "C#", type: "directory" as const },
-            { path: "C#/a.txt" },
-          ],
-          expected: "extapp --file C\\#/a.txt ",
-        },
-        {
-          name: "directory with a quote",
-          pattern: "it's/*.txt",
-          files: [
-            { path: "it's", type: "directory" as const },
-            { path: "it's/a.txt" },
-          ],
-          expected: "extapp --file it\\'s/a.txt ",
-        },
-        {
-          name: "dot relative directory",
-          pattern: "./tmp/fixtures/*.txt",
-          files: [
-            { path: "tmp/fixtures", type: "directory" as const },
-            { path: "tmp/fixtures/a.txt" },
-          ],
-          expected: "extapp --file ./tmp/fixtures/a.txt ",
-        },
-        {
-          name: "files-tag ignored pattern",
-          pattern: "*.txt",
-          files: [{ path: "a.txt" }, { path: "b.json" }],
-          setup: "zstyle ':completion:*:files' ignored-patterns 'a.txt'",
-          expected: "extapp --file ",
-        },
-        {
-          name: "excluded filename brackets (file)",
-          type: "file" as const,
-          pattern: "foo[1]*.txt",
-          files: [
-            { path: "foo[1]-a.txt" },
-            { path: "foo1-b.txt" },
-          ],
-          expected: "extapp --file ",
-        },
-        {
-          name: "excluded filename backslash (file)",
-          type: "file" as const,
-          pattern: "foo\\name*.txt",
-          files: [
-            { path: "foo\\name-a.txt" },
-            { path: "fooname-b.txt" },
-          ],
-          expected: "extapp --file ",
-        },
-        {
-          name: "excluded filename brackets (any)",
-          type: "any" as const,
-          pattern: "foo[1]*.txt",
-          files: [
-            { path: "foo[1]-a.txt" },
-            { path: "foo1-b.txt" },
-          ],
-          expected: "extapp --file ",
-        },
-        {
-          name: "excluded filename backslash (any)",
-          type: "any" as const,
-          pattern: "foo\\name*.txt",
-          files: [
-            { path: "foo\\name-a.txt" },
-            { path: "fooname-b.txt" },
-          ],
-          expected: "extapp --file ",
-        },
-        {
-          name: "excluded filename brackets (directory)",
-          type: "directory" as const,
-          pattern: "foo[1]*.txt",
-          files: [
-            { path: "foo[1]-a.txt", type: "directory" as const },
-            { path: "foo1-b.txt", type: "directory" as const },
-          ],
-          expected: "extapp --file ",
-        },
-        {
-          name: "excluded filename backslash (directory)",
-          type: "directory" as const,
-          pattern: "foo\\name*.txt",
-          files: [
-            { path: "foo\\name-a.txt", type: "directory" as const },
-            { path: "fooname-b.txt", type: "directory" as const },
-          ],
-          expected: "extapp --file ",
-        },
-        {
-          name: "excluded filename glob operator",
-          pattern: "report(1)*.txt",
-          files: [{ path: "report1b.txt" }],
-          expected: "extapp --file ",
-        },
-        {
-          name: "excluded filename token separator",
-          pattern: "a;*.txt",
-          files: [{ path: "zzz.txt" }],
-          expected: "extapp --file ",
-        },
-        {
-          name: "excluded filename whitespace",
-          pattern: "my *.txt",
-          files: [{ path: "my a.txt" }, { path: "other.txt" }],
-          expected: "extapp --file ",
-        },
-        {
-          name: "excluded directory wildcard",
-          pattern: "tmp/fix*/*.txt",
-          files: [
-            { path: "tmp/fixtures", type: "directory" as const },
-            { path: "tmp/fixtures/a.txt" },
-          ],
-          expected: "extapp --file ",
-        },
-        {
-          name: "bracket directory globcomplete",
-          pattern: "tmp/[ab]/*.txt",
-          setup: "setopt glob_complete",
-          files: [
-            { path: "tmp/a", type: "directory" as const },
-            { path: "tmp/a/foo.txt" },
-          ],
-          expected: "extapp --file tmp/a/foo.txt ",
-        },
-        {
-          name: "grouped directory globcomplete",
-          pattern: "tmp/(a|b)/*.txt",
-          setup: "setopt glob_complete",
-          files: [
-            { path: "tmp/a", type: "directory" as const },
-            { path: "tmp/a/foo.txt" },
-          ],
-          expected: "extapp --file tmp/a/foo.txt ",
-        },
-        {
-          name: "no pattern",
-          files: [{ path: "a.txt" }],
-          expected: "extapp --file a.txt ",
-        },
-      ]
-    ) {
-      it(`should complete initial zsh file values: ${testCase.name}`, {
-        skip: !isInteractiveZshCompletionAvailable() ||
-          (testCase.files.some((file) =>
-            "type" in file && file.type === "fifo"
-          ) &&
-            !isShellAvailable("mkfifo")),
-        timeout: 10000,
-      }, () => {
-        if (!isInteractiveZshCompletionAvailable()) return;
-        if (
-          testCase.files.some((file) =>
-            "type" in file && file.type === "fifo"
-          ) &&
-          !isShellAvailable("mkfifo")
-        ) return;
-        const directive = Array.from(zsh.encodeSuggestions([{
-          kind: "file",
-          type: testCase.type ?? "file",
-          pattern: testCase.pattern,
-          extensions: testCase.extensions,
-        }]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
-        const output = testInteractiveZshCompletion(
-          zsh.generateScript(testCase.programName ?? "extapp"),
-          directive,
-          testCase.files,
-          {
-            input: testCase.input ?? "extapp --file ",
-            captureBuffer: true,
-            setup: `unsetopt glob_complete
+        () => {
+          if (!isInteractiveZshCompletionAvailable()) return;
+          if (
+            testCase.files.some(
+              (file) => "type" in file && file.type === "fifo",
+            ) &&
+            !isShellAvailable("mkfifo")
+          )
+            return;
+          const directive = Array.from(
+            zsh.encodeSuggestions([
+              {
+                kind: "file",
+                type: testCase.type ?? "file",
+                pattern: testCase.pattern,
+                extensions: testCase.extensions,
+              },
+            ]),
+          )[0]
+            .replaceAll("\\", "\\\\")
+            .replaceAll("\0", "\\0");
+          const output = testInteractiveZshCompletion(
+            zsh.generateScript(testCase.programName ?? "extapp"),
+            directive,
+            testCase.files,
+            {
+              input: testCase.input ?? "extapp --file ",
+              captureBuffer: true,
+              setup: `unsetopt glob_complete
 zstyle ':completion:*' completer _complete
 ${testCase.setup ?? ""}`,
-          },
-        );
-        ok(
-          !output.includes("b.json"),
-          `Nonmatching JSON file should not appear, got:\n${output}`,
-        );
-        deepStrictEqual(output, testCase.expected);
-      });
+            },
+          );
+          ok(
+            !output.includes("b.json"),
+            `Nonmatching JSON file should not appear, got:\n${output}`,
+          );
+          deepStrictEqual(output, testCase.expected);
+        },
+      );
     }
 
     it("should build #q-qualified extension globs in zsh", () => {
@@ -4673,9 +4741,7 @@ ${testCase.setup ?? ""}`,
           '_path_files -g "${file_pattern}" "${expl[@]}" "${file_ignore_args[@]}"',
         ),
       );
-      ok(
-        anyCaseBlock.includes('local file_pattern="${ext_pattern}(#q^-/)"'),
-      );
+      ok(anyCaseBlock.includes('local file_pattern="${ext_pattern}(#q^-/)"'));
       ok(
         anyCaseBlock.includes(
           '_wanted files expl file _path_files -g "${file_pattern}"',
@@ -4684,37 +4750,39 @@ ${testCase.setup ?? ""}`,
       ok(!script.includes('_path_files -g "${ext_pattern}(-.)"'));
     });
 
-    it(
-      "should not forward stale expl arguments between zsh completion tags",
-      (t) => {
-        if (!isShellAvailable("zsh")) {
-          t.skip("zsh not available");
-          return;
-        }
+    it("should not forward stale expl arguments between zsh completion tags", (t) => {
+      if (!isShellAvailable("zsh")) {
+        t.skip("zsh not available");
+        return;
+      }
 
-        const tempDir = mkdtempSync(join(tmpdir(), "zsh-wanted-expl-"));
+      const tempDir = mkdtempSync(join(tmpdir(), "zsh-wanted-expl-"));
 
-        try {
-          const directive = Array.from(zsh.encodeSuggestions([
+      try {
+        const directive = Array.from(
+          zsh.encodeSuggestions([
             {
               kind: "file",
               type: "file",
               extensions: [".json"],
               includeHidden: false,
             },
-          ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+          ]),
+        )[0]
+          .replaceAll("\\", "\\\\")
+          .replaceAll("\0", "\\0");
 
-          const cliPath = join(tempDir, "extapp");
-          writeFileSync(
-            cliPath,
-            `#!/bin/bash
+        const cliPath = join(tempDir, "extapp");
+        writeFileSync(
+          cliPath,
+          `#!/bin/bash
 printf '${directive}'
 `,
-            { mode: 0o755 },
-          );
+          { mode: 0o755 },
+        );
 
-          const script = zsh.generateScript("extapp");
-          const testScript = `
+        const script = zsh.generateScript("extapp");
+        const testScript = `
 export PATH="${tempDir}:$PATH"
 autoload -U compinit && compinit -D 2>/dev/null
 
@@ -4752,46 +4820,46 @@ CURRENT=2
 _extapp 2>/dev/null
 `;
 
-          const output = runCommand("zsh", ["-c", testScript], {
-            cwd: tempDir,
-          });
-          const calls = output.trim().split("\n").filter((line) =>
-            line.length > 0
-          );
-          const fileCall = calls.find((line) => line.startsWith("files:"));
-          const directoryCall = calls.find((line) =>
-            line.startsWith("directories:")
-          );
+        const output = runCommand("zsh", ["-c", testScript], {
+          cwd: tempDir,
+        });
+        const calls = output
+          .trim()
+          .split("\n")
+          .filter((line) => line.length > 0);
+        const fileCall = calls.find((line) => line.startsWith("files:"));
+        const directoryCall = calls.find((line) =>
+          line.startsWith("directories:"),
+        );
 
-          ok(
-            fileCall?.includes("_path_files -g *.json(#q-.)"),
-            `Expected files completion call to include filtered _path_files args, got: ${
-              JSON.stringify(calls)
-            }`,
-          );
-          ok(
-            directoryCall?.includes("_path_files -/"),
-            `Expected directories completion call to include directory navigation args, got: ${
-              JSON.stringify(calls)
-            }`,
-          );
-          ok(
-            directoryCall?.startsWith("directories:3:"),
-            `directories completion call should receive only its own tag arguments, got: ${
-              JSON.stringify(calls)
-            }`,
-          );
-          ok(
-            !directoryCall?.includes("--tag files"),
-            `directories completion call should not inherit the files tag's expl array, got: ${
-              JSON.stringify(calls)
-            }`,
-          );
-        } finally {
-          rmSync(tempDir, { recursive: true, force: true });
-        }
-      },
-    );
+        ok(
+          fileCall?.includes("_path_files -g *.json(#q-.)"),
+          `Expected files completion call to include filtered _path_files args, got: ${JSON.stringify(
+            calls,
+          )}`,
+        );
+        ok(
+          directoryCall?.includes("_path_files -/"),
+          `Expected directories completion call to include directory navigation args, got: ${JSON.stringify(
+            calls,
+          )}`,
+        );
+        ok(
+          directoryCall?.startsWith("directories:3:"),
+          `directories completion call should receive only its own tag arguments, got: ${JSON.stringify(
+            calls,
+          )}`,
+        );
+        ok(
+          !directoryCall?.includes("--tag files"),
+          `directories completion call should not inherit the files tag's expl array, got: ${JSON.stringify(
+            calls,
+          )}`,
+        );
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
 
     it("should disable sh_glob around native file completion", () => {
       const script = zsh.generateScript("myapp");
@@ -4812,19 +4880,21 @@ _extapp 2>/dev/null
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "zsh-ext-dot-filter-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "zsh-ext-dot-filter-"));
 
       try {
-        const directive = Array.from(zsh.encodeSuggestions([
-          {
-            kind: "file",
-            type: "file",
-            extensions: [".json", ".yaml"],
-            includeHidden: false,
-          },
-        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+        const directive = Array.from(
+          zsh.encodeSuggestions([
+            {
+              kind: "file",
+              type: "file",
+              extensions: [".json", ".yaml"],
+              includeHidden: false,
+            },
+          ]),
+        )[0]
+          .replaceAll("\\", "\\\\")
+          .replaceAll("\0", "\\0");
 
         // Emit the encoded zsh transport so the test exercises both
         // dot-prefix normalization and the native file completion branch.
@@ -4941,67 +5011,72 @@ _extapp 2>/dev/null
         const result = runCommand("zsh", ["-c", testScript], {
           cwd: tempDir,
         });
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
 
         ok(
           completions.some((c) => c.includes("data.json")),
-          `Expected data.json in completions, got: ${
-            JSON.stringify(completions)
-          }`,
+          `Expected data.json in completions, got: ${JSON.stringify(
+            completions,
+          )}`,
         );
         ok(
           completions.some((c) => c.includes("config.yaml")),
-          `Expected config.yaml in completions, got: ${
-            JSON.stringify(completions)
-          }`,
+          `Expected config.yaml in completions, got: ${JSON.stringify(
+            completions,
+          )}`,
         );
         ok(
           !completions.some((c) => c.includes("readme.txt")),
-          `Should not include readme.txt in completions, got: ${
-            JSON.stringify(completions)
-          }`,
+          `Should not include readme.txt in completions, got: ${JSON.stringify(
+            completions,
+          )}`,
         );
         ok(
           completions.some((c) => c.includes("subdir/")),
-          `Expected subdir/ in completions for navigation, got: ${
-            JSON.stringify(completions)
-          }`,
+          `Expected subdir/ in completions for navigation, got: ${JSON.stringify(
+            completions,
+          )}`,
         );
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }
     });
 
-    it("should work with actual zsh shell", {
-      timeout: 10000,
-    }, (t) => {
-      if (!isShellAvailable("zsh")) {
-        t.skip("zsh not available");
-        return;
-      }
+    it(
+      "should work with actual zsh shell",
+      {
+        timeout: 10000,
+      },
+      (t) => {
+        if (!isShellAvailable("zsh")) {
+          t.skip("zsh not available");
+          return;
+        }
 
-      const tempDir = mkdtempSync(join(tmpdir(), "zsh-completion-"));
+        const tempDir = mkdtempSync(join(tmpdir(), "zsh-completion-"));
 
-      try {
-        const cliPath = createTestCli(tempDir);
-        const programName = "test-cli";
-        const script = zsh.generateScript(programName, ["completion", "zsh"]);
+        try {
+          const cliPath = createTestCli(tempDir);
+          const programName = "test-cli";
+          const script = zsh.generateScript(programName, ["completion", "zsh"]);
 
-        const result = testZshCompletion(
-          script,
-          programName,
-          dirname(cliPath),
-        );
+          const result = testZshCompletion(
+            script,
+            programName,
+            dirname(cliPath),
+          );
 
-        // For zsh, we verify that the completion function can be loaded
-        // and executed without errors
-        deepStrictEqual(result.includes("success"), true);
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
+          // For zsh, we verify that the completion function can be loaded
+          // and executed without errors
+          deepStrictEqual(result.includes("success"), true);
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      },
+    );
 
     it("should not fail when sourced before compinit in zsh", (t) => {
       if (!isShellAvailable("zsh")) {
@@ -5017,11 +5092,10 @@ _extapp 2>/dev/null
         const scriptPath = join(tempDir, "completion.zsh");
         writeFileSync(scriptPath, zsh.generateScript("myapp"));
 
-        runCommand(
-          "zsh",
-          ["-fc", 'source "$1"', "zsh", scriptPath],
-          { cwd: tempDir, stdio: "ignore" },
-        );
+        runCommand("zsh", ["-fc", 'source "$1"', "zsh", scriptPath], {
+          cwd: tempDir,
+          stdio: "ignore",
+        });
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }
@@ -5123,22 +5197,19 @@ _extapp 2>/dev/null
       },
     ];
 
-    for (
-      const style of [
-        { name: "default", setup: "" },
-        {
-          name: "ungrouped",
-          setup: "zstyle ':completion:*' list-grouped no",
-        },
-        {
-          name: "nonverbose",
-          setup: "zstyle ':completion:*' verbose no",
-        },
-      ]
-    ) {
-      const cases = style.name === "default"
-        ? literalCases
-        : literalCases.slice(0, 4);
+    for (const style of [
+      { name: "default", setup: "" },
+      {
+        name: "ungrouped",
+        setup: "zstyle ':completion:*' list-grouped no",
+      },
+      {
+        name: "nonverbose",
+        setup: "zstyle ':completion:*' verbose no",
+      },
+    ]) {
+      const cases =
+        style.name === "default" ? literalCases : literalCases.slice(0, 4);
       for (const scenario of cases) {
         it(
           `should insert literal ${scenario.name} in actual zsh (${style.name})`,
@@ -5151,13 +5222,20 @@ _extapp 2>/dev/null
               t.skip("interactive zsh completion not available");
               return;
             }
-            const payload = Array.from(zsh.encodeSuggestions([{
-              kind: "literal",
-              text: scenario.value,
-              description: scenario.description == null
-                ? undefined
-                : [text(scenario.description)],
-            }])).map((record) => `${record}\n`).join("");
+            const payload = Array.from(
+              zsh.encodeSuggestions([
+                {
+                  kind: "literal",
+                  text: scenario.value,
+                  description:
+                    scenario.description == null
+                      ? undefined
+                      : [text(scenario.description)],
+                },
+              ]),
+            )
+              .map((record) => `${record}\n`)
+              .join("");
             const buffer = testInteractiveZshCompletion(
               zsh.generateScript("extapp"),
               "",
@@ -5185,19 +5263,23 @@ _extapp 2>/dev/null
             t.skip("interactive zsh completion not available");
             return;
           }
-          const payload = Array.from(zsh.encodeSuggestions([
-            { kind: "literal", text: "foo:bar" },
-            {
-              kind: "literal",
-              text: "foo:baz",
-              description: message`real description`,
-            },
-            {
-              kind: "literal",
-              text: "foo:bat",
-              description: message`real description`,
-            },
-          ])).map((record) => `${record}\n`).join("");
+          const payload = Array.from(
+            zsh.encodeSuggestions([
+              { kind: "literal", text: "foo:bar" },
+              {
+                kind: "literal",
+                text: "foo:baz",
+                description: message`real description`,
+              },
+              {
+                kind: "literal",
+                text: "foo:bat",
+                description: message`real description`,
+              },
+            ]),
+          )
+            .map((record) => `${record}\n`)
+            .join("");
           const output = testInteractiveZshCompletion(
             zsh.generateScript("extapp"),
             "",
@@ -5219,60 +5301,63 @@ _extapp 2>/dev/null
 
     it("should keep colons and backslashes unchanged in zsh transport", () => {
       deepStrictEqual(
-        Array.from(zsh.encodeSuggestions([{
-          kind: "literal",
-          text: "foo\\:bar",
-          description: message`1: real description`,
-        }])),
+        Array.from(
+          zsh.encodeSuggestions([
+            {
+              kind: "literal",
+              text: "foo\\:bar",
+              description: message`1: real description`,
+            },
+          ]),
+        ),
         ["foo\\:bar\0" + "1: real description\0"],
       );
     });
 
-    for (
-      const scenario of [
-        { name: "default options", extensions: undefined, setup: "" },
-        {
-          name: "empty extensions and bareglobqual unset",
-          extensions: [],
-          setup: "unsetopt bareglobqual",
-        },
-        {
-          name: "file-patterns forcing all-files",
-          extensions: undefined,
-          setup: "zstyle ':completion:*' file-patterns '*:all-files'",
-        },
-        {
-          name: "fignore",
-          extensions: undefined,
-          setup: "fignore=(.o)",
-          ignoresObject: true,
-        },
-        {
-          name: "ignored-patterns overriding fignore",
-          extensions: undefined,
-          setup:
-            "fignore=(.o)\nzstyle ':completion:*:files' ignored-patterns '*.skip'",
-          ignoresStyle: true,
-        },
-        {
-          name: "described tag labels overriding fignore",
-          extensions: undefined,
-          setup:
-            "fignore=(.o)\nzstyle ':completion:*' ignored-patterns '*.skip'\nzstyle ':completion:*' tag-order '*:custom:custom'",
-          ignoresStyle: true,
-        },
-        {
-          name: "hidden files requested",
-          extensions: undefined,
-          setup: "",
-          includeHidden: true,
-        },
-      ]
-    ) {
+    for (const scenario of [
+      { name: "default options", extensions: undefined, setup: "" },
+      {
+        name: "empty extensions and bareglobqual unset",
+        extensions: [],
+        setup: "unsetopt bareglobqual",
+      },
+      {
+        name: "file-patterns forcing all-files",
+        extensions: undefined,
+        setup: "zstyle ':completion:*' file-patterns '*:all-files'",
+      },
+      {
+        name: "fignore",
+        extensions: undefined,
+        setup: "fignore=(.o)",
+        ignoresObject: true,
+      },
+      {
+        name: "ignored-patterns overriding fignore",
+        extensions: undefined,
+        setup:
+          "fignore=(.o)\nzstyle ':completion:*:files' ignored-patterns '*.skip'",
+        ignoresStyle: true,
+      },
+      {
+        name: "described tag labels overriding fignore",
+        extensions: undefined,
+        setup:
+          "fignore=(.o)\nzstyle ':completion:*' ignored-patterns '*.skip'\nzstyle ':completion:*' tag-order '*:custom:custom'",
+        ignoresStyle: true,
+      },
+      {
+        name: "hidden files requested",
+        extensions: undefined,
+        setup: "",
+        includeHidden: true,
+      },
+    ]) {
       it(
         `should restrict unfiltered file suggestions in actual zsh with ${scenario.name}`,
         {
-          skip: !isInteractiveZshCompletionAvailable() ||
+          skip:
+            !isInteractiveZshCompletionAvailable() ||
             !isShellAvailable("mkfifo"),
           timeout: 10000,
         },
@@ -5280,16 +5365,21 @@ _extapp 2>/dev/null
           if (
             !isInteractiveZshCompletionAvailable() ||
             !isShellAvailable("mkfifo")
-          ) return;
+          )
+            return;
 
-          const directive = Array.from(zsh.encodeSuggestions([
-            {
-              kind: "file",
-              type: "file",
-              extensions: scenario.extensions,
-              includeHidden: scenario.includeHidden ?? false,
-            },
-          ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+          const directive = Array.from(
+            zsh.encodeSuggestions([
+              {
+                kind: "file",
+                type: "file",
+                extensions: scenario.extensions,
+                includeHidden: scenario.includeHidden ?? false,
+              },
+            ]),
+          )[0]
+            .replaceAll("\\", "\\\\")
+            .replaceAll("\0", "\\0");
           const output = testInteractiveZshCompletion(
             zsh.generateScript("extapp"),
             directive,
@@ -5308,22 +5398,23 @@ _extapp 2>/dev/null
             ],
             { setup: scenario.setup },
           );
-          for (
-            const candidate of ["plain", "file-alias", "subdir/", "alias-dir"]
-          ) {
+          for (const candidate of [
+            "plain",
+            "file-alias",
+            "subdir/",
+            "alias-dir",
+          ]) {
             ok(
               output.includes(candidate),
               `Expected ${candidate}, got:\n${output}`,
             );
           }
-          for (
-            const candidate of [
-              "named-pipe",
-              "pipe-link",
-              "dangling",
-              ".hidden-pipe",
-            ]
-          ) {
+          for (const candidate of [
+            "named-pipe",
+            "pipe-link",
+            "dangling",
+            ".hidden-pipe",
+          ]) {
             ok(
               !output.includes(candidate),
               `Unexpected ${candidate}, got:\n${output}`,
@@ -5364,19 +5455,17 @@ _extapp 2>/dev/null
     }
 
     for (const type of ["file", "any", "directory"] as const) {
-      for (
-        const global of [
-          { setup: "unset expl", expected: ":unset" },
-          {
-            setup: "typeset -g expl=user-sentinel",
-            expected: "user-sentinel:scalar",
-          },
-          {
-            setup: "typeset -ga expl=(user-alpha user-beta)",
-            expected: "user-alpha,user-beta:array",
-          },
-        ]
-      ) {
+      for (const global of [
+        { setup: "unset expl", expected: ":unset" },
+        {
+          setup: "typeset -g expl=user-sentinel",
+          expected: "user-sentinel:scalar",
+        },
+        {
+          setup: "typeset -ga expl=(user-alpha user-beta)",
+          expected: "user-alpha,user-beta:array",
+        },
+      ]) {
         it(
           `should preserve globals in initial zsh native ${type} completion: ${global.expected}`,
           {
@@ -5385,19 +5474,24 @@ _extapp 2>/dev/null
           },
           () => {
             if (!isInteractiveZshCompletionAvailable()) return;
-            const directive = Array.from(zsh.encodeSuggestions([
-              { kind: "file", type, pattern: "*.txt" },
-            ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+            const directive = Array.from(
+              zsh.encodeSuggestions([{ kind: "file", type, pattern: "*.txt" }]),
+            )[0]
+              .replaceAll("\\", "\\\\")
+              .replaceAll("\0", "\\0");
             const output = testInteractiveZshCompletion(
               zsh.generateScript("extapp"),
               directive,
-              [{
-                path: "first.txt",
-                type: type === "directory" ? "directory" : "file",
-              }, {
-                path: "second.txt",
-                type: type === "directory" ? "directory" : "file",
-              }],
+              [
+                {
+                  path: "first.txt",
+                  type: type === "directory" ? "directory" : "file",
+                },
+                {
+                  path: "second.txt",
+                  type: type === "directory" ? "directory" : "file",
+                },
+              ],
               {
                 setup: global.setup,
                 afterCompletion:
@@ -5415,13 +5509,11 @@ _extapp 2>/dev/null
     }
 
     for (const type of ["file", "any"] as const) {
-      for (
-        const scenario of [
-          { first: "directories", second: "files", withDirectory: true },
-          { first: "directories", second: "files", withDirectory: false },
-          { first: "files", second: "directories", withDirectory: true },
-        ]
-      ) {
+      for (const scenario of [
+        { first: "directories", second: "files", withDirectory: true },
+        { first: "directories", second: "files", withDirectory: false },
+        { first: "files", second: "directories", withDirectory: true },
+      ]) {
         it(
           `should honor ordered tags in initial zsh native ${type} completion: ${scenario.first}, directories ${scenario.withDirectory}`,
           {
@@ -5430,9 +5522,13 @@ _extapp 2>/dev/null
           },
           () => {
             if (!isInteractiveZshCompletionAvailable()) return;
-            const directive = Array.from(zsh.encodeSuggestions([
-              { kind: "file", type, pattern: "*.txt", extensions: ["txt"] },
-            ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+            const directive = Array.from(
+              zsh.encodeSuggestions([
+                { kind: "file", type, pattern: "*.txt", extensions: ["txt"] },
+              ]),
+            )[0]
+              .replaceAll("\\", "\\\\")
+              .replaceAll("\0", "\\0");
             const output = testInteractiveZshCompletion(
               zsh.generateScript("extapp"),
               directive,
@@ -5443,8 +5539,7 @@ _extapp 2>/dev/null
                   : []),
               ],
               {
-                setup:
-                  `zstyle ':completion:*' tag-order '${scenario.first}' '${scenario.second}'`,
+                setup: `zstyle ':completion:*' tag-order '${scenario.first}' '${scenario.second}'`,
               },
             );
             if (scenario.first === "directories" && scenario.withDirectory) {
@@ -5466,9 +5561,13 @@ _extapp 2>/dev/null
           },
           () => {
             if (!isInteractiveZshCompletionAvailable()) return;
-            const directive = Array.from(zsh.encodeSuggestions([
-              { kind: "file", type, pattern: "*.txt", extensions },
-            ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+            const directive = Array.from(
+              zsh.encodeSuggestions([
+                { kind: "file", type, pattern: "*.txt", extensions },
+              ]),
+            )[0]
+              .replaceAll("\\", "\\\\")
+              .replaceAll("\0", "\\0");
             const output = testInteractiveZshCompletion(
               zsh.generateScript("extapp"),
               directive,
@@ -5487,52 +5586,51 @@ _extapp 2>/dev/null
       }
     }
 
-    for (
-      const scenario of [
-        {
-          name: "enabled",
-          pattern: "target*.txt",
-          recursive: "*",
-          expected: true,
-        },
-        {
-          name: "extension filter",
-          pattern: "target*",
-          extensions: ["txt"],
-          recursive: "*",
-          expected: true,
-        },
-        {
-          name: "disjoint extension filter",
-          pattern: "target*.json",
-          extensions: ["txt"],
-          recursive: "*",
-          expected: false,
-        },
-        {
-          name: "disabled",
-          pattern: "target*.txt",
-          recursive: "",
-          expected: false,
-        },
-        {
-          name: "ineligible directory",
-          pattern: "target*.txt",
-          recursive: "/not-current/",
-          expected: false,
-        },
-        {
-          name: "explicit directory",
-          pattern: "nested/target*.txt",
-          recursive: "*",
-          expected: true,
-        },
-      ]
-    ) {
+    for (const scenario of [
+      {
+        name: "enabled",
+        pattern: "target*.txt",
+        recursive: "*",
+        expected: true,
+      },
+      {
+        name: "extension filter",
+        pattern: "target*",
+        extensions: ["txt"],
+        recursive: "*",
+        expected: true,
+      },
+      {
+        name: "disjoint extension filter",
+        pattern: "target*.json",
+        extensions: ["txt"],
+        recursive: "*",
+        expected: false,
+      },
+      {
+        name: "disabled",
+        pattern: "target*.txt",
+        recursive: "",
+        expected: false,
+      },
+      {
+        name: "ineligible directory",
+        pattern: "target*.txt",
+        recursive: "/not-current/",
+        expected: false,
+      },
+      {
+        name: "explicit directory",
+        pattern: "nested/target*.txt",
+        recursive: "*",
+        expected: true,
+      },
+    ]) {
       it(
         `should preserve recursive-files in initial zsh native completion: ${scenario.name}`,
         {
-          skip: !isInteractiveZshCompletionAvailable() ||
+          skip:
+            !isInteractiveZshCompletionAvailable() ||
             !isShellAvailable("mkfifo"),
           timeout: 10000,
         },
@@ -5540,15 +5638,20 @@ _extapp 2>/dev/null
           if (
             !isInteractiveZshCompletionAvailable() ||
             !isShellAvailable("mkfifo")
-          ) return;
-          const directive = Array.from(zsh.encodeSuggestions([
-            {
-              kind: "file",
-              type: "file",
-              pattern: scenario.pattern,
-              extensions: scenario.extensions,
-            },
-          ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+          )
+            return;
+          const directive = Array.from(
+            zsh.encodeSuggestions([
+              {
+                kind: "file",
+                type: "file",
+                pattern: scenario.pattern,
+                extensions: scenario.extensions,
+              },
+            ]),
+          )[0]
+            .replaceAll("\\", "\\\\")
+            .replaceAll("\0", "\\0");
           const output = testInteractiveZshCompletion(
             zsh.generateScript("extapp"),
             directive,
@@ -5581,18 +5684,16 @@ _extapp 2>/dev/null
     }
 
     for (const extensions of [undefined, ["txt"]]) {
-      for (
-        const global of [
-          {
-            setup: "typeset -g expl=user-sentinel",
-            expected: "user-sentinel:scalar",
-          },
-          {
-            setup: "typeset -ga expl=(user-alpha user-beta)",
-            expected: "user-alpha,user-beta:array",
-          },
-        ]
-      ) {
+      for (const global of [
+        {
+          setup: "typeset -g expl=user-sentinel",
+          expected: "user-sentinel:scalar",
+        },
+        {
+          setup: "typeset -ga expl=(user-alpha user-beta)",
+          expected: "user-alpha,user-beta:array",
+        },
+      ]) {
         it(
           `should preserve global expl ${global.expected} in zsh with extensions ${extensions}`,
           {
@@ -5601,9 +5702,13 @@ _extapp 2>/dev/null
           },
           () => {
             if (!isInteractiveZshCompletionAvailable()) return;
-            const directive = Array.from(zsh.encodeSuggestions([
-              { kind: "file", type: "file", extensions },
-            ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+            const directive = Array.from(
+              zsh.encodeSuggestions([
+                { kind: "file", type: "file", extensions },
+              ]),
+            )[0]
+              .replaceAll("\\", "\\\\")
+              .replaceAll("\0", "\\0");
             const output = testInteractiveZshCompletion(
               zsh.generateScript("extapp"),
               directive,
@@ -5624,7 +5729,8 @@ _extapp 2>/dev/null
       it(
         `should list directories first for unfiltered zsh paths with extensions ${extensions}`,
         {
-          skip: !isInteractiveZshCompletionAvailable() ||
+          skip:
+            !isInteractiveZshCompletionAvailable() ||
             !isShellAvailable("mkfifo"),
           timeout: 10000,
         },
@@ -5632,17 +5738,24 @@ _extapp 2>/dev/null
           if (
             !isInteractiveZshCompletionAvailable() ||
             !isShellAvailable("mkfifo")
-          ) return;
-          const directive = Array.from(zsh.encodeSuggestions([
-            { kind: "file", type: "file", extensions },
-          ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+          )
+            return;
+          const directive = Array.from(
+            zsh.encodeSuggestions([{ kind: "file", type: "file", extensions }]),
+          )[0]
+            .replaceAll("\\", "\\\\")
+            .replaceAll("\0", "\\0");
           const output = testInteractiveZshCompletion(
             zsh.generateScript("extapp"),
             directive,
-            [{ path: "aaa.txt" }, { path: "zzz", type: "directory" }, {
-              path: "pipe",
-              type: "fifo",
-            }],
+            [
+              { path: "aaa.txt" },
+              { path: "zzz", type: "directory" },
+              {
+                path: "pipe",
+                type: "fifo",
+              },
+            ],
             {
               setup:
                 "zstyle ':completion:*' group-name ''; zstyle ':completion:*' list-dirs-first true",
@@ -5658,21 +5771,23 @@ _extapp 2>/dev/null
     }
 
     for (const extensions of [undefined, ["txt"]]) {
-      for (
-        const scenario of [
-          { first: "directories", second: "files", withDirectory: true },
-          { first: "directories", second: "files", withDirectory: false },
-          { first: "files", second: "directories", withDirectory: true },
-        ]
-      ) {
+      for (const scenario of [
+        { first: "directories", second: "files", withDirectory: true },
+        { first: "directories", second: "files", withDirectory: false },
+        { first: "files", second: "directories", withDirectory: true },
+      ]) {
         it(
           `should honor ordered zsh tag fallback with ${scenario.first} first, directories ${scenario.withDirectory}, extensions ${extensions}`,
           { skip: !isInteractiveZshCompletionAvailable(), timeout: 10000 },
           () => {
             if (!isInteractiveZshCompletionAvailable()) return;
-            const directive = Array.from(zsh.encodeSuggestions([
-              { kind: "file", type: "file", extensions },
-            ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+            const directive = Array.from(
+              zsh.encodeSuggestions([
+                { kind: "file", type: "file", extensions },
+              ]),
+            )[0]
+              .replaceAll("\\", "\\\\")
+              .replaceAll("\0", "\\0");
             const output = testInteractiveZshCompletion(
               zsh.generateScript("extapp"),
               directive,
@@ -5683,8 +5798,7 @@ _extapp 2>/dev/null
                   : []),
               ],
               {
-                setup:
-                  `zstyle ':completion:*' tag-order '${scenario.first}' '${scenario.second}'`,
+                setup: `zstyle ':completion:*' tag-order '${scenario.first}' '${scenario.second}'`,
               },
             );
             if (scenario.first === "directories" && scenario.withDirectory) {
@@ -5699,21 +5813,20 @@ _extapp 2>/dev/null
       }
     }
 
-    for (
-      const scenario of [
-        { name: "unfiltered", extensions: undefined, recursive: "*" },
-        { name: "empty extensions", extensions: [], recursive: "*" },
-        {
-          name: "ineligible current directory",
-          extensions: undefined,
-          recursive: "/not-the-current-directory/",
-        },
-      ]
-    ) {
+    for (const scenario of [
+      { name: "unfiltered", extensions: undefined, recursive: "*" },
+      { name: "empty extensions", extensions: [], recursive: "*" },
+      {
+        name: "ineligible current directory",
+        extensions: undefined,
+        recursive: "/not-the-current-directory/",
+      },
+    ]) {
       it(
         `should preserve recursive-files for ${scenario.name} zsh paths`,
         {
-          skip: !isInteractiveZshCompletionAvailable() ||
+          skip:
+            !isInteractiveZshCompletionAvailable() ||
             !isShellAvailable("mkfifo"),
           timeout: 10000,
         },
@@ -5721,10 +5834,15 @@ _extapp 2>/dev/null
           if (
             !isInteractiveZshCompletionAvailable() ||
             !isShellAvailable("mkfifo")
-          ) return;
-          const directive = Array.from(zsh.encodeSuggestions([
-            { kind: "file", type: "file", extensions: scenario.extensions },
-          ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+          )
+            return;
+          const directive = Array.from(
+            zsh.encodeSuggestions([
+              { kind: "file", type: "file", extensions: scenario.extensions },
+            ]),
+          )[0]
+            .replaceAll("\\", "\\\\")
+            .replaceAll("\0", "\\0");
           const output = testInteractiveZshCompletion(
             zsh.generateScript("extapp"),
             directive,
@@ -5745,8 +5863,7 @@ _extapp 2>/dev/null
             ],
             {
               currentWord: "target",
-              setup:
-                `zstyle ':completion:*:files' recursive-files '${scenario.recursive}'`,
+              setup: `zstyle ':completion:*:files' recursive-files '${scenario.recursive}'`,
             },
           );
           if (scenario.recursive === "*") {
@@ -5762,32 +5879,44 @@ _extapp 2>/dev/null
       );
     }
 
-    it("should retain FIFOs in unrestricted file suggestions in actual zsh", {
-      skip: !isInteractiveZshCompletionAvailable() ||
-        !isShellAvailable("mkfifo"),
-      timeout: 10000,
-    }, () => {
-      if (
-        !isInteractiveZshCompletionAvailable() || !isShellAvailable("mkfifo")
-      ) return;
-      const directive = Array.from(zsh.encodeSuggestions([
-        { kind: "file", type: "any" },
-      ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
-      const output = testInteractiveZshCompletion(
-        zsh.generateScript("extapp"),
-        directive,
-        [{ path: "plain" }, { path: "named-pipe", type: "fifo" }, {
-          path: "subdir",
-          type: "directory",
-        }],
-      );
-      for (const candidate of ["plain", "named-pipe", "subdir/"]) {
-        ok(
-          output.includes(candidate),
-          `Expected ${candidate}, got:\n${output}`,
+    it(
+      "should retain FIFOs in unrestricted file suggestions in actual zsh",
+      {
+        skip:
+          !isInteractiveZshCompletionAvailable() || !isShellAvailable("mkfifo"),
+        timeout: 10000,
+      },
+      () => {
+        if (
+          !isInteractiveZshCompletionAvailable() ||
+          !isShellAvailable("mkfifo")
+        )
+          return;
+        const directive = Array.from(
+          zsh.encodeSuggestions([{ kind: "file", type: "any" }]),
+        )[0]
+          .replaceAll("\\", "\\\\")
+          .replaceAll("\0", "\\0");
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          directive,
+          [
+            { path: "plain" },
+            { path: "named-pipe", type: "fifo" },
+            {
+              path: "subdir",
+              type: "directory",
+            },
+          ],
         );
-      }
-    });
+        for (const candidate of ["plain", "named-pipe", "subdir/"]) {
+          ok(
+            output.includes(candidate),
+            `Expected ${candidate}, got:\n${output}`,
+          );
+        }
+      },
+    );
 
     it(
       "should apply fignore only to unfiltered zsh file suggestions when enabled",
@@ -5799,34 +5928,34 @@ _extapp 2>/dev/null
         const tempDir = mkdtempSync(join(tmpdir(), "zsh-file-ignore-"));
         try {
           const cliPath = join(tempDir, "extapp");
-          for (
-            const scenario of [
-              { directive: "__FILE__:file:::0", noIgnore: "", expected: 1 },
-              {
-                directive: "__FILE__:file:::0",
-                noIgnore: "yes",
-                expected: 0,
-              },
-              {
-                directive: "__FILE__:file:txt::0",
-                noIgnore: "",
-                expected: 0,
-              },
-              {
-                directive: "__FILE__:file:::0\n__FILE__:file:txt::0",
-                noIgnore: "",
-                expected: 1,
-              },
-            ]
-          ) {
+          for (const scenario of [
+            { directive: "__FILE__:file:::0", noIgnore: "", expected: 1 },
+            {
+              directive: "__FILE__:file:::0",
+              noIgnore: "yes",
+              expected: 0,
+            },
+            {
+              directive: "__FILE__:file:txt::0",
+              noIgnore: "",
+              expected: 0,
+            },
+            {
+              directive: "__FILE__:file:::0\n__FILE__:file:txt::0",
+              noIgnore: "",
+              expected: 1,
+            },
+          ]) {
             writeFileSync(
               cliPath,
               `#!/bin/sh\nprintf '%s\\n' '${scenario.directive}'\n`,
               { mode: 0o755 },
             );
-            const output = runCommand("zsh", [
-              "-fc",
-              `
+            const output = runCommand(
+              "zsh",
+              [
+                "-fc",
+                `
 export PATH="${tempDir}:$PATH"
 autoload -U compinit && compinit -D
 fignore=(.o)
@@ -5859,11 +5988,13 @@ words=(extapp "")
 CURRENT=2
 _extapp
 `,
-            ], { cwd: tempDir });
+              ],
+              { cwd: tempDir },
+            );
             deepStrictEqual(
-              output.split("\n").filter((line) =>
-                line.includes("-F file_ignore")
-              ).length,
+              output
+                .split("\n")
+                .filter((line) => line.includes("-F file_ignore")).length,
               scenario.expected,
               output,
             );
@@ -5874,47 +6005,55 @@ _extapp
       },
     );
 
-    it("should complete single-extension file suggestions in actual zsh", {
-      skip: !isInteractiveZshCompletionAvailable(),
-      timeout: 10000,
-    }, (t) => {
-      if (!isInteractiveZshCompletionAvailable()) {
-        t.skip("interactive zsh completion not available");
-        return;
-      }
+    it(
+      "should complete single-extension file suggestions in actual zsh",
+      {
+        skip: !isInteractiveZshCompletionAvailable(),
+        timeout: 10000,
+      },
+      (t) => {
+        if (!isInteractiveZshCompletionAvailable()) {
+          t.skip("interactive zsh completion not available");
+          return;
+        }
 
-      const directive = Array.from(zsh.encodeSuggestions([
-        {
-          kind: "file",
-          type: "file",
-          extensions: [".json"],
-          includeHidden: false,
-        },
-      ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+        const directive = Array.from(
+          zsh.encodeSuggestions([
+            {
+              kind: "file",
+              type: "file",
+              extensions: [".json"],
+              includeHidden: false,
+            },
+          ]),
+        )[0]
+          .replaceAll("\\", "\\\\")
+          .replaceAll("\0", "\\0");
 
-      const output = testInteractiveZshCompletion(
-        zsh.generateScript("extapp"),
-        directive,
-        [
-          { path: "data.json" },
-          { path: "readme.txt" },
-          { path: "subdir", type: "directory" },
-        ],
-      );
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          directive,
+          [
+            { path: "data.json" },
+            { path: "readme.txt" },
+            { path: "subdir", type: "directory" },
+          ],
+        );
 
-      ok(
-        output.includes("data.json"),
-        `Expected data.json in actual zsh completions, got:\n${output}`,
-      );
-      ok(
-        output.includes("subdir/"),
-        `Expected subdir/ in actual zsh completions, got:\n${output}`,
-      );
-      ok(
-        !output.includes("readme.txt"),
-        `readme.txt should not appear in single-extension zsh completions, got:\n${output}`,
-      );
-    });
+        ok(
+          output.includes("data.json"),
+          `Expected data.json in actual zsh completions, got:\n${output}`,
+        );
+        ok(
+          output.includes("subdir/"),
+          `Expected subdir/ in actual zsh completions, got:\n${output}`,
+        );
+        ok(
+          !output.includes("readme.txt"),
+          `readme.txt should not appear in single-extension zsh completions, got:\n${output}`,
+        );
+      },
+    );
 
     it(
       "should preserve extension filtering while keeping directories in actual zsh",
@@ -5928,14 +6067,18 @@ _extapp
           return;
         }
 
-        const directive = Array.from(zsh.encodeSuggestions([
-          {
-            kind: "file",
-            type: "file",
-            extensions: [".json", ".yaml"],
-            includeHidden: false,
-          },
-        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+        const directive = Array.from(
+          zsh.encodeSuggestions([
+            {
+              kind: "file",
+              type: "file",
+              extensions: [".json", ".yaml"],
+              includeHidden: false,
+            },
+          ]),
+        )[0]
+          .replaceAll("\\", "\\\\")
+          .replaceAll("\0", "\\0");
 
         const output = testInteractiveZshCompletion(
           zsh.generateScript("extapp"),
@@ -5979,14 +6122,18 @@ _extapp
           return;
         }
 
-        const directive = Array.from(zsh.encodeSuggestions([
-          {
-            kind: "file",
-            type: "file",
-            extensions: [".json"],
-            includeHidden: false,
-          },
-        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+        const directive = Array.from(
+          zsh.encodeSuggestions([
+            {
+              kind: "file",
+              type: "file",
+              extensions: [".json"],
+              includeHidden: false,
+            },
+          ]),
+        )[0]
+          .replaceAll("\\", "\\\\")
+          .replaceAll("\0", "\\0");
 
         const output = testInteractiveZshCompletion(
           zsh.generateScript("extapp"),
@@ -6028,14 +6175,18 @@ _extapp
           return;
         }
 
-        const directive = Array.from(zsh.encodeSuggestions([
-          {
-            kind: "file",
-            type: "file",
-            extensions: [".json"],
-            includeHidden: false,
-          },
-        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+        const directive = Array.from(
+          zsh.encodeSuggestions([
+            {
+              kind: "file",
+              type: "file",
+              extensions: [".json"],
+              includeHidden: false,
+            },
+          ]),
+        )[0]
+          .replaceAll("\\", "\\\\")
+          .replaceAll("\0", "\\0");
 
         const output = testInteractiveZshCompletion(
           zsh.generateScript("extapp"),
@@ -6077,14 +6228,18 @@ _extapp
           return;
         }
 
-        const directive = Array.from(zsh.encodeSuggestions([
-          {
-            kind: "file",
-            type: "file",
-            extensions: [".json"],
-            includeHidden: false,
-          },
-        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+        const directive = Array.from(
+          zsh.encodeSuggestions([
+            {
+              kind: "file",
+              type: "file",
+              extensions: [".json"],
+              includeHidden: false,
+            },
+          ]),
+        )[0]
+          .replaceAll("\\", "\\\\")
+          .replaceAll("\0", "\\0");
 
         const output = testInteractiveZshCompletion(
           zsh.generateScript("extapp"),
@@ -6126,14 +6281,18 @@ _extapp
           return;
         }
 
-        const directive = Array.from(zsh.encodeSuggestions([
-          {
-            kind: "file",
-            type: "file",
-            extensions: [".json"],
-            includeHidden: false,
-          },
-        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+        const directive = Array.from(
+          zsh.encodeSuggestions([
+            {
+              kind: "file",
+              type: "file",
+              extensions: [".json"],
+              includeHidden: false,
+            },
+          ]),
+        )[0]
+          .replaceAll("\\", "\\\\")
+          .replaceAll("\0", "\\0");
 
         const output = testInteractiveZshCompletion(
           zsh.generateScript("extapp"),
@@ -6175,14 +6334,18 @@ _extapp
           return;
         }
 
-        const directive = Array.from(zsh.encodeSuggestions([
-          {
-            kind: "file",
-            type: "file",
-            extensions: [".json"],
-            includeHidden: false,
-          },
-        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+        const directive = Array.from(
+          zsh.encodeSuggestions([
+            {
+              kind: "file",
+              type: "file",
+              extensions: [".json"],
+              includeHidden: false,
+            },
+          ]),
+        )[0]
+          .replaceAll("\\", "\\\\")
+          .replaceAll("\0", "\\0");
 
         const output = testInteractiveZshCompletion(
           zsh.generateScript("extapp"),
@@ -6231,14 +6394,18 @@ _extapp
           return;
         }
 
-        const directive = Array.from(zsh.encodeSuggestions([
-          {
-            kind: "file",
-            type: "file",
-            extensions: [".json"],
-            includeHidden: false,
-          },
-        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+        const directive = Array.from(
+          zsh.encodeSuggestions([
+            {
+              kind: "file",
+              type: "file",
+              extensions: [".json"],
+              includeHidden: false,
+            },
+          ]),
+        )[0]
+          .replaceAll("\\", "\\\\")
+          .replaceAll("\0", "\\0");
 
         const output = testInteractiveZshCompletion(
           zsh.generateScript("extapp"),
@@ -6280,14 +6447,18 @@ _extapp
           return;
         }
 
-        const directive = Array.from(zsh.encodeSuggestions([
-          {
-            kind: "file",
-            type: "file",
-            extensions: [".json"],
-            includeHidden: false,
-          },
-        ]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+        const directive = Array.from(
+          zsh.encodeSuggestions([
+            {
+              kind: "file",
+              type: "file",
+              extensions: [".json"],
+              includeHidden: false,
+            },
+          ]),
+        )[0]
+          .replaceAll("\\", "\\\\")
+          .replaceAll("\0", "\\0");
 
         const output = testInteractiveZshCompletion(
           zsh.generateScript("extapp"),
@@ -6337,10 +6508,7 @@ _extapp
 
       const encoded = Array.from(zsh.encodeSuggestions(suggestions));
 
-      deepStrictEqual(encoded, [
-        "--verbose\0\0",
-        "--quiet\0\0",
-      ]);
+      deepStrictEqual(encoded, ["--verbose\0\0", "--quiet\0\0"]);
     });
 
     it("should encode suggestions with descriptions", () => {
@@ -6556,9 +6724,10 @@ print -r -- "__GLOB_DOTS_AFTER:$options[globdots]"
         });
 
         ok(result.includes("__GLOB_DOTS_AFTER:off"), result);
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
         ok(completions.some((c) => c.includes(".hidden")));
         ok(completions.some((c) => c.includes(".env")));
         ok(completions.some((c) => c.includes("visible.txt")));
@@ -6573,9 +6742,7 @@ print -r -- "__GLOB_DOTS_AFTER:$options[globdots]"
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "zsh-no-hidden-completion-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "zsh-no-hidden-completion-"));
 
       try {
         // CLI that emits __FILE__ with hidden=0
@@ -6641,9 +6808,10 @@ print -r -- "__GLOB_DOTS_AFTER:$options[globdots]"
         });
 
         ok(result.includes("__GLOB_DOTS_AFTER:off"), result);
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
         ok(!completions.some((c) => c.includes(".hidden")));
         ok(completions.some((c) => c.includes("visible.txt")));
       } finally {
@@ -6681,48 +6849,41 @@ print -r -- "__GLOB_DOTS_AFTER:$options[globdots]"
       ]);
     });
 
-    it(
-      "should use _path_files for regular-file zsh completion",
-      () => {
-        const script = zsh.generateScript("filedir-cli");
+    it("should use _path_files for regular-file zsh completion", () => {
+      const script = zsh.generateScript("filedir-cli");
 
-        // Extract the file case block from the zsh script
-        const fileCase = script.substring(
-          script.indexOf('case "$type" in'),
-          script.indexOf("esac"),
-        );
-        const fileCaseBlock = fileCase.substring(
-          fileCase.indexOf("file|any)"),
-          fileCase.indexOf("directory)"),
-        );
-        ok(
-          fileCaseBlock.includes(
-            'local file_pattern="${ext_pattern:-*}(#q-.)"',
-          ),
-          "zsh file) case should derive a #q-qualified regular-file pattern that preserves symlinked files.",
-        );
-        ok(
-          fileCaseBlock.includes(
-            '_path_files -g "${file_pattern}" "${expl[@]}" "${file_ignore_args[@]}"',
-          ),
-          "zsh file) case should route filtered file completions through the standard files tag.",
-        );
-        ok(
-          fileCaseBlock.includes(
-            "_next_label directories expl directory",
-          ),
-          "zsh file) case should add directory navigation via the directories tag.",
-        );
-        ok(
-          !fileCaseBlock.includes('_files -g "$ext_pattern"'),
-          "zsh file) case should not rely on _files -g for extension-filtered navigation.",
-        );
-        ok(
-          fileCaseBlock.includes("_next_label files expl file"),
-          "zsh file) case should use zsh's standard tag selection for filtered file completion.",
-        );
-      },
-    );
+      // Extract the file case block from the zsh script
+      const fileCase = script.substring(
+        script.indexOf('case "$type" in'),
+        script.indexOf("esac"),
+      );
+      const fileCaseBlock = fileCase.substring(
+        fileCase.indexOf("file|any)"),
+        fileCase.indexOf("directory)"),
+      );
+      ok(
+        fileCaseBlock.includes('local file_pattern="${ext_pattern:-*}(#q-.)"'),
+        "zsh file) case should derive a #q-qualified regular-file pattern that preserves symlinked files.",
+      );
+      ok(
+        fileCaseBlock.includes(
+          '_path_files -g "${file_pattern}" "${expl[@]}" "${file_ignore_args[@]}"',
+        ),
+        "zsh file) case should route filtered file completions through the standard files tag.",
+      );
+      ok(
+        fileCaseBlock.includes("_next_label directories expl directory"),
+        "zsh file) case should add directory navigation via the directories tag.",
+      );
+      ok(
+        !fileCaseBlock.includes('_files -g "$ext_pattern"'),
+        "zsh file) case should not rely on _files -g for extension-filtered navigation.",
+      );
+      ok(
+        fileCaseBlock.includes("_next_label files expl file"),
+        "zsh file) case should use zsh's standard tag selection for filtered file completion.",
+      );
+    });
   });
 
   describe("pwsh shell completion", () => {
@@ -6745,137 +6906,149 @@ print -r -- "__GLOB_DOTS_AFTER:$options[globdots]"
       );
     });
 
-    it("should work with actual pwsh shell", {
-      timeout: pwshTestTimeout,
-    }, (t) => {
-      if (!isShellAvailable("pwsh")) {
-        t.skip("pwsh not available");
-        return;
-      }
+    it(
+      "should work with actual pwsh shell",
+      {
+        timeout: pwshTestTimeout,
+      },
+      (t) => {
+        if (!isShellAvailable("pwsh")) {
+          t.skip("pwsh not available");
+          return;
+        }
 
-      const tempDir = mkdtempSync(join(tmpdir(), "pwsh-completion-"));
+        const tempDir = mkdtempSync(join(tmpdir(), "pwsh-completion-"));
 
-      try {
-        const cliPath = createTestCli(tempDir);
-        const programName = "test-cli";
-        const script = pwsh.generateScript(programName, ["completion", "pwsh"]);
+        try {
+          const cliPath = createTestCli(tempDir);
+          const programName = "test-cli";
+          const script = pwsh.generateScript(programName, [
+            "completion",
+            "pwsh",
+          ]);
 
-        const result = testPwshCompletion(
-          script,
-          programName,
-          dirname(cliPath),
+          const result = testPwshCompletion(
+            script,
+            programName,
+            dirname(cliPath),
+          );
+
+          // For pwsh, we verify that the completion script can be loaded
+          // and executed without errors (similar to zsh test approach)
+          deepStrictEqual(result.includes("success"), true);
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      },
+    );
+
+    it(
+      "should use only arguments before the PowerShell cursor",
+      {
+        skip:
+          process.platform === "win32" ||
+          !isShellAvailable("pwsh") ||
+          !isShellAvailable("bash"),
+        timeout: 10000,
+      },
+      () => {
+        // Bun ignores skip, so check the prerequisites here as well.
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("pwsh") || !isShellAvailable("bash")) return;
+
+        const cases = [
+          {
+            before: "cursor-cli --pick al",
+            after: "",
+            args: ["--pick", "al"],
+            replacementLength: 2,
+          },
+          {
+            before: "cursor-cli --pick al",
+            after: " --other xyz",
+            args: ["--pick", "al"],
+            replacementLength: 2,
+          },
+          {
+            before: "cursor-cli --pick al",
+            after: "pha --other xyz",
+            args: ["--pick", "alpha"],
+            replacementLength: 5,
+          },
+          {
+            before: "cursor-cli --pick ",
+            after: " --other xyz",
+            args: ["--pick", ""],
+            replacementLength: 0,
+          },
+          {
+            before: "cursor-cli --pick ",
+            after: "alpha --other xyz",
+            args: ["--pick", ""],
+            replacementLength: 0,
+          },
+          {
+            before: "cursor-cli --other 'some value' --pick al",
+            after: "",
+            args: ["--other", "some value", "--pick", "al"],
+            replacementLength: 2,
+          },
+          {
+            before: "cursor-cli --pick al",
+            after: " --other al",
+            args: ["--pick", "al"],
+            replacementLength: 2,
+          },
+          {
+            before: "cursor-cli --other '' ",
+            after: "",
+            args: ["--other", "", ""],
+            replacementLength: 0,
+          },
+          {
+            before: "cursor-cli --pick ",
+            after: "",
+            args: ["--pick", ""],
+            replacementLength: 0,
+          },
+          {
+            before: "Write-Output done; cursor-cli --pick al",
+            after: " --other xyz",
+            args: ["--pick", "al"],
+            replacementLength: 2,
+          },
+          {
+            before: "Write-Output done\ncursor-cli --pick al",
+            after: " --other xyz",
+            args: ["--pick", "al"],
+            replacementLength: 2,
+          },
+        ];
+
+        // Keep executable fixtures in the checkout's ignored tmp/ directory.
+        const scratchRoot = fileURLToPath(
+          new URL("../../../tmp/", import.meta.url),
         );
-
-        // For pwsh, we verify that the completion script can be loaded
-        // and executed without errors (similar to zsh test approach)
-        deepStrictEqual(result.includes("success"), true);
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
-
-    it("should use only arguments before the PowerShell cursor", {
-      skip: process.platform === "win32" || !isShellAvailable("pwsh") ||
-        !isShellAvailable("bash"),
-      timeout: 10000,
-    }, () => {
-      // Bun ignores skip, so check the prerequisites here as well.
-      if (process.platform === "win32") return;
-      if (!isShellAvailable("pwsh") || !isShellAvailable("bash")) return;
-
-      const cases = [
-        {
-          before: "cursor-cli --pick al",
-          after: "",
-          args: ["--pick", "al"],
-          replacementLength: 2,
-        },
-        {
-          before: "cursor-cli --pick al",
-          after: " --other xyz",
-          args: ["--pick", "al"],
-          replacementLength: 2,
-        },
-        {
-          before: "cursor-cli --pick al",
-          after: "pha --other xyz",
-          args: ["--pick", "alpha"],
-          replacementLength: 5,
-        },
-        {
-          before: "cursor-cli --pick ",
-          after: " --other xyz",
-          args: ["--pick", ""],
-          replacementLength: 0,
-        },
-        {
-          before: "cursor-cli --pick ",
-          after: "alpha --other xyz",
-          args: ["--pick", ""],
-          replacementLength: 0,
-        },
-        {
-          before: "cursor-cli --other 'some value' --pick al",
-          after: "",
-          args: ["--other", "some value", "--pick", "al"],
-          replacementLength: 2,
-        },
-        {
-          before: "cursor-cli --pick al",
-          after: " --other al",
-          args: ["--pick", "al"],
-          replacementLength: 2,
-        },
-        {
-          before: "cursor-cli --other '' ",
-          after: "",
-          args: ["--other", "", ""],
-          replacementLength: 0,
-        },
-        {
-          before: "cursor-cli --pick ",
-          after: "",
-          args: ["--pick", ""],
-          replacementLength: 0,
-        },
-        {
-          before: "Write-Output done; cursor-cli --pick al",
-          after: " --other xyz",
-          args: ["--pick", "al"],
-          replacementLength: 2,
-        },
-        {
-          before: "Write-Output done\ncursor-cli --pick al",
-          after: " --other xyz",
-          args: ["--pick", "al"],
-          replacementLength: 2,
-        },
-      ];
-
-      // Keep executable fixtures in the checkout's ignored tmp/ directory.
-      const scratchRoot = fileURLToPath(
-        new URL("../../../tmp/", import.meta.url),
-      );
-      mkdirSync(scratchRoot, { recursive: true });
-      const tempDir = mkdtempSync(join(scratchRoot, "pwsh-cursor-"));
-      try {
-        writeFileSync(
-          join(tempDir, "cursor-cli"),
-          `#!/usr/bin/env bash
+        mkdirSync(scratchRoot, { recursive: true });
+        const tempDir = mkdtempSync(join(scratchRoot, "pwsh-cursor-"));
+        try {
+          writeFileSync(
+            join(tempDir, "cursor-cli"),
+            `#!/usr/bin/env bash
 printf '%s\\0' "$@" > "$OPTIQUE_CURSOR_CAPTURE"
 printf 'alpha\\nalpine\\n'
 `,
-          { mode: 0o755 },
-        );
-        writeFileSync(
-          join(tempDir, "completion.ps1"),
-          pwsh.generateScript("cursor-cli", ["completion", "pwsh"]),
-        );
-        writeFileSync(join(tempDir, "cases.json"), JSON.stringify(cases));
-        const testScriptPath = join(tempDir, "test.ps1");
-        writeFileSync(
-          testScriptPath,
-          `$ErrorActionPreference = 'Stop'
+            { mode: 0o755 },
+          );
+          writeFileSync(
+            join(tempDir, "completion.ps1"),
+            pwsh.generateScript("cursor-cli", ["completion", "pwsh"]),
+          );
+          writeFileSync(join(tempDir, "cases.json"), JSON.stringify(cases));
+          const testScriptPath = join(tempDir, "test.ps1");
+          writeFileSync(
+            testScriptPath,
+            `$ErrorActionPreference = 'Stop'
 $PSNativeCommandArgumentPassing = 'Standard'
 $env:PATH = $PSScriptRoot + [IO.Path]::PathSeparator + $env:PATH
 $env:OPTIQUE_CURSOR_CAPTURE = Join-Path $PSScriptRoot 'argv.bin'
@@ -6899,42 +7072,46 @@ foreach ($case in $cases) {
 }
 ConvertTo-Json -InputObject $records -Depth 5 -Compress
 `,
-        );
-        const results: readonly {
-          readonly Captured: string;
-          readonly Matches: readonly string[];
-          readonly Index: number;
-          readonly Length: number;
-          readonly Lines: readonly string[];
-        }[] = JSON.parse(runCommand(
-          "pwsh",
-          ["-NoProfile", "-NonInteractive", "-File", testScriptPath],
-          { cwd: tempDir },
-        ));
-
-        deepStrictEqual(
-          results.map((result) => result.Captured.split("\0").slice(0, -1)),
-          cases.map((testCase) => ["completion", "pwsh", ...testCase.args]),
-        );
-        deepStrictEqual(results.length, cases.length);
-        for (let i = 0; i < cases.length; i++) {
-          const testCase = cases[i];
-          const result = results[i];
-          deepStrictEqual(result.Matches, ["alpha", "alpine"]);
-          deepStrictEqual(result.Length, testCase.replacementLength);
-          deepStrictEqual(
-            result.Index,
-            testCase.before.length - (testCase.replacementLength === 0 ? 0 : 2),
           );
+          const results: readonly {
+            readonly Captured: string;
+            readonly Matches: readonly string[];
+            readonly Index: number;
+            readonly Length: number;
+            readonly Lines: readonly string[];
+          }[] = JSON.parse(
+            runCommand(
+              "pwsh",
+              ["-NoProfile", "-NonInteractive", "-File", testScriptPath],
+              { cwd: tempDir },
+            ),
+          );
+
+          deepStrictEqual(
+            results.map((result) => result.Captured.split("\0").slice(0, -1)),
+            cases.map((testCase) => ["completion", "pwsh", ...testCase.args]),
+          );
+          deepStrictEqual(results.length, cases.length);
+          for (let i = 0; i < cases.length; i++) {
+            const testCase = cases[i];
+            const result = results[i];
+            deepStrictEqual(result.Matches, ["alpha", "alpine"]);
+            deepStrictEqual(result.Length, testCase.replacementLength);
+            deepStrictEqual(
+              result.Index,
+              testCase.before.length -
+                (testCase.replacementLength === 0 ? 0 : 2),
+            );
+          }
+          deepStrictEqual(results[1].Lines, [
+            "cursor-cli --pick alpha --other xyz",
+            "cursor-cli --pick alpine --other xyz",
+          ]);
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
         }
-        deepStrictEqual(results[1].Lines, [
-          "cursor-cli --pick alpha --other xyz",
-          "cursor-cli --pick alpine --other xyz",
-        ]);
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
+      },
+    );
 
     it("should generate script with completion command args", () => {
       const script = pwsh.generateScript("myapp", ["completion", "pwsh"]);
@@ -6995,17 +7172,21 @@ fi
         join(tempDir, "completion.ps1"),
         directorySeparator == null
           ? pwsh.generateScript("quoted-cli", ["completion"])
-          : pwsh.generateScript("quoted-cli", ["completion"]).replaceAll(
-            "[IO.Path]::DirectorySeparatorChar",
-            `[char]${directorySeparator.charCodeAt(0)}`,
-          ),
+          : pwsh
+              .generateScript("quoted-cli", ["completion"])
+              .replaceAll(
+                "[IO.Path]::DirectorySeparatorChar",
+                `[char]${directorySeparator.charCodeAt(0)}`,
+              ),
       );
       writeFileSync(
         join(tempDir, "lines.json"),
-        JSON.stringify(lines.map((line, index) => ({
-          line,
-          cursor: cursors?.[index] ?? line.length,
-        }))),
+        JSON.stringify(
+          lines.map((line, index) => ({
+            line,
+            cursor: cursors?.[index] ?? line.length,
+          })),
+        ),
       );
       const testScript = join(tempDir, "test.ps1");
       writeFileSync(
@@ -7041,105 +7222,110 @@ $results = @(foreach ($entry in $lines) {
 ConvertTo-Json -InputObject $results -Depth 5 -Compress
 `,
       );
-      return JSON.parse(runCommand(
-        "pwsh",
-        ["-NoProfile", "-NonInteractive", "-File", testScript],
-        { cwd: tempDir },
-      ));
+      return JSON.parse(
+        runCommand(
+          "pwsh",
+          ["-NoProfile", "-NonInteractive", "-File", testScript],
+          { cwd: tempDir },
+        ),
+      );
     }
 
-    it("should insert literal completions as single native arguments", {
-      skip: process.platform === "win32" || !isShellAvailable("pwsh"),
-      timeout: 20000,
-    }, () => {
-      if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
-      const tempDir = createInsertionTempDir("pwsh-literal-insertion-");
-      try {
-        const values = [
-          "3.141592653589793",
-          "0.30000000000000004",
-          "1700000000.123456",
-          "-1e20",
-          ".30000000000000004",
-          "hello fallback",
-          "hello world",
-          "hello'world",
-          'hello"world',
-          "hello;world",
-          "hello‘world",
-          "hello’world",
-          "hello‚world",
-          "hello‛world",
-          "hello$HOME",
-          "hello$(1+1)",
-          "hello`world",
-          "hello&world",
-          "hello|world",
-          "hello>world",
-          "hello<world",
-          "hello(world)",
-          "hello{world}",
-          "hello[world]",
-          "@hello",
-          "#hello",
-          "hello,world",
-          "hello=world",
-          "hello*world",
-          "hello?world",
-          "~",
-          "~/hello",
-          "-hello.world",
-          "-a:",
-          "--hello.world",
-          "Khello",
-          "–hello.world",
-          "hello“world",
-          "hello”world",
-          "hello‶world",
-          "--verbose",
-          "sub-command",
-          "nested/plain.txt",
-          "C:\\plain\\file.txt",
-        ];
-        const results = completeAndExecute(
-          tempDir,
-          values.map((value) => ({
-            kind: "literal",
-            text: value,
-            description: value === "hello fallback"
-              ? undefined
-              : message`Readable hint`,
-          })),
-          ["quoted-cli --pick "],
-        );
-        deepStrictEqual(results.length, values.length);
-        for (const value of values) {
-          const result = results.find((r) => r.label === value);
-          ok(result, `Missing completion for ${JSON.stringify(value)}.`);
-          deepStrictEqual(result.parseErrors, 0, value);
-          deepStrictEqual(result.commands, 1, value);
-          deepStrictEqual(result.elements, 3, value);
-          deepStrictEqual(result.argv, ["2", "--pick", value], value);
-          deepStrictEqual(
-            result.tooltip,
-            value === "hello fallback" ? value : "Readable hint",
+    it(
+      "should insert literal completions as single native arguments",
+      {
+        skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+        timeout: 20000,
+      },
+      () => {
+        if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
+        const tempDir = createInsertionTempDir("pwsh-literal-insertion-");
+        try {
+          const values = [
+            "3.141592653589793",
+            "0.30000000000000004",
+            "1700000000.123456",
+            "-1e20",
+            ".30000000000000004",
+            "hello fallback",
+            "hello world",
+            "hello'world",
+            'hello"world',
+            "hello;world",
+            "hello‘world",
+            "hello’world",
+            "hello‚world",
+            "hello‛world",
+            "hello$HOME",
+            "hello$(1+1)",
+            "hello`world",
+            "hello&world",
+            "hello|world",
+            "hello>world",
+            "hello<world",
+            "hello(world)",
+            "hello{world}",
+            "hello[world]",
+            "@hello",
+            "#hello",
+            "hello,world",
+            "hello=world",
+            "hello*world",
+            "hello?world",
+            "~",
+            "~/hello",
+            "-hello.world",
+            "-a:",
+            "--hello.world",
+            "Khello",
+            "–hello.world",
+            "hello“world",
+            "hello”world",
+            "hello‶world",
+            "--verbose",
+            "sub-command",
+            "nested/plain.txt",
+            "C:\\plain\\file.txt",
+          ];
+          const results = completeAndExecute(
+            tempDir,
+            values.map((value) => ({
+              kind: "literal",
+              text: value,
+              description:
+                value === "hello fallback" ? undefined : message`Readable hint`,
+            })),
+            ["quoted-cli --pick "],
           );
-          if (
-            [
-              "--hello.world",
-              "--verbose",
-              "sub-command",
-              "nested/plain.txt",
-              "C:\\plain\\file.txt",
-            ].includes(value)
-          ) {
-            deepStrictEqual(result.insertion, value);
+          deepStrictEqual(results.length, values.length);
+          for (const value of values) {
+            const result = results.find((r) => r.label === value);
+            ok(result, `Missing completion for ${JSON.stringify(value)}.`);
+            deepStrictEqual(result.parseErrors, 0, value);
+            deepStrictEqual(result.commands, 1, value);
+            deepStrictEqual(result.elements, 3, value);
+            deepStrictEqual(result.argv, ["2", "--pick", value], value);
+            deepStrictEqual(
+              result.tooltip,
+              value === "hello fallback" ? value : "Readable hint",
+            );
+            if (
+              [
+                "--hello.world",
+                "--verbose",
+                "sub-command",
+                "nested/plain.txt",
+                "C:\\plain\\file.txt",
+              ].includes(value)
+            ) {
+              deepStrictEqual(result.insertion, value);
+            }
           }
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
         }
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
+      },
+    );
 
     it(
       "should insert file and directory completions as single native arguments",
@@ -7171,8 +7357,8 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
           }
           writeFileSync(join(tempDir, "3.141592653589793"), "");
           const prefixes = ["", "home/", "~/", "~\\"];
-          const lines = prefixes.map((prefix) =>
-            `quoted-cli --file ${prefix}a`
+          const lines = prefixes.map(
+            (prefix) => `quoted-cli --file ${prefix}a`,
           );
           const results = completeAndExecute(
             tempDir,
@@ -7225,20 +7411,22 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
       },
     );
 
-    for (
-      const { directory, input, separator } of [
-        { directory: "a dir", input: "a" },
-        { directory: "a' dir", input: "a" },
-        { directory: "a$ dir", input: "a" },
-        { directory: "a dir", input: '"a' },
-      ].flatMap((entry) =>
-        (["/", "\\"] as const).map((separator) => ({ ...entry, separator }))
-      )
-    ) {
+    for (const { directory, input, separator } of [
+      { directory: "a dir", input: "a" },
+      { directory: "a' dir", input: "a" },
+      { directory: "a$ dir", input: "a" },
+      { directory: "a dir", input: '"a' },
+    ].flatMap((entry) =>
+      (["/", "\\"] as const).map((separator) => ({ ...entry, separator })),
+    )) {
       it(
-        "should continue into " + JSON.stringify(directory) +
-          " after completing " + JSON.stringify(input) + " with " +
-          JSON.stringify(separator) + " separators",
+        "should continue into " +
+          JSON.stringify(directory) +
+          " after completing " +
+          JSON.stringify(input) +
+          " with " +
+          JSON.stringify(separator) +
+          " separators",
         {
           skip: process.platform === "win32" || !isShellAvailable("pwsh"),
           timeout: 20000,
@@ -7250,10 +7438,12 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
             const child = directory + "/child one.txt";
             mkdirSync(join(tempDir, directory));
             writeFileSync(join(tempDir, child), "");
-            const suggestions: readonly Suggestion[] = [{
-              kind: "file",
-              type: "any",
-            }];
+            const suggestions: readonly Suggestion[] = [
+              {
+                kind: "file",
+                type: "any",
+              },
+            ];
             const first = completeAndExecute(
               tempDir,
               suggestions,
@@ -7261,8 +7451,8 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
               undefined,
               separator,
             );
-            const parent = first.find((result) =>
-              result.label === directory + "/"
+            const parent = first.find(
+              (result) => result.label === directory + "/",
             );
             ok(parent, "Missing directory completion.");
             deepStrictEqual(parent.argv, [
@@ -7273,8 +7463,10 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
             deepStrictEqual(parent.resultType, "ProviderContainer");
 
             // PSReadLine places the cursor before a directory's closing quote.
-            const line = "quoted-cli --file " +
-              parent.insertion.slice(0, -1) + "ch" +
+            const line =
+              "quoted-cli --file " +
+              parent.insertion.slice(0, -1) +
+              "ch" +
               parent.insertion.slice(-1);
 
             const continued = completeAndExecute(
@@ -7292,9 +7484,11 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
             deepStrictEqual(continued[0].commands, 1);
             deepStrictEqual(continued[0].elements, 3);
             deepStrictEqual(continued[0].argv, ["2", "--file", insertedChild]);
-            ok(continued[0].insertion.startsWith(
-              input.startsWith('"') ? '"' : "'",
-            ));
+            ok(
+              continued[0].insertion.startsWith(
+                input.startsWith('"') ? '"' : "'",
+              ),
+            );
           } finally {
             rmSync(tempDir, { recursive: true, force: true });
           }
@@ -7306,17 +7500,22 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
       // Backslash cases simulate Windows formatting on Linux, not Windows execution.
       it(
         "should complete a quoted directory and its child through PSReadLine with " +
-          JSON.stringify(separator) + " separators",
+          JSON.stringify(separator) +
+          " separators",
         {
-          skip: process.platform === "win32" || !isShellAvailable("pwsh") ||
+          skip:
+            process.platform === "win32" ||
+            !isShellAvailable("pwsh") ||
             !isShellAvailable("python3"),
           timeout: 30000,
         },
         () => {
           if (
-            process.platform === "win32" || !isShellAvailable("pwsh") ||
+            process.platform === "win32" ||
+            !isShellAvailable("pwsh") ||
             !isShellAvailable("python3")
-          ) return;
+          )
+            return;
           const tempDir = createInsertionTempDir("pwsh-directory-pty-");
           try {
             mkdirSync(join(tempDir, "a dir"));
@@ -7324,9 +7523,7 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
             completeAndExecute(
               tempDir,
               [{ kind: "file", type: "any" }],
-              [
-                "quoted-cli --file a",
-              ],
+              ["quoted-cli --file a"],
               undefined,
               separator,
             );
@@ -7339,8 +7536,8 @@ $env:PATH = $PSScriptRoot + [IO.Path]::PathSeparator + $env:PATH
 Import-Module PSReadLine
 Set-PSReadLineOption -HistorySaveStyle SaveNothing -PredictionSource None
 ${
-                separator === "\\"
-                  ? `
+  separator === "\\"
+    ? `
 Set-PSReadLineKeyHandler -Key Tab -ScriptBlock {
   param($key, $arg)
   $type = [Microsoft.PowerShell.PSConsoleReadLine]
@@ -7350,8 +7547,8 @@ Set-PSReadLineKeyHandler -Key Tab -ScriptBlock {
   [Microsoft.PowerShell.PSConsoleReadLine]::TabCompleteNext($key, $arg)
 }
 `
-                  : "Set-PSReadLineKeyHandler -Key Tab -Function TabCompleteNext"
-              }
+    : "Set-PSReadLineKeyHandler -Key Tab -Function TabCompleteNext"
+}
 $global:capturePath = Join-Path $PSScriptRoot 'buffer.jsonl'
 Set-PSReadLineKeyHandler -Chord Ctrl+g -ScriptBlock {
   $line = $null; $cursor = 0
@@ -7409,12 +7606,13 @@ finally:
             const buffers: readonly {
               readonly line: string;
               readonly cursor: number;
-            }[] = JSON.parse(runCommand("python3", [
-              "-c",
-              driver,
-              init,
-              join(tempDir, "buffer.jsonl"),
-            ], { cwd: tempDir, timeout: 25000 }));
+            }[] = JSON.parse(
+              runCommand(
+                "python3",
+                ["-c", driver, init, join(tempDir, "buffer.jsonl")],
+                { cwd: tempDir, timeout: 25000 },
+              ),
+            );
             deepStrictEqual(buffers.length, 2);
             deepStrictEqual(
               buffers[0].line,
@@ -7429,15 +7627,20 @@ finally:
               join(tempDir, "completion-argv.bin"),
               "utf8",
             )
-              .split("\0").at(-2);
+              .split("\0")
+              .at(-2);
             deepStrictEqual(prefix, "a dir" + separator + "ch");
-            const executed = runCommand("pwsh", [
-              "-NoProfile",
-              "-NonInteractive",
-              "-Command",
-              "$env:PATH = $PWD.Path + [IO.Path]::PathSeparator + $env:PATH; " +
-              buffers[1].line,
-            ], { cwd: tempDir });
+            const executed = runCommand(
+              "pwsh",
+              [
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$env:PATH = $PWD.Path + [IO.Path]::PathSeparator + $env:PATH; " +
+                  buffers[1].line,
+              ],
+              { cwd: tempDir },
+            );
             deepStrictEqual(executed.trimEnd().split(/\r?\n/), [
               "2",
               "--file",
@@ -7543,10 +7746,7 @@ finally:
 
       const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
 
-      deepStrictEqual(
-        encoded[0],
-        "__FILE__:file:json,yaml::0\t[file]\t",
-      );
+      deepStrictEqual(encoded[0], "__FILE__:file:json,yaml::0\t[file]\t");
     });
 
     it("should encode file suggestions with colon in pattern", () => {
@@ -7580,10 +7780,7 @@ finally:
 
       const encoded = Array.from(pwsh.encodeSuggestions(suggestions));
 
-      deepStrictEqual(
-        encoded[0],
-        "__FILE__:file::100%25done:0\t[file]\t",
-      );
+      deepStrictEqual(encoded[0], "__FILE__:file::100%25done:0\t[file]\t");
     });
 
     it("should format descriptions without colors", () => {
@@ -7651,35 +7848,37 @@ finally:
       ok(fileBlock.includes('-split "`t"'));
     });
 
-    it("should parse hidden field correctly with tab-delimited metadata", {
-      timeout: pwshTestTimeout,
-    }, (t) => {
-      if (!isShellAvailable("pwsh")) {
-        t.skip("pwsh not available");
-        return;
-      }
+    it(
+      "should parse hidden field correctly with tab-delimited metadata",
+      {
+        timeout: pwshTestTimeout,
+      },
+      (t) => {
+        if (!isShellAvailable("pwsh")) {
+          t.skip("pwsh not available");
+          return;
+        }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "pwsh-hidden-completion-"),
-      );
+        const tempDir = mkdtempSync(join(tmpdir(), "pwsh-hidden-completion-"));
 
-      try {
-        // CLI that emits __FILE__ with hidden=1 and tab-delimited metadata
-        const cliScript = `#!/bin/bash
+        try {
+          // CLI that emits __FILE__ with hidden=1 and tab-delimited metadata
+          const cliScript = `#!/bin/bash
 printf '__FILE__:file:::1\\t[file]\\tConfiguration file\\n'
 `;
-        const cliPath = join(tempDir, "hidden-cli");
-        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+          const cliPath = join(tempDir, "hidden-cli");
+          writeFileSync(cliPath, cliScript, { mode: 0o755 });
 
-        const script = pwsh.generateScript("hidden-cli");
-        const completions = testPwshCompletion(script, "hidden-cli", tempDir);
+          const script = pwsh.generateScript("hidden-cli");
+          const completions = testPwshCompletion(script, "hidden-cli", tempDir);
 
-        // Verify the script loads without error (pwsh helper is limited)
-        ok(completions.includes("success"));
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
+          // Verify the script loads without error (pwsh helper is limited)
+          ok(completions.includes("success"));
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      },
+    );
 
     it("should use -Force on Get-ChildItem when hidden is true", () => {
       const script = pwsh.generateScript("myapp");
@@ -7702,207 +7901,216 @@ printf '__FILE__:file:::1\\t[file]\\tConfiguration file\\n'
       );
     });
 
-    it("should preserve directory prefix in nested file completions", {
-      skip: process.platform === "win32" || !isShellAvailable("pwsh"),
-      timeout: 10000,
-    }, () => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (process.platform === "win32") return;
-      if (!isShellAvailable("pwsh")) return;
+    it(
+      "should preserve directory prefix in nested file completions",
+      {
+        skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+        timeout: 10000,
+      },
+      () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("pwsh")) return;
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "pwsh-nested-dir-"),
-      );
+        const tempDir = mkdtempSync(join(tmpdir(), "pwsh-nested-dir-"));
 
-      try {
-        // CLI that emits __FILE__:file with src/ prefix already typed
-        const cliScript = `#!/bin/bash
+        try {
+          // CLI that emits __FILE__:file with src/ prefix already typed
+          const cliScript = `#!/bin/bash
 printf '__FILE__:file::src/:0\\n'
 `;
-        const cliPath = join(tempDir, "nested-cli");
-        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+          const cliPath = join(tempDir, "nested-cli");
+          writeFileSync(cliPath, cliScript, { mode: 0o755 });
 
-        // Create src/ directory with a file inside
-        const srcDir = join(tempDir, "src");
-        mkdirSync(srcDir, { recursive: true });
-        writeFileSync(join(srcDir, "alpha.txt"), "");
+          // Create src/ directory with a file inside
+          const srcDir = join(tempDir, "src");
+          mkdirSync(srcDir, { recursive: true });
+          writeFileSync(join(srcDir, "alpha.txt"), "");
 
-        const script = pwsh.generateScript("nested-cli");
+          const script = pwsh.generateScript("nested-cli");
 
-        const scriptPath = join(tempDir, "completion.ps1");
-        writeFileSync(scriptPath, script);
+          const scriptPath = join(tempDir, "completion.ps1");
+          writeFileSync(scriptPath, script);
 
-        const testScriptPath = join(tempDir, "test.ps1");
-        writeFileSync(
-          testScriptPath,
-          `$env:PATH = "${tempDir}:" + $env:PATH\n` +
-            `. "${scriptPath}"\n` +
-            `$result = TabExpansion2 -inputScript 'nested-cli src/' ` +
-            `-cursorColumn 15\n` +
-            `$result.CompletionMatches | ` +
-            `ForEach-Object { $_.CompletionText }\n`,
-        );
+          const testScriptPath = join(tempDir, "test.ps1");
+          writeFileSync(
+            testScriptPath,
+            `$env:PATH = "${tempDir}:" + $env:PATH\n` +
+              `. "${scriptPath}"\n` +
+              `$result = TabExpansion2 -inputScript 'nested-cli src/' ` +
+              `-cursorColumn 15\n` +
+              `$result.CompletionMatches | ` +
+              `ForEach-Object { $_.CompletionText }\n`,
+          );
 
-        const result = runCommand(
-          "pwsh",
-          ["-NoProfile", "-NonInteractive", "-File", testScriptPath],
-          { cwd: tempDir },
-        );
+          const result = runCommand(
+            "pwsh",
+            ["-NoProfile", "-NonInteractive", "-File", testScriptPath],
+            { cwd: tempDir },
+          );
 
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
-        ok(
-          completions.some((c) => c.trim() === "src/alpha.txt"),
-          `Expected "src/alpha.txt" in completions, got: ${
-            JSON.stringify(completions)
-          }`,
-        );
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
+          const completions = result
+            .trim()
+            .split("\n")
+            .filter((l) => l.length > 0);
+          ok(
+            completions.some((c) => c.trim() === "src/alpha.txt"),
+            `Expected "src/alpha.txt" in completions, got: ${JSON.stringify(
+              completions,
+            )}`,
+          );
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      },
+    );
 
-    it("should preserve backslash directory prefix on Windows", {
-      skip: process.platform !== "win32" || !isShellAvailable("pwsh"),
-      timeout: pwshTestTimeout,
-    }, () => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (process.platform !== "win32") return;
-      if (!isShellAvailable("pwsh")) return;
+    it(
+      "should preserve backslash directory prefix on Windows",
+      {
+        skip: process.platform !== "win32" || !isShellAvailable("pwsh"),
+        timeout: pwshTestTimeout,
+      },
+      () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform !== "win32") return;
+        if (!isShellAvailable("pwsh")) return;
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "pwsh-nested-backslash-"),
-      );
+        const tempDir = mkdtempSync(join(tmpdir(), "pwsh-nested-backslash-"));
 
-      try {
-        // CLI that emits __FILE__:file with src\ prefix (Windows-style)
-        const cliScript = `@echo off\r\necho __FILE__:file::src\\:0\r\n`;
-        const cliPath = join(tempDir, "nested-cli.cmd");
-        writeFileSync(cliPath, cliScript);
+        try {
+          // CLI that emits __FILE__:file with src\ prefix (Windows-style)
+          const cliScript = `@echo off\r\necho __FILE__:file::src\\:0\r\n`;
+          const cliPath = join(tempDir, "nested-cli.cmd");
+          writeFileSync(cliPath, cliScript);
 
-        // Create src\ directory with a file inside
-        const srcDir = join(tempDir, "src");
-        mkdirSync(srcDir, { recursive: true });
-        writeFileSync(join(srcDir, "alpha.txt"), "");
+          // Create src\ directory with a file inside
+          const srcDir = join(tempDir, "src");
+          mkdirSync(srcDir, { recursive: true });
+          writeFileSync(join(srcDir, "alpha.txt"), "");
 
-        const script = pwsh.generateScript("nested-cli");
+          const script = pwsh.generateScript("nested-cli");
 
-        const scriptPath = join(tempDir, "completion.ps1");
-        writeFileSync(scriptPath, script);
+          const scriptPath = join(tempDir, "completion.ps1");
+          writeFileSync(scriptPath, script);
 
-        const testScriptPath = join(tempDir, "test.ps1");
-        writeFileSync(
-          testScriptPath,
-          `$env:PATH = "${tempDir};" + $env:PATH\n` +
-            `. "${scriptPath}"\n` +
-            `$result = TabExpansion2 -inputScript 'nested-cli src\\' ` +
-            `-cursorColumn 16\n` +
-            `$result.CompletionMatches | ` +
-            `ForEach-Object { $_.CompletionText }\n`,
-        );
+          const testScriptPath = join(tempDir, "test.ps1");
+          writeFileSync(
+            testScriptPath,
+            `$env:PATH = "${tempDir};" + $env:PATH\n` +
+              `. "${scriptPath}"\n` +
+              `$result = TabExpansion2 -inputScript 'nested-cli src\\' ` +
+              `-cursorColumn 16\n` +
+              `$result.CompletionMatches | ` +
+              `ForEach-Object { $_.CompletionText }\n`,
+          );
 
-        const result = runCommand(
-          "pwsh",
-          ["-NoProfile", "-NonInteractive", "-File", testScriptPath],
-          { cwd: tempDir },
-        );
+          const result = runCommand(
+            "pwsh",
+            ["-NoProfile", "-NonInteractive", "-File", testScriptPath],
+            { cwd: tempDir },
+          );
 
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
-        ok(
-          completions.some((c) => c.trim() === "src\\alpha.txt"),
-          `Expected "src\\alpha.txt" in completions, got: ${
-            JSON.stringify(completions)
-          }`,
-        );
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
+          const completions = result
+            .trim()
+            .split("\n")
+            .filter((l) => l.length > 0);
+          ok(
+            completions.some((c) => c.trim() === "src\\alpha.txt"),
+            `Expected "src\\alpha.txt" in completions, got: ${JSON.stringify(
+              completions,
+            )}`,
+          );
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      },
+    );
 
-    it("should filter files by dot-prefixed extensions in pwsh", {
-      skip: process.platform === "win32" || !isShellAvailable("pwsh"),
-      timeout: 10000,
-    }, () => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (process.platform === "win32") return;
-      if (!isShellAvailable("pwsh")) return;
+    it(
+      "should filter files by dot-prefixed extensions in pwsh",
+      {
+        skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+        timeout: 10000,
+      },
+      () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("pwsh")) return;
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "pwsh-ext-dot-filter-"),
-      );
+        const tempDir = mkdtempSync(join(tmpdir(), "pwsh-ext-dot-filter-"));
 
-      try {
-        // CLI emits __FILE__ with dot-prefixed extensions (.json,.yaml)
-        const cliScript = `#!/bin/bash
+        try {
+          // CLI emits __FILE__ with dot-prefixed extensions (.json,.yaml)
+          const cliScript = `#!/bin/bash
 printf '__FILE__:file:.json,.yaml::0\\n'
 `;
-        const cliPath = join(tempDir, "extapp");
-        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+          const cliPath = join(tempDir, "extapp");
+          writeFileSync(cliPath, cliScript, { mode: 0o755 });
 
-        // Create test files
-        writeFileSync(join(tempDir, "data.json"), "");
-        writeFileSync(join(tempDir, "config.yaml"), "");
-        writeFileSync(join(tempDir, "readme.txt"), "");
-        const subDir = join(tempDir, "subdir");
-        mkdirSync(subDir);
+          // Create test files
+          writeFileSync(join(tempDir, "data.json"), "");
+          writeFileSync(join(tempDir, "config.yaml"), "");
+          writeFileSync(join(tempDir, "readme.txt"), "");
+          const subDir = join(tempDir, "subdir");
+          mkdirSync(subDir);
 
-        const script = pwsh.generateScript("extapp");
+          const script = pwsh.generateScript("extapp");
 
-        const scriptPath = join(tempDir, "completion.ps1");
-        writeFileSync(scriptPath, script);
+          const scriptPath = join(tempDir, "completion.ps1");
+          writeFileSync(scriptPath, script);
 
-        const testScriptPath = join(tempDir, "test.ps1");
-        writeFileSync(
-          testScriptPath,
-          `$env:PATH = "${tempDir}:" + $env:PATH\n` +
-            `. "${scriptPath}"\n` +
-            `$result = TabExpansion2 -inputScript 'extapp ' ` +
-            `-cursorColumn 7\n` +
-            `$result.CompletionMatches | ` +
-            `ForEach-Object { $_.CompletionText }\n`,
-        );
+          const testScriptPath = join(tempDir, "test.ps1");
+          writeFileSync(
+            testScriptPath,
+            `$env:PATH = "${tempDir}:" + $env:PATH\n` +
+              `. "${scriptPath}"\n` +
+              `$result = TabExpansion2 -inputScript 'extapp ' ` +
+              `-cursorColumn 7\n` +
+              `$result.CompletionMatches | ` +
+              `ForEach-Object { $_.CompletionText }\n`,
+          );
 
-        const result = runCommand(
-          "pwsh",
-          ["-NoProfile", "-NonInteractive", "-File", testScriptPath],
-          { cwd: tempDir },
-        );
+          const result = runCommand(
+            "pwsh",
+            ["-NoProfile", "-NonInteractive", "-File", testScriptPath],
+            { cwd: tempDir },
+          );
 
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+          const completions = result
+            .trim()
+            .split("\n")
+            .filter((l) => l.length > 0);
 
-        ok(
-          completions.some((c) => c.includes("data.json")),
-          `Expected data.json in completions, got: ${
-            JSON.stringify(completions)
-          }`,
-        );
-        ok(
-          completions.some((c) => c.includes("config.yaml")),
-          `Expected config.yaml in completions, got: ${
-            JSON.stringify(completions)
-          }`,
-        );
-        ok(
-          !completions.some((c) => c.includes("readme.txt")),
-          `Should not include readme.txt in completions, got: ${
-            JSON.stringify(completions)
-          }`,
-        );
-        ok(
-          completions.some((c) => c.includes("subdir")),
-          `Expected subdir/ in completions for navigation, got: ${
-            JSON.stringify(completions)
-          }`,
-        );
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
+          ok(
+            completions.some((c) => c.includes("data.json")),
+            `Expected data.json in completions, got: ${JSON.stringify(
+              completions,
+            )}`,
+          );
+          ok(
+            completions.some((c) => c.includes("config.yaml")),
+            `Expected config.yaml in completions, got: ${JSON.stringify(
+              completions,
+            )}`,
+          );
+          ok(
+            !completions.some((c) => c.includes("readme.txt")),
+            `Should not include readme.txt in completions, got: ${JSON.stringify(
+              completions,
+            )}`,
+          );
+          ok(
+            completions.some((c) => c.includes("subdir")),
+            `Expected subdir/ in completions for navigation, got: ${JSON.stringify(
+              completions,
+            )}`,
+          );
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      },
+    );
 
     for (const type of ["file", "any"] as const) {
       for (const extension of ["txt", "TXT"]) {
@@ -7917,24 +8125,27 @@ printf '__FILE__:file:.json,.yaml::0\\n'
             },
             () => {
               // Bun ignores the skip option, so guard the POSIX fixture as well.
-              if (
-                process.platform === "win32" || !isShellAvailable("pwsh")
-              ) return;
+              if (process.platform === "win32" || !isShellAvailable("pwsh"))
+                return;
 
               const tempDir = mkdtempSync(
                 join(tmpdir(), "pwsh-extension-case-"),
               );
               try {
                 const directive = dotPrefix
-                  // Compatibility transport also accepts dot-prefixed extensions.
-                  ? `__FILE__:${type}:.${extension},.json:case:0`
-                  : Array.from(pwsh.encodeSuggestions([{
-                    kind: "file",
-                    type,
-                    extensions: [`.${extension}`, ".json"],
-                    pattern: "case",
-                    includeHidden: false,
-                  }])).join("");
+                  ? // Compatibility transport also accepts dot-prefixed extensions.
+                    `__FILE__:${type}:.${extension},.json:case:0`
+                  : Array.from(
+                      pwsh.encodeSuggestions([
+                        {
+                          kind: "file",
+                          type,
+                          extensions: [`.${extension}`, ".json"],
+                          pattern: "case",
+                          includeHidden: false,
+                        },
+                      ]),
+                    ).join("");
                 writeFileSync(
                   join(tempDir, "casecli"),
                   `#!/bin/bash\nprintf '%s\\n' '${directive}'\n`,
@@ -7943,16 +8154,14 @@ printf '__FILE__:file:.json,.yaml::0\\n'
                 const fixtureDir = join(tempDir, "files");
                 mkdirSync(fixtureDir);
                 // Distinct stems also work on case-insensitive filesystems.
-                for (
-                  const file of [
-                    "case-lower.txt",
-                    "case-upper.TXT",
-                    "case-mixed.Txt",
-                    "case-data.json",
-                    "case-shout.JSON",
-                    "case-notes.md",
-                  ]
-                ) {
+                for (const file of [
+                  "case-lower.txt",
+                  "case-upper.TXT",
+                  "case-mixed.Txt",
+                  "case-data.json",
+                  "case-shout.JSON",
+                  "case-notes.md",
+                ]) {
                   writeFileSync(join(fixtureDir, file), "");
                 }
                 mkdirSync(join(fixtureDir, "case-dir"));
@@ -7960,21 +8169,26 @@ printf '__FILE__:file:.json,.yaml::0\\n'
                 writeFileSync(scriptPath, pwsh.generateScript("casecli"));
                 const quote = (value: string) =>
                   `'${value.replaceAll("'", "''")}'`;
-                const result = runCommand("pwsh", [
-                  "-NoProfile",
-                  "-NonInteractive",
-                  "-Command",
-                  `$env:PATH = ${
-                    quote(tempDir)
-                  } + [IO.Path]::PathSeparator + $env:PATH; ` +
-                  `. ${quote(scriptPath)}; ` +
-                  `$line = 'casecli case'; ` +
-                  `$result = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $line.Length, $null); ` +
-                  `$result.CompletionMatches | ForEach-Object { $_.CompletionText }`,
-                ], { cwd: fixtureDir, timeout: 10000 });
-                const completions = result.split(/\r?\n/).map((line) =>
-                  line.trim()
-                ).filter(Boolean);
+                const result = runCommand(
+                  "pwsh",
+                  [
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    `$env:PATH = ${quote(
+                      tempDir,
+                    )} + [IO.Path]::PathSeparator + $env:PATH; ` +
+                      `. ${quote(scriptPath)}; ` +
+                      `$line = 'casecli case'; ` +
+                      `$result = [System.Management.Automation.CommandCompletion]::CompleteInput($line, $line.Length, $null); ` +
+                      `$result.CompletionMatches | ForEach-Object { $_.CompletionText }`,
+                  ],
+                  { cwd: fixtureDir, timeout: 10000 },
+                );
+                const completions = result
+                  .split(/\r?\n/)
+                  .map((line) => line.trim())
+                  .filter(Boolean);
                 deepStrictEqual(
                   completions.sort(),
                   [
@@ -8060,11 +8274,11 @@ printf '__FILE__:file:.json,.yaml::0\\n'
         );
 
         // Check that we got git and docker (may have descriptions appended)
-        const hasGit = completions.some((line) =>
-          line.startsWith("git") || line === "git"
+        const hasGit = completions.some(
+          (line) => line.startsWith("git") || line === "git",
         );
-        const hasDocker = completions.some((line) =>
-          line.startsWith("docker") || line === "docker"
+        const hasDocker = completions.some(
+          (line) => line.startsWith("docker") || line === "docker",
         );
 
         deepStrictEqual(hasGit, true);
@@ -8086,14 +8300,12 @@ printf '__FILE__:file:.json,.yaml::0\\n'
       deepStrictEqual(script.includes("'it\\'s'"), true);
     });
 
-    for (
-      const [arg, quoted] of [
-        ["a\\b", String.raw`'a\\b'`],
-        ["a\\", String.raw`'a\\'`],
-        ["a\\\\b", String.raw`'a\\\\b'`],
-        ["a\\'b", String.raw`'a\\\'b'`],
-      ]
-    ) {
+    for (const [arg, quoted] of [
+      ["a\\b", String.raw`'a\\b'`],
+      ["a\\", String.raw`'a\\'`],
+      ["a\\\\b", String.raw`'a\\\\b'`],
+      ["a\\'b", String.raw`'a\\\'b'`],
+    ]) {
       it(`should quote fixed fish argument ${JSON.stringify(arg)}`, () => {
         const script = fish.generateScript("myapp", [arg]);
         ok(script.includes(`myapp ${quoted} $prev $current 2>/dev/null`));
@@ -8108,11 +8320,7 @@ printf '__FILE__:file:.json,.yaml::0\\n'
 
       const encoded = Array.from(fish.encodeSuggestions(suggestions));
 
-      deepStrictEqual(encoded, [
-        "--verbose\t",
-        "\n",
-        "--quiet\t",
-      ]);
+      deepStrictEqual(encoded, ["--verbose\t", "\n", "--quiet\t"]);
     });
 
     it("should encode suggestions with descriptions", () => {
@@ -8234,10 +8442,7 @@ printf '__FILE__:file:.json,.yaml::0\\n'
 
       const encoded = Array.from(fish.encodeSuggestions(suggestions));
 
-      deepStrictEqual(
-        encoded[0],
-        "__FILE__:file::100%25done:0\t",
-      );
+      deepStrictEqual(encoded[0], "__FILE__:file::100%25done:0\t");
     });
 
     it("should format descriptions without colors", () => {
@@ -8318,9 +8523,7 @@ printf '__FILE__:file:.json,.yaml::0\\n'
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "fish-pattern-completion-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "fish-pattern-completion-"));
 
       try {
         // CLI emits __FILE__ with pattern=src/
@@ -8364,9 +8567,10 @@ ${functionName}
         const testScriptPath = join(tempDir, "test.fish");
         writeFileSync(testScriptPath, testScript);
         const result = runCommand("fish", [testScriptPath], { cwd: tempDir });
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
 
         // Should find files under src/ (from pattern), not root-level files
         ok(completions.some((c) => c.includes("main.ts")));
@@ -8428,9 +8632,10 @@ ${functionName}
         const result = runCommand("fish", [testScriptPath], {
           cwd: tempDir,
         });
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
 
         // Should find the file via tilde-expanded pattern
         ok(completions.some((c) => c.includes("testfile.txt")));
@@ -8448,9 +8653,7 @@ ${functionName}
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "fish-hidden-pattern-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "fish-hidden-pattern-"));
 
       try {
         // CLI emits __FILE__ with pattern=src/.e (hidden basename under
@@ -8494,9 +8697,10 @@ ${functionName}
         const testScriptPath = join(tempDir, "test.fish");
         writeFileSync(testScriptPath, testScript);
         const result = runCommand("fish", [testScriptPath], { cwd: tempDir });
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
 
         // Pattern "src/.e" targets hidden files—they must not be filtered out
         ok(completions.some((c) => c.includes(".env")));
@@ -8514,9 +8718,7 @@ ${functionName}
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "fish-incremental-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "fish-incremental-"));
 
       try {
         // CLI emits __FILE__ with pattern=src/
@@ -8562,9 +8764,10 @@ ${functionName}
         const testScriptPath = join(tempDir, "test.fish");
         writeFileSync(testScriptPath, testScript);
         const result = runCommand("fish", [testScriptPath], { cwd: tempDir });
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
 
         ok(completions.some((c) => c.includes("main.ts")));
         ok(!completions.some((c) => c.includes("util.ts")));
@@ -8580,9 +8783,7 @@ ${functionName}
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "fish-hidden-completion-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "fish-hidden-completion-"));
 
       try {
         // CLI that emits __FILE__ with hidden=1 and tab-delimited description,
@@ -8628,9 +8829,10 @@ ${functionName}
         const testScriptPath = join(tempDir, "test.fish");
         writeFileSync(testScriptPath, testScript);
         const result = runCommand("fish", [testScriptPath], { cwd: tempDir });
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
 
         // With hidden=1 and dot prefix, hidden files must be included
         ok(completions.some((c) => c.includes(".hidden")));
@@ -8645,9 +8847,7 @@ ${functionName}
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "fish-hidden-no-dot-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "fish-hidden-no-dot-"));
 
       try {
         // CLI that emits __FILE__ with hidden=1
@@ -8688,9 +8888,10 @@ ${functionName}
         const testScriptPath = join(tempDir, "test.fish");
         writeFileSync(testScriptPath, testScript);
         const result = runCommand("fish", [testScriptPath], { cwd: tempDir });
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
 
         // With hidden=1 and no dot prefix, hidden files must still be included
         ok(completions.some((c) => c.includes(".hidden")));
@@ -8706,9 +8907,7 @@ ${functionName}
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "fish-ext-dot-filter-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "fish-ext-dot-filter-"));
 
       try {
         // CLI emits __FILE__ with dot-prefixed extensions (.json,.yaml)
@@ -8752,33 +8951,34 @@ ${functionName}
         const testScriptPath = join(tempDir, "test.fish");
         writeFileSync(testScriptPath, testScript);
         const result = runCommand("fish", [testScriptPath], { cwd: tempDir });
-        const completions = result.trim().split("\n").filter((l) =>
-          l.length > 0
-        );
+        const completions = result
+          .trim()
+          .split("\n")
+          .filter((l) => l.length > 0);
 
         ok(
           completions.some((c) => c.includes("data.json")),
-          `Expected data.json in completions, got: ${
-            JSON.stringify(completions)
-          }`,
+          `Expected data.json in completions, got: ${JSON.stringify(
+            completions,
+          )}`,
         );
         ok(
           completions.some((c) => c.includes("config.yaml")),
-          `Expected config.yaml in completions, got: ${
-            JSON.stringify(completions)
-          }`,
+          `Expected config.yaml in completions, got: ${JSON.stringify(
+            completions,
+          )}`,
         );
         ok(
           !completions.some((c) => c.includes("readme.txt")),
-          `Should not include readme.txt in completions, got: ${
-            JSON.stringify(completions)
-          }`,
+          `Should not include readme.txt in completions, got: ${JSON.stringify(
+            completions,
+          )}`,
         );
         ok(
           completions.some((c) => c.includes("subdir")),
-          `Expected subdir/ in completions for navigation, got: ${
-            JSON.stringify(completions)
-          }`,
+          `Expected subdir/ in completions for navigation, got: ${JSON.stringify(
+            completions,
+          )}`,
         );
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
@@ -8868,316 +9068,369 @@ __globapp_complete
         });
         deepStrictEqual(result.stderr, "");
         deepStrictEqual(result.status, 0);
-        return result.stdout.split("\n").filter((l) => l.length > 0).sort();
+        return result.stdout
+          .split("\n")
+          .filter((l) => l.length > 0)
+          .sort();
       }
 
-      it("should match files against a basename wildcard", {
-        skip: fishUnavailable,
-      }, () => {
-        // Bun ignores the skip option, so we need an early return as well:
-        if (fishUnavailable) return;
-        const f = createFixture("fish-glob-star-");
-        try {
-          touch(
-            f.fixture,
-            "hello.txt",
-            "notes.txt",
-            "other.json",
-            ".secret.txt",
-            "src/",
-          );
-          deepStrictEqual(completeWithFish(f, "__FILE__:file::*.txt:0"), [
-            "hello.txt",
-            "notes.txt",
-            "src/",
-          ]);
-        } finally {
-          rmSync(f.root, { recursive: true, force: true });
-        }
-      });
+      it(
+        "should match files against a basename wildcard",
+        {
+          skip: fishUnavailable,
+        },
+        () => {
+          // Bun ignores the skip option, so we need an early return as well:
+          if (fishUnavailable) return;
+          const f = createFixture("fish-glob-star-");
+          try {
+            touch(
+              f.fixture,
+              "hello.txt",
+              "notes.txt",
+              "other.json",
+              ".secret.txt",
+              "src/",
+            );
+            deepStrictEqual(completeWithFish(f, "__FILE__:file::*.txt:0"), [
+              "hello.txt",
+              "notes.txt",
+              "src/",
+            ]);
+          } finally {
+            rmSync(f.root, { recursive: true, force: true });
+          }
+        },
+      );
 
-      it("should match a single character for ? in a wildcard", {
-        skip: fishUnavailable,
-      }, () => {
-        if (fishUnavailable) return;
-        const f = createFixture("fish-glob-qmark-");
-        try {
-          touch(
-            f.fixture,
-            "file1.txt",
-            "file12.txt",
-            "fileAB.txt",
-            "file?.txt.bak",
-            "dir/",
-          );
-          deepStrictEqual(completeWithFish(f, "__FILE__:file::file?.txt:0"), [
-            "dir/",
-            "file1.txt",
-          ]);
-        } finally {
-          rmSync(f.root, { recursive: true, force: true });
-        }
-      });
+      it(
+        "should match a single character for ? in a wildcard",
+        {
+          skip: fishUnavailable,
+        },
+        () => {
+          if (fishUnavailable) return;
+          const f = createFixture("fish-glob-qmark-");
+          try {
+            touch(
+              f.fixture,
+              "file1.txt",
+              "file12.txt",
+              "fileAB.txt",
+              "file?.txt.bak",
+              "dir/",
+            );
+            deepStrictEqual(completeWithFish(f, "__FILE__:file::file?.txt:0"), [
+              "dir/",
+              "file1.txt",
+            ]);
+          } finally {
+            rmSync(f.root, { recursive: true, force: true });
+          }
+        },
+      );
 
-      it("should keep the directory prefix of a wildcard pattern", {
-        skip: fishUnavailable,
-      }, () => {
-        if (fishUnavailable) return;
-        const f = createFixture("fish-glob-dir-");
-        try {
-          touch(f.fixture, "top.txt", "src/a.txt", "src/b.json", "src/sub/");
-          deepStrictEqual(completeWithFish(f, "__FILE__:file::src/*.txt:0"), [
-            "src/a.txt",
-            "src/sub/",
-          ]);
-          deepStrictEqual(
-            completeWithFish(f, "__FILE__:file::./src/*.txt:0"),
-            ["./src/a.txt", "./src/sub/"],
-          );
-        } finally {
-          rmSync(f.root, { recursive: true, force: true });
-        }
-      });
+      it(
+        "should keep the directory prefix of a wildcard pattern",
+        {
+          skip: fishUnavailable,
+        },
+        () => {
+          if (fishUnavailable) return;
+          const f = createFixture("fish-glob-dir-");
+          try {
+            touch(f.fixture, "top.txt", "src/a.txt", "src/b.json", "src/sub/");
+            deepStrictEqual(completeWithFish(f, "__FILE__:file::src/*.txt:0"), [
+              "src/a.txt",
+              "src/sub/",
+            ]);
+            deepStrictEqual(
+              completeWithFish(f, "__FILE__:file::./src/*.txt:0"),
+              ["./src/a.txt", "./src/sub/"],
+            );
+          } finally {
+            rmSync(f.root, { recursive: true, force: true });
+          }
+        },
+      );
 
-      it("should treat other characters in a wildcard literally", {
-        skip: fishUnavailable,
-      }, () => {
-        if (fishUnavailable) return;
-        const f = createFixture("fish-glob-literal-");
-        try {
-          touch(
-            f.fixture,
-            "[draft] notes.txt",
-            "d notes.txt",
-            "a+(b)1.txt",
-            "aa(b)1.txt",
-            "a+b1.txt",
-            "back\\slash.txt",
-            "backxslash.txt",
-          );
-          deepStrictEqual(
-            completeWithFish(f, "__FILE__:file::[draft] *.txt:0"),
-            ["[draft] notes.txt"],
-          );
-          deepStrictEqual(completeWithFish(f, "__FILE__:file::a+(b)*.txt:0"), [
-            "a+(b)1.txt",
-          ]);
-          deepStrictEqual(
-            completeWithFish(f, "__FILE__:file::back\\sl*.txt:0"),
-            ["back\\slash.txt"],
-          );
-        } finally {
-          rmSync(f.root, { recursive: true, force: true });
-        }
-      });
+      it(
+        "should treat other characters in a wildcard literally",
+        {
+          skip: fishUnavailable,
+        },
+        () => {
+          if (fishUnavailable) return;
+          const f = createFixture("fish-glob-literal-");
+          try {
+            touch(
+              f.fixture,
+              "[draft] notes.txt",
+              "d notes.txt",
+              "a+(b)1.txt",
+              "aa(b)1.txt",
+              "a+b1.txt",
+              "back\\slash.txt",
+              "backxslash.txt",
+            );
+            deepStrictEqual(
+              completeWithFish(f, "__FILE__:file::[draft] *.txt:0"),
+              ["[draft] notes.txt"],
+            );
+            deepStrictEqual(
+              completeWithFish(f, "__FILE__:file::a+(b)*.txt:0"),
+              ["a+(b)1.txt"],
+            );
+            deepStrictEqual(
+              completeWithFish(f, "__FILE__:file::back\\sl*.txt:0"),
+              ["back\\slash.txt"],
+            );
+          } finally {
+            rmSync(f.root, { recursive: true, force: true });
+          }
+        },
+      );
 
-      it("should include hidden entries for a wildcard when requested", {
-        skip: fishUnavailable,
-      }, () => {
-        if (fishUnavailable) return;
-        const f = createFixture("fish-glob-hidden-");
-        try {
-          touch(
-            f.fixture,
-            "hello.txt",
-            ".secret.txt",
-            ".env",
-            ".eslintrc",
-            ".cache/",
-            "src/",
-          );
-          deepStrictEqual(completeWithFish(f, "__FILE__:file::*.txt:1"), [
-            ".cache/",
-            ".secret.txt",
-            "hello.txt",
-            "src/",
-          ]);
-          deepStrictEqual(completeWithFish(f, "__FILE__:file::*.txt:0"), [
-            "hello.txt",
-            "src/",
-          ]);
-          deepStrictEqual(completeWithFish(f, "__FILE__:file::.e*:0"), [
-            ".env",
-            ".eslintrc",
-            "src/",
-          ]);
-          deepStrictEqual(completeWithFish(f, "__FILE__:file::.e?v:0"), [
-            ".env",
-            "src/",
-          ]);
-        } finally {
-          rmSync(f.root, { recursive: true, force: true });
-        }
-      });
+      it(
+        "should include hidden entries for a wildcard when requested",
+        {
+          skip: fishUnavailable,
+        },
+        () => {
+          if (fishUnavailable) return;
+          const f = createFixture("fish-glob-hidden-");
+          try {
+            touch(
+              f.fixture,
+              "hello.txt",
+              ".secret.txt",
+              ".env",
+              ".eslintrc",
+              ".cache/",
+              "src/",
+            );
+            deepStrictEqual(completeWithFish(f, "__FILE__:file::*.txt:1"), [
+              ".cache/",
+              ".secret.txt",
+              "hello.txt",
+              "src/",
+            ]);
+            deepStrictEqual(completeWithFish(f, "__FILE__:file::*.txt:0"), [
+              "hello.txt",
+              "src/",
+            ]);
+            deepStrictEqual(completeWithFish(f, "__FILE__:file::.e*:0"), [
+              ".env",
+              ".eslintrc",
+              "src/",
+            ]);
+            deepStrictEqual(completeWithFish(f, "__FILE__:file::.e?v:0"), [
+              ".env",
+              "src/",
+            ]);
+          } finally {
+            rmSync(f.root, { recursive: true, force: true });
+          }
+        },
+      );
 
-      it("should apply extension filters and directory type to wildcards", {
-        skip: fishUnavailable,
-      }, () => {
-        if (fishUnavailable) return;
-        const f = createFixture("fish-glob-filter-");
-        try {
-          touch(f.fixture, "a.json", "b.txt", "src/", "share/", "lib/");
-          deepStrictEqual(completeWithFish(f, "__FILE__:file:json:*:0"), [
-            "a.json",
-            "lib/",
-            "share/",
-            "src/",
-          ]);
-          deepStrictEqual(completeWithFish(f, "__FILE__:directory::s*:0"), [
-            "share/",
-            "src/",
-          ]);
-        } finally {
-          rmSync(f.root, { recursive: true, force: true });
-        }
-      });
+      it(
+        "should apply extension filters and directory type to wildcards",
+        {
+          skip: fishUnavailable,
+        },
+        () => {
+          if (fishUnavailable) return;
+          const f = createFixture("fish-glob-filter-");
+          try {
+            touch(f.fixture, "a.json", "b.txt", "src/", "share/", "lib/");
+            deepStrictEqual(completeWithFish(f, "__FILE__:file:json:*:0"), [
+              "a.json",
+              "lib/",
+              "share/",
+              "src/",
+            ]);
+            deepStrictEqual(completeWithFish(f, "__FILE__:directory::s*:0"), [
+              "share/",
+              "src/",
+            ]);
+          } finally {
+            rmSync(f.root, { recursive: true, force: true });
+          }
+        },
+      );
 
-      it("should list each matching directory once", {
-        skip: fishUnavailable,
-      }, () => {
-        if (fishUnavailable) return;
-        const f = createFixture("fish-glob-dedupe-");
-        try {
-          touch(f.fixture, "a.txt", "src/", ".cache/");
-          deepStrictEqual(completeWithFish(f, "__FILE__:file::*:1"), [
-            ".cache/",
-            "a.txt",
-            "src/",
-          ]);
-          deepStrictEqual(completeWithFish(f, "__FILE__:any::*:0"), [
-            "a.txt",
-            "src/",
-          ]);
-        } finally {
-          rmSync(f.root, { recursive: true, force: true });
-        }
-      });
+      it(
+        "should list each matching directory once",
+        {
+          skip: fishUnavailable,
+        },
+        () => {
+          if (fishUnavailable) return;
+          const f = createFixture("fish-glob-dedupe-");
+          try {
+            touch(f.fixture, "a.txt", "src/", ".cache/");
+            deepStrictEqual(completeWithFish(f, "__FILE__:file::*:1"), [
+              ".cache/",
+              "a.txt",
+              "src/",
+            ]);
+            deepStrictEqual(completeWithFish(f, "__FILE__:any::*:0"), [
+              "a.txt",
+              "src/",
+            ]);
+          } finally {
+            rmSync(f.root, { recursive: true, force: true });
+          }
+        },
+      );
 
-      it("should not treat ? in a directory name as a wildcard", {
-        skip: fishUnavailable,
-      }, () => {
-        if (fishUnavailable) return;
-        const f = createFixture("fish-glob-dirname-");
-        try {
-          touch(f.fixture, "What?/f1", "Whatx/f2");
-          deepStrictEqual(completeWithFish(f, "__FILE__:file::What?/:0"), [
-            "What?/f1",
-          ]);
-          // An unrelated typed word must not replace the fixed directory,
-          // just as it does not for a pattern such as src/.
-          deepStrictEqual(
-            completeWithFish(f, "__FILE__:file::What?/:0", "zz"),
-            ["What?/f1"],
-          );
-        } finally {
-          rmSync(f.root, { recursive: true, force: true });
-        }
-      });
+      it(
+        "should not treat ? in a directory name as a wildcard",
+        {
+          skip: fishUnavailable,
+        },
+        () => {
+          if (fishUnavailable) return;
+          const f = createFixture("fish-glob-dirname-");
+          try {
+            touch(f.fixture, "What?/f1", "Whatx/f2");
+            deepStrictEqual(completeWithFish(f, "__FILE__:file::What?/:0"), [
+              "What?/f1",
+            ]);
+            // An unrelated typed word must not replace the fixed directory,
+            // just as it does not for a pattern such as src/.
+            deepStrictEqual(
+              completeWithFish(f, "__FILE__:file::What?/:0", "zz"),
+              ["What?/f1"],
+            );
+          } finally {
+            rmSync(f.root, { recursive: true, force: true });
+          }
+        },
+      );
 
-      it("should treat ? and * in the typed word as literal prefixes", {
-        skip: fishUnavailable,
-      }, () => {
-        if (fishUnavailable) return;
-        const f = createFixture("fish-glob-typed-");
-        try {
-          // path() echoes the typed word as its pattern, so a pattern equal
-          // to the current word is a literal prefix, not a wildcard.
-          touch(
-            f.fixture,
-            "What?.txt",
-            "Whatx",
-            "src/a?b.txt",
-            "src/axb.txt",
-            "star*x.txt",
-            "starzz.txt",
-          );
-          deepStrictEqual(
-            completeWithFish(f, "__FILE__:file::What?:0", "What?"),
-            ["What?.txt"],
-          );
-          deepStrictEqual(
-            completeWithFish(f, "__FILE__:file::src/a?:0", "src/a?"),
-            ["src/a?b.txt"],
-          );
-          deepStrictEqual(
-            completeWithFish(f, "__FILE__:file::star*:0", "star*"),
-            ["star*x.txt"],
-          );
-        } finally {
-          rmSync(f.root, { recursive: true, force: true });
-        }
-      });
+      it(
+        "should treat ? and * in the typed word as literal prefixes",
+        {
+          skip: fishUnavailable,
+        },
+        () => {
+          if (fishUnavailable) return;
+          const f = createFixture("fish-glob-typed-");
+          try {
+            // path() echoes the typed word as its pattern, so a pattern equal
+            // to the current word is a literal prefix, not a wildcard.
+            touch(
+              f.fixture,
+              "What?.txt",
+              "Whatx",
+              "src/a?b.txt",
+              "src/axb.txt",
+              "star*x.txt",
+              "starzz.txt",
+            );
+            deepStrictEqual(
+              completeWithFish(f, "__FILE__:file::What?:0", "What?"),
+              ["What?.txt"],
+            );
+            deepStrictEqual(
+              completeWithFish(f, "__FILE__:file::src/a?:0", "src/a?"),
+              ["src/a?b.txt"],
+            );
+            deepStrictEqual(
+              completeWithFish(f, "__FILE__:file::star*:0", "star*"),
+              ["star*x.txt"],
+            );
+          } finally {
+            rmSync(f.root, { recursive: true, force: true });
+          }
+        },
+      );
 
-      it("should return nothing when a wildcard matches nothing", {
-        skip: fishUnavailable,
-      }, () => {
-        if (fishUnavailable) return;
-        const f = createFixture("fish-glob-none-");
-        try {
-          touch(f.fixture, "a.txt", "b.json");
-          deepStrictEqual(completeWithFish(f, "__FILE__:file::*.none:0"), []);
-        } finally {
-          rmSync(f.root, { recursive: true, force: true });
-        }
-      });
+      it(
+        "should return nothing when a wildcard matches nothing",
+        {
+          skip: fishUnavailable,
+        },
+        () => {
+          if (fishUnavailable) return;
+          const f = createFixture("fish-glob-none-");
+          try {
+            touch(f.fixture, "a.txt", "b.json");
+            deepStrictEqual(completeWithFish(f, "__FILE__:file::*.none:0"), []);
+          } finally {
+            rmSync(f.root, { recursive: true, force: true });
+          }
+        },
+      );
 
-      it("should keep the typed word for non-wildcard and ./ prefixes", {
-        skip: fishUnavailable,
-      }, () => {
-        if (fishUnavailable) return;
-        const f = createFixture("fish-glob-control-");
-        try {
-          touch(f.fixture, "src/main.ts", "src/model.ts", "src/util.ts");
-          deepStrictEqual(completeWithFish(f, "__FILE__:file::src/:0"), [
-            "src/main.ts",
-            "src/model.ts",
-            "src/util.ts",
-          ]);
-          deepStrictEqual(
-            completeWithFish(f, "__FILE__:file::src/:0", "./src/m"),
-            ["./src/main.ts", "./src/model.ts"],
-          );
-        } finally {
-          rmSync(f.root, { recursive: true, force: true });
-        }
-      });
+      it(
+        "should keep the typed word for non-wildcard and ./ prefixes",
+        {
+          skip: fishUnavailable,
+        },
+        () => {
+          if (fishUnavailable) return;
+          const f = createFixture("fish-glob-control-");
+          try {
+            touch(f.fixture, "src/main.ts", "src/model.ts", "src/util.ts");
+            deepStrictEqual(completeWithFish(f, "__FILE__:file::src/:0"), [
+              "src/main.ts",
+              "src/model.ts",
+              "src/util.ts",
+            ]);
+            deepStrictEqual(
+              completeWithFish(f, "__FILE__:file::src/:0", "./src/m"),
+              ["./src/main.ts", "./src/model.ts"],
+            );
+          } finally {
+            rmSync(f.root, { recursive: true, force: true });
+          }
+        },
+      );
 
-      it("should enumerate the root directory for a /-rooted wildcard", {
-        skip: fishUnavailable,
-      }, () => {
-        if (fishUnavailable) return;
-        const f = createFixture("fish-glob-root-");
-        try {
-          const completions = completeWithFish(
-            f,
-            "__FILE__:directory::/*:0",
-          );
-          ok(completions.length > 0);
-          ok(completions.every((c) => c.startsWith("/") && c.endsWith("/")));
-        } finally {
-          rmSync(f.root, { recursive: true, force: true });
-        }
-      });
+      it(
+        "should enumerate the root directory for a /-rooted wildcard",
+        {
+          skip: fishUnavailable,
+        },
+        () => {
+          if (fishUnavailable) return;
+          const f = createFixture("fish-glob-root-");
+          try {
+            const completions = completeWithFish(f, "__FILE__:directory::/*:0");
+            ok(completions.length > 0);
+            ok(completions.every((c) => c.startsWith("/") && c.endsWith("/")));
+          } finally {
+            rmSync(f.root, { recursive: true, force: true });
+          }
+        },
+      );
 
-      it("should restore the tilde prefix for a wildcard", {
-        skip: fishUnavailable || process.env.HOME == null,
-      }, () => {
-        const home = process.env.HOME;
-        if (fishUnavailable || home == null) return;
-        const f = createFixture("fish-glob-tilde-");
-        const homeDir = mkdtempSync(join(home, ".optique-fish-glob-"));
-        try {
-          touch(homeDir, "x.txt", "y.json");
-          const tildeDir = "~" + homeDir.slice(home.length);
-          deepStrictEqual(
-            completeWithFish(f, `__FILE__:file::${tildeDir}/*.txt:0`),
-            [`${tildeDir}/x.txt`],
-          );
-        } finally {
-          rmSync(homeDir, { recursive: true, force: true });
-          rmSync(f.root, { recursive: true, force: true });
-        }
-      });
+      it(
+        "should restore the tilde prefix for a wildcard",
+        {
+          skip: fishUnavailable || process.env.HOME == null,
+        },
+        () => {
+          const home = process.env.HOME;
+          if (fishUnavailable || home == null) return;
+          const f = createFixture("fish-glob-tilde-");
+          const homeDir = mkdtempSync(join(home, ".optique-fish-glob-"));
+          try {
+            touch(homeDir, "x.txt", "y.json");
+            const tildeDir = "~" + homeDir.slice(home.length);
+            deepStrictEqual(
+              completeWithFish(f, `__FILE__:file::${tildeDir}/*.txt:0`),
+              [`${tildeDir}/x.txt`],
+            );
+          } finally {
+            rmSync(homeDir, { recursive: true, force: true });
+            rmSync(f.root, { recursive: true, force: true });
+          }
+        },
+      );
     });
   });
 
@@ -9223,11 +9476,11 @@ __globapp_complete
         );
 
         // Check that we got git and docker completions
-        const hasGit = completions.some((c) =>
-          c === "git" || c.includes("git")
+        const hasGit = completions.some(
+          (c) => c === "git" || c.includes("git"),
         );
-        const hasDocker = completions.some((c) =>
-          c === "docker" || c.includes("docker")
+        const hasDocker = completions.some(
+          (c) => c === "docker" || c.includes("docker"),
         );
 
         deepStrictEqual(hasGit, true);
@@ -9258,62 +9511,66 @@ __globapp_complete
       ok(script.includes(`^myapp "it's \\"quoted\\" C:\\\\path\\\\"`));
     });
 
-    it("should pass fixed arguments intact to the CLI with actual nu shell", {
-      skip: process.platform === "win32",
-    }, (t) => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (process.platform === "win32") return;
-      if (!isShellAvailable("nu")) {
-        t.skip("nu not available");
-        return;
-      }
+    it(
+      "should pass fixed arguments intact to the CLI with actual nu shell",
+      {
+        skip: process.platform === "win32",
+      },
+      (t) => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("nu")) {
+          t.skip("nu not available");
+          return;
+        }
 
-      const tempDir = mkdtempSync(join(tmpdir(), "nu-fixed-args-"));
-      try {
-        const argsPath = join(tempDir, "callback-args");
-        const cliPath = join(tempDir, "fixed-args-cli");
-        writeFileSync(
-          cliPath,
-          `#!/bin/sh
+        const tempDir = mkdtempSync(join(tmpdir(), "nu-fixed-args-"));
+        try {
+          const argsPath = join(tempDir, "callback-args");
+          const cliPath = join(tempDir, "fixed-args-cli");
+          writeFileSync(
+            cliPath,
+            `#!/bin/sh
 printf '%s\\0' "$@" > '${argsPath}'
 printf 'alpha\\t\\n'
 `,
-          { mode: 0o755 },
-        );
+            { mode: 0o755 },
+          );
 
-        const fixedArgs = [
-          "it's",
-          `say "hi" it's`,
-          "back\\slash's\\",
-          "$(not) it's ~ *",
-          "line\nbreak's",
-          "caf\u00e9's \u{1F600}",
-          "",
-          "plain",
-        ];
-        const scriptPath = join(tempDir, "completion.nu");
-        writeFileSync(
-          scriptPath,
-          nu.generateScript("fixed-args-cli", fixedArgs),
-        );
-        const testScriptPath = join(tempDir, "test.nu");
-        writeFileSync(
-          testScriptPath,
-          `
+          const fixedArgs = [
+            "it's",
+            `say "hi" it's`,
+            "back\\slash's\\",
+            "$(not) it's ~ *",
+            "line\nbreak's",
+            "caf\u00e9's \u{1F600}",
+            "",
+            "plain",
+          ];
+          const scriptPath = join(tempDir, "completion.nu");
+          writeFileSync(
+            scriptPath,
+            nu.generateScript("fixed-args-cli", fixedArgs),
+          );
+          const testScriptPath = join(tempDir, "test.nu");
+          writeFileSync(
+            testScriptPath,
+            `
 $env.PATH = ($env.PATH | prepend "${tempDir}")
 source ${scriptPath}
 nu-complete-fixed-args-cli "fixed-args-cli a" | ignore
 `,
-        );
-        runCommand("nu", [testScriptPath], { cwd: tempDir });
+          );
+          runCommand("nu", [testScriptPath], { cwd: tempDir });
 
-        const output = readFileSync(argsPath, "utf8");
-        ok(output.endsWith("\0"));
-        deepStrictEqual(output.slice(0, -1).split("\0"), [...fixedArgs, "a"]);
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
+          const output = readFileSync(argsPath, "utf8");
+          ok(output.endsWith("\0"));
+          deepStrictEqual(output.slice(0, -1).split("\0"), [...fixedArgs, "a"]);
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      },
+    );
 
     it("should encode suggestions with tab-separated format", () => {
       const suggestions: Suggestion[] = [
@@ -9323,11 +9580,7 @@ nu-complete-fixed-args-cli "fixed-args-cli a" | ignore
 
       const encoded = Array.from(nu.encodeSuggestions(suggestions));
 
-      deepStrictEqual(encoded, [
-        "--verbose\t",
-        "\n",
-        "--quiet\t",
-      ]);
+      deepStrictEqual(encoded, ["--verbose\t", "\n", "--quiet\t"]);
     });
 
     it("should encode suggestions with descriptions", () => {
@@ -9449,10 +9702,7 @@ nu-complete-fixed-args-cli "fixed-args-cli a" | ignore
 
       const encoded = Array.from(nu.encodeSuggestions(suggestions));
 
-      deepStrictEqual(
-        encoded[0],
-        "__FILE__:file::100%25done:0\t",
-      );
+      deepStrictEqual(encoded[0], "__FILE__:file::100%25done:0\t");
     });
 
     it("should format descriptions without colors", () => {
@@ -9511,8 +9761,8 @@ nu-complete-fixed-args-cli "fixed-args-cli a" | ignore
 
       // Check that the script uses 2-space indentation
       const lines = script.split("\n");
-      const indentedLines = lines.filter((line) =>
-        line.startsWith("  ") && !line.startsWith("    ")
+      const indentedLines = lines.filter(
+        (line) => line.startsWith("  ") && !line.startsWith("    "),
       );
 
       // Should have some lines with 2-space indentation
@@ -9559,9 +9809,7 @@ nu-complete-fixed-args-cli "fixed-args-cli a" | ignore
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "nu-hidden-completion-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "nu-hidden-completion-"));
 
       try {
         // CLI that emits __FILE__ with hidden=1 and tab-delimited description,
@@ -9589,206 +9837,135 @@ printf '__FILE__:file:::1\\tConfiguration file\\n'
       }
     });
 
-    it("should preserve directory prefix in nested file completions", {
-      skip: process.platform === "win32",
-    }, (t) => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (process.platform === "win32") return;
-      if (!isShellAvailable("nu")) {
-        t.skip("nu not available");
-        return;
-      }
+    it(
+      "should preserve directory prefix in nested file completions",
+      {
+        skip: process.platform === "win32",
+      },
+      (t) => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("nu")) {
+          t.skip("nu not available");
+          return;
+        }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "nu-nested-dir-"),
-      );
+        const tempDir = mkdtempSync(join(tmpdir(), "nu-nested-dir-"));
 
-      try {
-        // CLI that emits __FILE__:file:::0
-        const cliScript = `#!/bin/bash
+        try {
+          // CLI that emits __FILE__:file:::0
+          const cliScript = `#!/bin/bash
 printf '__FILE__:file:::0\\n'
 `;
-        const cliPath = join(tempDir, "nested-cli");
-        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+          const cliPath = join(tempDir, "nested-cli");
+          writeFileSync(cliPath, cliScript, { mode: 0o755 });
 
-        // Create src/ directory with a file inside
-        const srcDir = join(tempDir, "src");
-        mkdirSync(srcDir, { recursive: true });
-        writeFileSync(join(srcDir, "alpha.txt"), "");
+          // Create src/ directory with a file inside
+          const srcDir = join(tempDir, "src");
+          mkdirSync(srcDir, { recursive: true });
+          writeFileSync(join(srcDir, "alpha.txt"), "");
 
-        const script = nu.generateScript("nested-cli");
+          const script = nu.generateScript("nested-cli");
 
-        // Write and run test script with "nested-cli src/" context
-        const nuTempDir = mkdtempSync(
-          join(tmpdir(), "nu-nested-test-"),
-        );
-        try {
-          const scriptPath = join(nuTempDir, "completion.nu");
-          writeFileSync(scriptPath, script);
+          // Write and run test script with "nested-cli src/" context
+          const nuTempDir = mkdtempSync(join(tmpdir(), "nu-nested-test-"));
+          try {
+            const scriptPath = join(nuTempDir, "completion.nu");
+            writeFileSync(scriptPath, script);
 
-          const safeName = "nested-cli".replace(/[^a-zA-Z0-9]+/g, "-");
-          const functionName = `nu-complete-${safeName}`;
-          const testScript = `
+            const safeName = "nested-cli".replace(/[^a-zA-Z0-9]+/g, "-");
+            const functionName = `nu-complete-${safeName}`;
+            const testScript = `
 $env.PATH = ($env.PATH | prepend "${tempDir}")
 source ${scriptPath}
 
 do { ${functionName} "nested-cli src/" }
 `;
-          const testScriptPath = join(nuTempDir, "test.nu");
-          writeFileSync(testScriptPath, testScript);
+            const testScriptPath = join(nuTempDir, "test.nu");
+            writeFileSync(testScriptPath, testScript);
 
-          const result = runCommand("nu", [testScriptPath], {
-            cwd: tempDir,
-          });
+            const result = runCommand("nu", [testScriptPath], {
+              cwd: tempDir,
+            });
 
-          const lines = result.trim().split("\n");
-          const completions: string[] = [];
-          for (const line of lines) {
-            const match = line.match(
-              /│\s*\d+\s*│\s*([^│]+)\s*│/,
-            );
-            if (match) {
-              const value = match[1]?.trim();
-              if (value) completions.push(value);
+            const lines = result.trim().split("\n");
+            const completions: string[] = [];
+            for (const line of lines) {
+              const match = line.match(/│\s*\d+\s*│\s*([^│]+)\s*│/);
+              if (match) {
+                const value = match[1]?.trim();
+                if (value) completions.push(value);
+              }
             }
+
+            ok(
+              completions.some((c) => c === "src/alpha.txt"),
+              `Expected "src/alpha.txt" in completions, got: ${JSON.stringify(
+                completions,
+              )}`,
+            );
+          } finally {
+            rmSync(nuTempDir, { recursive: true, force: true });
           }
-
-          ok(
-            completions.some((c) => c === "src/alpha.txt"),
-            `Expected "src/alpha.txt" in completions, got: ${
-              JSON.stringify(completions)
-            }`,
-          );
         } finally {
-          rmSync(nuTempDir, { recursive: true, force: true });
+          rmSync(tempDir, { recursive: true, force: true });
         }
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
+      },
+    );
 
-    it("should not double slash for root-level absolute path prefix", {
-      skip: process.platform === "win32",
-    }, (t) => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (process.platform === "win32") return;
-      if (!isShellAvailable("nu")) {
-        t.skip("nu not available");
-        return;
-      }
+    it(
+      "should not double slash for root-level absolute path prefix",
+      {
+        skip: process.platform === "win32",
+      },
+      (t) => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("nu")) {
+          t.skip("nu not available");
+          return;
+        }
 
-      const script = nu.generateScript("root-cli");
+        const script = nu.generateScript("root-cli");
 
-      // Verify the generated script does not produce "//" for root paths
-      // by checking the dir_prefix logic handles parent == "/" correctly
-      const nuTempDir = mkdtempSync(
-        join(tmpdir(), "nu-root-prefix-"),
-      );
+        // Verify the generated script does not produce "//" for root paths
+        // by checking the dir_prefix logic handles parent == "/" correctly
+        const nuTempDir = mkdtempSync(join(tmpdir(), "nu-root-prefix-"));
 
-      try {
-        // CLI that emits __FILE__:any:::0
-        const cliScript = `#!/bin/bash
+        try {
+          // CLI that emits __FILE__:any:::0
+          const cliScript = `#!/bin/bash
 printf '__FILE__:any:::0\\n'
 `;
-        const cliPath = join(nuTempDir, "root-cli");
-        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+          const cliPath = join(nuTempDir, "root-cli");
+          writeFileSync(cliPath, cliScript, { mode: 0o755 });
 
-        const scriptPath = join(nuTempDir, "completion.nu");
-        writeFileSync(scriptPath, script);
+          const scriptPath = join(nuTempDir, "completion.nu");
+          writeFileSync(scriptPath, script);
 
-        const functionName = "nu-complete-root-cli";
-        const testScript = `
+          const functionName = "nu-complete-root-cli";
+          const testScript = `
 $env.PATH = ($env.PATH | prepend "${nuTempDir}")
 source ${scriptPath}
 
 do { ${functionName} "root-cli /u" }
 `;
-        const testScriptPath = join(nuTempDir, "test.nu");
-        writeFileSync(testScriptPath, testScript);
-
-        const result = runCommand("nu", [testScriptPath], {
-          cwd: nuTempDir,
-        });
-
-        const lines = result.trim().split("\n");
-        for (const line of lines) {
-          const match = line.match(
-            /│\s*\d+\s*│\s*([^│]+)\s*│/,
-          );
-          if (match) {
-            const value = match[1]?.trim();
-            if (value) {
-              ok(
-                !value.startsWith("//"),
-                `Completion "${value}" has double-slash prefix`,
-              );
-            }
-          }
-        }
-      } finally {
-        rmSync(nuTempDir, { recursive: true, force: true });
-      }
-    });
-
-    it("should not prefix bare relative path completions with slash", {
-      skip: process.platform === "win32",
-    }, (t) => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (process.platform === "win32") return;
-      if (!isShellAvailable("nu")) {
-        t.skip("nu not available");
-        return;
-      }
-
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "nu-bare-prefix-"),
-      );
-
-      try {
-        // CLI that emits __FILE__:file:::0
-        const cliScript = `#!/bin/bash
-printf '__FILE__:file:::0\\n'
-`;
-        const cliPath = join(tempDir, "bare-cli");
-        writeFileSync(cliPath, cliScript, { mode: 0o755 });
-
-        // Create a file that starts with "re"
-        writeFileSync(join(tempDir, "readme.txt"), "");
-
-        const script = nu.generateScript("bare-cli");
-
-        const nuTempDir = mkdtempSync(
-          join(tmpdir(), "nu-bare-test-"),
-        );
-        try {
-          const scriptPath = join(nuTempDir, "completion.nu");
-          writeFileSync(scriptPath, script);
-
-          const functionName = "nu-complete-bare-cli";
-          const testScript = `
-$env.PATH = ($env.PATH | prepend "${tempDir}")
-source ${scriptPath}
-
-do { ${functionName} "bare-cli re" }
-`;
           const testScriptPath = join(nuTempDir, "test.nu");
           writeFileSync(testScriptPath, testScript);
 
           const result = runCommand("nu", [testScriptPath], {
-            cwd: tempDir,
+            cwd: nuTempDir,
           });
 
           const lines = result.trim().split("\n");
           for (const line of lines) {
-            const match = line.match(
-              /│\s*\d+\s*│\s*([^│]+)\s*│/,
-            );
+            const match = line.match(/│\s*\d+\s*│\s*([^│]+)\s*│/);
             if (match) {
               const value = match[1]?.trim();
               if (value) {
                 ok(
-                  !value.startsWith("/"),
-                  `Completion "${value}" should not start with "/"`,
+                  !value.startsWith("//"),
+                  `Completion "${value}" has double-slash prefix`,
                 );
               }
             }
@@ -9796,10 +9973,77 @@ do { ${functionName} "bare-cli re" }
         } finally {
           rmSync(nuTempDir, { recursive: true, force: true });
         }
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
+      },
+    );
+
+    it(
+      "should not prefix bare relative path completions with slash",
+      {
+        skip: process.platform === "win32",
+      },
+      (t) => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("nu")) {
+          t.skip("nu not available");
+          return;
+        }
+
+        const tempDir = mkdtempSync(join(tmpdir(), "nu-bare-prefix-"));
+
+        try {
+          // CLI that emits __FILE__:file:::0
+          const cliScript = `#!/bin/bash
+printf '__FILE__:file:::0\\n'
+`;
+          const cliPath = join(tempDir, "bare-cli");
+          writeFileSync(cliPath, cliScript, { mode: 0o755 });
+
+          // Create a file that starts with "re"
+          writeFileSync(join(tempDir, "readme.txt"), "");
+
+          const script = nu.generateScript("bare-cli");
+
+          const nuTempDir = mkdtempSync(join(tmpdir(), "nu-bare-test-"));
+          try {
+            const scriptPath = join(nuTempDir, "completion.nu");
+            writeFileSync(scriptPath, script);
+
+            const functionName = "nu-complete-bare-cli";
+            const testScript = `
+$env.PATH = ($env.PATH | prepend "${tempDir}")
+source ${scriptPath}
+
+do { ${functionName} "bare-cli re" }
+`;
+            const testScriptPath = join(nuTempDir, "test.nu");
+            writeFileSync(testScriptPath, testScript);
+
+            const result = runCommand("nu", [testScriptPath], {
+              cwd: tempDir,
+            });
+
+            const lines = result.trim().split("\n");
+            for (const line of lines) {
+              const match = line.match(/│\s*\d+\s*│\s*([^│]+)\s*│/);
+              if (match) {
+                const value = match[1]?.trim();
+                if (value) {
+                  ok(
+                    !value.startsWith("/"),
+                    `Completion "${value}" should not start with "/"`,
+                  );
+                }
+              }
+            }
+          } finally {
+            rmSync(nuTempDir, { recursive: true, force: true });
+          }
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      },
+    );
 
     it("should enumerate hidden files without dot prefix when includeHidden is true", (t) => {
       if (!isShellAvailable("nu")) {
@@ -9807,9 +10051,7 @@ do { ${functionName} "bare-cli re" }
         return;
       }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "nu-hidden-no-dot-"),
-      );
+      const tempDir = mkdtempSync(join(tmpdir(), "nu-hidden-no-dot-"));
 
       try {
         // CLI that emits __FILE__ with hidden=1
@@ -9841,192 +10083,201 @@ printf '__FILE__:file:::1\\tConfiguration file\\n'
       }
     });
 
-    it("should filter files by dot-prefixed extensions in nu", {
-      skip: process.platform === "win32",
-    }, (t) => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (process.platform === "win32") return;
-      if (!isShellAvailable("nu")) {
-        t.skip("nu not available");
-        return;
-      }
+    it(
+      "should filter files by dot-prefixed extensions in nu",
+      {
+        skip: process.platform === "win32",
+      },
+      (t) => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("nu")) {
+          t.skip("nu not available");
+          return;
+        }
 
-      const tempDir = mkdtempSync(
-        join(tmpdir(), "nu-ext-dot-filter-"),
-      );
+        const tempDir = mkdtempSync(join(tmpdir(), "nu-ext-dot-filter-"));
 
-      try {
-        // CLI emits __FILE__ with dot-prefixed extensions (.json,.yaml)
-        const cliScript = `#!/bin/bash
+        try {
+          // CLI emits __FILE__ with dot-prefixed extensions (.json,.yaml)
+          const cliScript = `#!/bin/bash
 printf '__FILE__:file:.json,.yaml::0\\n'
 `;
-        const cliPath = join(tempDir, "extapp");
-        writeFileSync(cliPath, cliScript, { mode: 0o755 });
+          const cliPath = join(tempDir, "extapp");
+          writeFileSync(cliPath, cliScript, { mode: 0o755 });
 
-        // Create test files
-        writeFileSync(join(tempDir, "data.json"), "");
-        writeFileSync(join(tempDir, "config.yaml"), "");
-        writeFileSync(join(tempDir, "readme.txt"), "");
-        const subDir = join(tempDir, "subdir");
-        mkdirSync(subDir);
+          // Create test files
+          writeFileSync(join(tempDir, "data.json"), "");
+          writeFileSync(join(tempDir, "config.yaml"), "");
+          writeFileSync(join(tempDir, "readme.txt"), "");
+          const subDir = join(tempDir, "subdir");
+          mkdirSync(subDir);
 
-        const script = nu.generateScript("extapp");
+          const script = nu.generateScript("extapp");
 
-        const nuTempDir = mkdtempSync(
-          join(tmpdir(), "nu-ext-dot-test-"),
-        );
-        try {
-          const scriptPath = join(nuTempDir, "completion.nu");
-          writeFileSync(scriptPath, script);
+          const nuTempDir = mkdtempSync(join(tmpdir(), "nu-ext-dot-test-"));
+          try {
+            const scriptPath = join(nuTempDir, "completion.nu");
+            writeFileSync(scriptPath, script);
 
-          const safeName = "extapp".replace(/[^a-zA-Z0-9]+/g, "-");
-          const functionName = `nu-complete-${safeName}`;
-          const testScript = `
+            const safeName = "extapp".replace(/[^a-zA-Z0-9]+/g, "-");
+            const functionName = `nu-complete-${safeName}`;
+            const testScript = `
 $env.PATH = ($env.PATH | prepend "${tempDir}")
 source ${scriptPath}
 
 do { ${functionName} "extapp " }
 `;
-          const testScriptPath = join(nuTempDir, "test.nu");
-          writeFileSync(testScriptPath, testScript);
+            const testScriptPath = join(nuTempDir, "test.nu");
+            writeFileSync(testScriptPath, testScript);
 
-          const result = runCommand("nu", [testScriptPath], {
-            cwd: tempDir,
-          });
+            const result = runCommand("nu", [testScriptPath], {
+              cwd: tempDir,
+            });
 
-          const lines = result.trim().split("\n");
-          const completions: string[] = [];
-          for (const line of lines) {
-            const match = line.match(
-              /│\s*\d+\s*│\s*([^│]+)\s*│/,
-            );
-            if (match) {
-              const value = match[1]?.trim();
-              if (value) completions.push(value);
+            const lines = result.trim().split("\n");
+            const completions: string[] = [];
+            for (const line of lines) {
+              const match = line.match(/│\s*\d+\s*│\s*([^│]+)\s*│/);
+              if (match) {
+                const value = match[1]?.trim();
+                if (value) completions.push(value);
+              }
             }
-          }
 
-          ok(
-            completions.some((c) => c.includes("data.json")),
-            `Expected data.json in completions, got: ${
-              JSON.stringify(completions)
-            }`,
+            ok(
+              completions.some((c) => c.includes("data.json")),
+              `Expected data.json in completions, got: ${JSON.stringify(
+                completions,
+              )}`,
+            );
+            ok(
+              completions.some((c) => c.includes("config.yaml")),
+              `Expected config.yaml in completions, got: ${JSON.stringify(
+                completions,
+              )}`,
+            );
+            ok(
+              !completions.some((c) => c.includes("readme.txt")),
+              `Should not include readme.txt in completions, got: ${JSON.stringify(
+                completions,
+              )}`,
+            );
+            ok(
+              completions.some((c) => c.includes("subdir")),
+              `Expected subdir/ in completions for navigation, got: ${JSON.stringify(
+                completions,
+              )}`,
+            );
+          } finally {
+            rmSync(nuTempDir, { recursive: true, force: true });
+          }
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      },
+    );
+
+    it(
+      "should treat brackets in a typed path literally in nu",
+      {
+        skip: process.platform === "win32" || !isShellAvailable("nu"),
+      },
+      (t) => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("nu")) {
+          t.skip("nu not available");
+          return;
+        }
+
+        const tempDir = mkdtempSync(join(tmpdir(), "nu-literal-brackets-"));
+
+        try {
+          writeFileSync(join(tempDir, "report[1].txt"), "");
+          writeFileSync(join(tempDir, "report1.txt"), "");
+          writeFileSync(join(tempDir, "a[b.txt"), "");
+
+          deepStrictEqual(
+            testNuFileCompletion(tempDir, "report[1]", '"report[1]"'),
+            ["'report[1].txt'"],
           );
-          ok(
-            completions.some((c) => c.includes("config.yaml")),
-            `Expected config.yaml in completions, got: ${
-              JSON.stringify(completions)
-            }`,
-          );
-          ok(
-            !completions.some((c) => c.includes("readme.txt")),
-            `Should not include readme.txt in completions, got: ${
-              JSON.stringify(completions)
-            }`,
-          );
-          ok(
-            completions.some((c) => c.includes("subdir")),
-            `Expected subdir/ in completions for navigation, got: ${
-              JSON.stringify(completions)
-            }`,
+          // An unclosed bracket must not make the glob invalid:
+          deepStrictEqual(testNuFileCompletion(tempDir, "a[", '"a["'), [
+            "'a[b.txt'",
+          ]);
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      },
+    );
+
+    it(
+      "should treat brackets in a directory name literally in nu",
+      {
+        skip: process.platform === "win32" || !isShellAvailable("nu"),
+      },
+      (t) => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("nu")) {
+          t.skip("nu not available");
+          return;
+        }
+
+        const tempDir = mkdtempSync(join(tmpdir(), "nu-literal-bracket-dir-"));
+
+        try {
+          mkdirSync(join(tempDir, "[draft]", "sub"), { recursive: true });
+          writeFileSync(join(tempDir, "[draft]", "notes.txt"), "");
+          // The completer keeps the typed directory prefix and appends only
+          // the matched basename, so the decoy needs a distinct basename to
+          // reveal a match inside "d/" via the [draft] character class:
+          mkdirSync(join(tempDir, "d"));
+          writeFileSync(join(tempDir, "d", "decoy.txt"), "");
+
+          deepStrictEqual(
+            testNuFileCompletion(tempDir, "[draft]", '"[draft]"'),
+            ["'[draft]/notes.txt'", "'[draft]/sub/'"],
           );
         } finally {
-          rmSync(nuTempDir, { recursive: true, force: true });
+          rmSync(tempDir, { recursive: true, force: true });
         }
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
+      },
+    );
 
-    it("should treat brackets in a typed path literally in nu", {
-      skip: process.platform === "win32" || !isShellAvailable("nu"),
-    }, (t) => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (process.platform === "win32") return;
-      if (!isShellAvailable("nu")) {
-        t.skip("nu not available");
-        return;
-      }
+    it(
+      "should keep bracket classes in supplied wildcard patterns in nu",
+      {
+        skip: process.platform === "win32" || !isShellAvailable("nu"),
+      },
+      (t) => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("nu")) {
+          t.skip("nu not available");
+          return;
+        }
 
-      const tempDir = mkdtempSync(join(tmpdir(), "nu-literal-brackets-"));
+        const tempDir = mkdtempSync(join(tmpdir(), "nu-bracket-class-"));
 
-      try {
-        writeFileSync(join(tempDir, "report[1].txt"), "");
-        writeFileSync(join(tempDir, "report1.txt"), "");
-        writeFileSync(join(tempDir, "a[b.txt"), "");
+        try {
+          writeFileSync(join(tempDir, "a1.txt"), "");
+          writeFileSync(join(tempDir, "b1.txt"), "");
+          writeFileSync(join(tempDir, "c1.txt"), "");
+          writeFileSync(join(tempDir, "[ab]1.txt"), "");
 
-        deepStrictEqual(
-          testNuFileCompletion(tempDir, "report[1]", '"report[1]"'),
-          ["'report[1].txt'"],
-        );
-        // An unclosed bracket must not make the glob invalid:
-        deepStrictEqual(
-          testNuFileCompletion(tempDir, "a[", '"a["'),
-          ["'a[b.txt'"],
-        );
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
-
-    it("should treat brackets in a directory name literally in nu", {
-      skip: process.platform === "win32" || !isShellAvailable("nu"),
-    }, (t) => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (process.platform === "win32") return;
-      if (!isShellAvailable("nu")) {
-        t.skip("nu not available");
-        return;
-      }
-
-      const tempDir = mkdtempSync(join(tmpdir(), "nu-literal-bracket-dir-"));
-
-      try {
-        mkdirSync(join(tempDir, "[draft]", "sub"), { recursive: true });
-        writeFileSync(join(tempDir, "[draft]", "notes.txt"), "");
-        // The completer keeps the typed directory prefix and appends only
-        // the matched basename, so the decoy needs a distinct basename to
-        // reveal a match inside "d/" via the [draft] character class:
-        mkdirSync(join(tempDir, "d"));
-        writeFileSync(join(tempDir, "d", "decoy.txt"), "");
-
-        deepStrictEqual(
-          testNuFileCompletion(tempDir, "[draft]", '"[draft]"'),
-          ["'[draft]/notes.txt'", "'[draft]/sub/'"],
-        );
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
-
-    it("should keep bracket classes in supplied wildcard patterns in nu", {
-      skip: process.platform === "win32" || !isShellAvailable("nu"),
-    }, (t) => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (process.platform === "win32") return;
-      if (!isShellAvailable("nu")) {
-        t.skip("nu not available");
-        return;
-      }
-
-      const tempDir = mkdtempSync(join(tmpdir(), "nu-bracket-class-"));
-
-      try {
-        writeFileSync(join(tempDir, "a1.txt"), "");
-        writeFileSync(join(tempDir, "b1.txt"), "");
-        writeFileSync(join(tempDir, "c1.txt"), "");
-        writeFileSync(join(tempDir, "[ab]1.txt"), "");
-
-        // A pattern with * or ? is a glob, as in the other shells, so its
-        // [ab] stays a character class:
-        deepStrictEqual(
-          testNuFileCompletion(tempDir, "[ab]*.txt", ""),
-          ["a1.txt", "b1.txt"],
-        );
-      } finally {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
+          // A pattern with * or ? is a glob, as in the other shells, so its
+          // [ab] stays a character class:
+          deepStrictEqual(testNuFileCompletion(tempDir, "[ab]*.txt", ""), [
+            "a1.txt",
+            "b1.txt",
+          ]);
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      },
+    );
 
     it("should include directories for navigation in file type completion", () => {
       const script = nu.generateScript("filedir-cli");
@@ -10067,240 +10318,273 @@ do { ${functionName} "extapp " }
         }
       }
 
-      it("should complete symlinks by target type in file mode", {
-        skip,
-      }, () => {
-        // Bun ignores the skip option, so we need an early return as well:
-        if (skip) return;
-        withFixtures((workDir) => {
-          deepStrictEqual(
-            runNuFileCompletion("__FILE__:file:.txt::0", "link", workDir),
-            [
-              "link.txt",
-              "linkchain/",
-              "linkdir/",
-              "linkdir2/",
-              "linkmixed.txt",
-            ],
-          );
-          deepStrictEqual(
-            runNuFileCompletion("__FILE__:file:::0", "link", workDir),
-            [
-              "link.md",
-              "link.txt",
-              "linkchain/",
-              "linkdir/",
-              "linkdir2/",
-              "linkmixed.md",
-              "linkmixed.txt",
-            ],
-          );
-        });
-      });
+      it(
+        "should complete symlinks by target type in file mode",
+        {
+          skip,
+        },
+        () => {
+          // Bun ignores the skip option, so we need an early return as well:
+          if (skip) return;
+          withFixtures((workDir) => {
+            deepStrictEqual(
+              runNuFileCompletion("__FILE__:file:.txt::0", "link", workDir),
+              [
+                "link.txt",
+                "linkchain/",
+                "linkdir/",
+                "linkdir2/",
+                "linkmixed.txt",
+              ],
+            );
+            deepStrictEqual(
+              runNuFileCompletion("__FILE__:file:::0", "link", workDir),
+              [
+                "link.md",
+                "link.txt",
+                "linkchain/",
+                "linkdir/",
+                "linkdir2/",
+                "linkmixed.md",
+                "linkmixed.txt",
+              ],
+            );
+          });
+        },
+      );
 
-      it("should complete directory symlinks in directory mode", {
-        skip,
-      }, () => {
-        // Bun ignores the skip option, so we need an early return as well:
-        if (skip) return;
-        withFixtures((workDir) => {
-          deepStrictEqual(
-            runNuFileCompletion("__FILE__:directory:::0", "link", workDir),
-            ["linkchain/", "linkdir/", "linkdir2/"],
-          );
-        });
-      });
+      it(
+        "should complete directory symlinks in directory mode",
+        {
+          skip,
+        },
+        () => {
+          // Bun ignores the skip option, so we need an early return as well:
+          if (skip) return;
+          withFixtures((workDir) => {
+            deepStrictEqual(
+              runNuFileCompletion("__FILE__:directory:::0", "link", workDir),
+              ["linkchain/", "linkdir/", "linkdir2/"],
+            );
+          });
+        },
+      );
 
-      it("should complete symlinks by target type in any mode", {
-        skip,
-      }, () => {
-        // Bun ignores the skip option, so we need an early return as well:
-        if (skip) return;
-        withFixtures((workDir) => {
-          deepStrictEqual(
-            runNuFileCompletion("__FILE__:any:::0", "link", workDir),
-            [
-              "link.md",
-              "link.txt",
-              "linkchain/",
-              "linkdir/",
-              "linkdir2/",
-              "linkmixed.md",
-              "linkmixed.txt",
-            ],
-          );
-          deepStrictEqual(
-            runNuFileCompletion("__FILE__:any:.txt::0", "link", workDir),
-            [
-              "link.txt",
-              "linkchain/",
-              "linkdir/",
-              "linkdir2/",
-              "linkmixed.txt",
-            ],
-          );
-        });
-      });
+      it(
+        "should complete symlinks by target type in any mode",
+        {
+          skip,
+        },
+        () => {
+          // Bun ignores the skip option, so we need an early return as well:
+          if (skip) return;
+          withFixtures((workDir) => {
+            deepStrictEqual(
+              runNuFileCompletion("__FILE__:any:::0", "link", workDir),
+              [
+                "link.md",
+                "link.txt",
+                "linkchain/",
+                "linkdir/",
+                "linkdir2/",
+                "linkmixed.md",
+                "linkmixed.txt",
+              ],
+            );
+            deepStrictEqual(
+              runNuFileCompletion("__FILE__:any:.txt::0", "link", workDir),
+              [
+                "link.txt",
+                "linkchain/",
+                "linkdir/",
+                "linkdir2/",
+                "linkmixed.txt",
+              ],
+            );
+          });
+        },
+      );
 
-      it("should exclude broken and looping symlinks when filtering", {
-        skip,
-      }, () => {
-        // Bun ignores the skip option, so we need an early return as well:
-        if (skip) return;
-        withFixtures((workDir) => {
-          for (
-            const directive of [
+      it(
+        "should exclude broken and looping symlinks when filtering",
+        {
+          skip,
+        },
+        () => {
+          // Bun ignores the skip option, so we need an early return as well:
+          if (skip) return;
+          withFixtures((workDir) => {
+            for (const directive of [
               "__FILE__:file:.txt::0",
               "__FILE__:file:::0",
               "__FILE__:directory:::0",
               "__FILE__:any:.txt::0",
-            ]
-          ) {
-            for (const prefix of ["bro", "loop"]) {
-              deepStrictEqual(
-                runNuFileCompletion(directive, prefix, workDir),
-                [],
-                `${directive} with prefix ${prefix}`,
+            ]) {
+              for (const prefix of ["bro", "loop"]) {
+                deepStrictEqual(
+                  runNuFileCompletion(directive, prefix, workDir),
+                  [],
+                  `${directive} with prefix ${prefix}`,
+                );
+              }
+            }
+            // Unfiltered any mode keeps listing every entry as before:
+            deepStrictEqual(
+              runNuFileCompletion("__FILE__:any:::0", "bro", workDir),
+              ["broken.txt"],
+            );
+          });
+        },
+      );
+
+      it(
+        "should list a directory symlink's contents for its exact name",
+        {
+          skip,
+        },
+        () => {
+          // Bun ignores the skip option, so we need an early return as well:
+          if (skip) return;
+          withFixtures((workDir) => {
+            deepStrictEqual(
+              runNuFileCompletion("__FILE__:file:.txt::0", "linkdir", workDir),
+              ["linkdir/inner.txt"],
+            );
+          });
+        },
+      );
+
+      it(
+        "should include symlinks in glob pattern completion",
+        {
+          skip,
+        },
+        () => {
+          // Bun ignores the skip option, so we need an early return as well:
+          if (skip) return;
+          withFixtures((workDir) => {
+            const completions = runNuFileCompletion(
+              "__FILE__:file:.txt:*.txt:0",
+              "",
+              workDir,
+            );
+            for (const expected of ["link.txt", "linkmixed.txt", "linkdir/"]) {
+              ok(
+                completions.includes(expected),
+                `Expected ${expected} in ${JSON.stringify(completions)}.`,
               );
             }
-          }
-          // Unfiltered any mode keeps listing every entry as before:
-          deepStrictEqual(
-            runNuFileCompletion("__FILE__:any:::0", "bro", workDir),
-            ["broken.txt"],
-          );
-        });
-      });
-
-      it("should list a directory symlink's contents for its exact name", {
-        skip,
-      }, () => {
-        // Bun ignores the skip option, so we need an early return as well:
-        if (skip) return;
-        withFixtures((workDir) => {
-          deepStrictEqual(
-            runNuFileCompletion("__FILE__:file:.txt::0", "linkdir", workDir),
-            ["linkdir/inner.txt"],
-          );
-        });
-      });
-
-      it("should include symlinks in glob pattern completion", {
-        skip,
-      }, () => {
-        // Bun ignores the skip option, so we need an early return as well:
-        if (skip) return;
-        withFixtures((workDir) => {
-          const completions = runNuFileCompletion(
-            "__FILE__:file:.txt:*.txt:0",
-            "",
-            workDir,
-          );
-          for (const expected of ["link.txt", "linkmixed.txt", "linkdir/"]) {
             ok(
-              completions.includes(expected),
-              `Expected ${expected} in ${JSON.stringify(completions)}.`,
+              !completions.includes("broken.txt"),
+              `Unexpected broken.txt in ${JSON.stringify(completions)}.`,
             );
-          }
-          ok(
-            !completions.includes("broken.txt"),
-            `Unexpected broken.txt in ${JSON.stringify(completions)}.`,
-          );
-        });
-      });
+          });
+        },
+      );
 
-      it("should not expand a tilde at the start of a symlink name", {
-        skip,
-      }, () => {
-        // Bun ignores the skip option, so we need an early return as well:
-        if (skip) return;
-        withFixtures((workDir) => {
-          symlinkSync("target.txt", join(workDir, "~draft.txt"));
-          // A broken link whose name would expand to the root user's home:
-          symlinkSync("missing", join(workDir, "~root"));
-          const files = runNuFileCompletion(
-            "__FILE__:file:.txt::0",
-            "",
-            workDir,
-          );
-          // The name is inserted as ./~draft.txt so that Nushell does not
-          // expand the tilde when running the command either:
-          ok(
-            files.includes("./~draft.txt"),
-            `Expected ./~draft.txt in ${JSON.stringify(files)}.`,
-          );
-          const dirs = runNuFileCompletion(
-            "__FILE__:directory:::0",
-            "",
-            workDir,
-          );
-          ok(
-            !dirs.includes("~root/") && !dirs.includes("./~root/"),
-            `Unexpected ~root/ in ${JSON.stringify(dirs)}.`,
-          );
-        });
-      });
-
-      it("should resolve symlinks via .. from a symlinked directory", {
-        skip,
-      }, () => {
-        // Bun ignores the skip option, so we need an early return as well:
-        if (skip) return;
-        withFixtures((workDir) => {
-          // Nushell's cd keeps the logical path, so .. leads back to workDir
-          // even though the physical parent of the link's target differs:
-          mkdirSync(join(workDir, "physical", "project"), { recursive: true });
-          symlinkSync(
-            join("physical", "project"),
-            join(workDir, "project"),
-          );
-          const nuCwd = join(workDir, "project");
-          deepStrictEqual(
-            runNuFileCompletion(
+      it(
+        "should not expand a tilde at the start of a symlink name",
+        {
+          skip,
+        },
+        () => {
+          // Bun ignores the skip option, so we need an early return as well:
+          if (skip) return;
+          withFixtures((workDir) => {
+            symlinkSync("target.txt", join(workDir, "~draft.txt"));
+            // A broken link whose name would expand to the root user's home:
+            symlinkSync("missing", join(workDir, "~root"));
+            const files = runNuFileCompletion(
+              "__FILE__:file:.txt::0",
+              "",
+              workDir,
+            );
+            // The name is inserted as ./~draft.txt so that Nushell does not
+            // expand the tilde when running the command either:
+            ok(
+              files.includes("./~draft.txt"),
+              `Expected ./~draft.txt in ${JSON.stringify(files)}.`,
+            );
+            const dirs = runNuFileCompletion(
               "__FILE__:directory:::0",
-              "../link",
+              "",
               workDir,
-              nuCwd,
-            ),
-            ["../linkchain/", "../linkdir/", "../linkdir2/"],
-          );
-          deepStrictEqual(
-            runNuFileCompletion(
-              "__FILE__:file:.txt::0",
-              "../link.",
-              workDir,
-              nuCwd,
-            ),
-            ["../link.txt"],
-          );
-          deepStrictEqual(
-            runNuFileCompletion(
-              "__FILE__:file:.txt::0",
-              "../linkdir",
-              workDir,
-              nuCwd,
-            ),
-            ["../linkdir/inner.txt"],
-          );
-        });
-      });
+            );
+            ok(
+              !dirs.includes("~root/") && !dirs.includes("./~root/"),
+              `Unexpected ~root/ in ${JSON.stringify(dirs)}.`,
+            );
+          });
+        },
+      );
 
-      it("should judge symlink visibility by the link name", {
-        skip,
-      }, () => {
-        // Bun ignores the skip option, so we need an early return as well:
-        if (skip) return;
-        withFixtures((workDir) => {
-          deepStrictEqual(
-            runNuFileCompletion("__FILE__:file:.txt::0", "hid/", workDir),
-            ["hid/shown.txt"],
-          );
-          deepStrictEqual(
-            runNuFileCompletion("__FILE__:file:.txt::1", "hid/", workDir),
-            ["hid/.hidlink.txt", "hid/.secret.txt", "hid/shown.txt"],
-          );
-        });
-      });
+      it(
+        "should resolve symlinks via .. from a symlinked directory",
+        {
+          skip,
+        },
+        () => {
+          // Bun ignores the skip option, so we need an early return as well:
+          if (skip) return;
+          withFixtures((workDir) => {
+            // Nushell's cd keeps the logical path, so .. leads back to workDir
+            // even though the physical parent of the link's target differs:
+            mkdirSync(join(workDir, "physical", "project"), {
+              recursive: true,
+            });
+            symlinkSync(join("physical", "project"), join(workDir, "project"));
+            const nuCwd = join(workDir, "project");
+            deepStrictEqual(
+              runNuFileCompletion(
+                "__FILE__:directory:::0",
+                "../link",
+                workDir,
+                nuCwd,
+              ),
+              ["../linkchain/", "../linkdir/", "../linkdir2/"],
+            );
+            deepStrictEqual(
+              runNuFileCompletion(
+                "__FILE__:file:.txt::0",
+                "../link.",
+                workDir,
+                nuCwd,
+              ),
+              ["../link.txt"],
+            );
+            deepStrictEqual(
+              runNuFileCompletion(
+                "__FILE__:file:.txt::0",
+                "../linkdir",
+                workDir,
+                nuCwd,
+              ),
+              ["../linkdir/inner.txt"],
+            );
+          });
+        },
+      );
+
+      it(
+        "should judge symlink visibility by the link name",
+        {
+          skip,
+        },
+        () => {
+          // Bun ignores the skip option, so we need an early return as well:
+          if (skip) return;
+          withFixtures((workDir) => {
+            deepStrictEqual(
+              runNuFileCompletion("__FILE__:file:.txt::0", "hid/", workDir),
+              ["hid/shown.txt"],
+            );
+            deepStrictEqual(
+              runNuFileCompletion("__FILE__:file:.txt::1", "hid/", workDir),
+              ["hid/.hidlink.txt", "hid/.secret.txt", "hid/shown.txt"],
+            );
+          });
+        },
+      );
     });
 
     it(
@@ -10451,10 +10735,12 @@ do { ${functionName} "extapp " }
           // Completing inside a quoted directory keeps the result quoted:
           deepStrictEqual(
             runNuCompleter(fixture, `${fixture.programName} --file 'my dir/'`),
-            [{
-              value: "'my dir/inner.txt'",
-              display_override: "my dir/inner.txt",
-            }],
+            [
+              {
+                value: "'my dir/inner.txt'",
+                display_override: "my dir/inner.txt",
+              },
+            ],
           );
           // Completing inside ./~dir/ lists that directory, not a home
           // directory:
@@ -10466,14 +10752,15 @@ do { ${functionName} "extapp " }
           // A name made only of dots would be expanded (... is ../..):
           mkdirSync(join(fixture.workDir, "..."));
           deepStrictEqual(
-            runNuCompleter(fixture, `${fixture.programName} --any-file `)
-              .filter((record) => record.display_override === ".../"),
+            runNuCompleter(
+              fixture,
+              `${fixture.programName} --any-file `,
+            ).filter((record) => record.display_override === ".../"),
             [{ value: "'.../'", display_override: ".../" }],
           );
-          deepStrictEqual(
-            parseNuExternalArguments(fixture, ["'.../'"]),
-            [".../"],
-          );
+          deepStrictEqual(parseNuExternalArguments(fixture, ["'.../'"]), [
+            ".../",
+          ]);
         } finally {
           rmSync(fixture.tempDir, { recursive: true, force: true });
         }
@@ -10523,10 +10810,12 @@ do { ${functionName} "extapp " }
               `${fixture.programName} --file '~/My Docs/../pl'`,
               env,
             ),
-            [{
-              value: `${home}/plain/`,
-              display_override: "~/My Docs/../plain/",
-            }],
+            [
+              {
+                value: `${home}/plain/`,
+                display_override: "~/My Docs/../plain/",
+              },
+            ],
           );
 
           // The same applies to Nushell's n-dot expansion (... is ../..):
@@ -10535,141 +10824,159 @@ do { ${functionName} "extapp " }
           mkdirSync(join(fixture.workDir, "My Docs"));
           const contextPath = join(fixture.tempDir, "nested-context.txt");
           writeFileSync(contextPath, `${fixture.programName} --file .../My`);
-          const output = runCommand("nu", [
-            "--no-config-file",
-            "-c",
-            `$env.PATH = ($env.PATH | prepend ${
-              JSON.stringify(fixture.binDir)
-            }); source ${JSON.stringify(fixture.scriptPath)}; ` +
-            `nu-complete-${fixture.programName} (open --raw ${
-              JSON.stringify(contextPath)
-            }) | to json --raw`,
-          ], { cwd: nested });
-          deepStrictEqual(JSON.parse(output.trim()), [{
-            value: `'${fixture.workDir}/My Docs/'`,
-            display_override: ".../My Docs/",
-          }]);
+          const output = runCommand(
+            "nu",
+            [
+              "--no-config-file",
+              "-c",
+              `$env.PATH = ($env.PATH | prepend ${JSON.stringify(
+                fixture.binDir,
+              )}); source ${JSON.stringify(fixture.scriptPath)}; ` +
+                `nu-complete-${fixture.programName} (open --raw ${JSON.stringify(
+                  contextPath,
+                )}) | to json --raw`,
+            ],
+            { cwd: nested },
+          );
+          deepStrictEqual(JSON.parse(output.trim()), [
+            {
+              value: `'${fixture.workDir}/My Docs/'`,
+              display_override: ".../My Docs/",
+            },
+          ]);
         } finally {
           rmSync(fixture.tempDir, { recursive: true, force: true });
         }
       },
     );
 
-    it("should not start a new argument at a space inside an open quote", {
-      skip: process.platform === "win32",
-    }, (t) => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (process.platform === "win32") return;
-      if (!isShellAvailable("nu")) {
-        t.skip("nu not available");
-        return;
-      }
-
-      const fixture = createNuQuotingFixture(nuArgsEchoCli);
-      try {
-        const cases: readonly (readonly [string, string])[] = [
-          // A space inside an unterminated quote does not start a new
-          // argument (e.g., after Nushell inserted the common prefix 'a ):
-          [" --value 'a ", "ARGS<--value><a >"],
-          [` --value "it's `, "ARGS<--value><it's >"],
-          // When the quoted values share no character but the quote, the
-          // inserted common prefix is a bare quote, which still starts the
-          // value being completed:
-          [" --value '", "ARGS<--value><>"],
-          [` --value "`, "ARGS<--value><>"],
-        ];
-        for (const [rest, expected] of cases) {
-          const context = `${fixture.programName}${rest}`;
-          deepStrictEqual(
-            runNuCompleter(fixture, context).map((record) =>
-              record.display_override ?? record.value
-            ),
-            [expected],
-            `Context: ${JSON.stringify(context)}`,
-          );
+    it(
+      "should not start a new argument at a space inside an open quote",
+      {
+        skip: process.platform === "win32",
+      },
+      (t) => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("nu")) {
+          t.skip("nu not available");
+          return;
         }
-      } finally {
-        rmSync(fixture.tempDir, { recursive: true, force: true });
-      }
-    });
 
-    it("should keep tokenizing plain arguments as before", {
-      skip: process.platform === "win32",
-    }, (t) => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (process.platform === "win32") return;
-      if (!isShellAvailable("nu")) {
-        t.skip("nu not available");
-        return;
-      }
-
-      const fixture = createNuQuotingFixture(nuArgsEchoCli);
-      try {
-        const cases: readonly (readonly [string, string])[] = [
-          ["", "ARGS<>"],
-          [" ", "ARGS<>"],
-          [" --value ", "ARGS<--value><>"],
-          [" --value a", "ARGS<--value><a>"],
-          [" --value 'a b' ", "ARGS<--value><a b><>"],
-          [" --value a\\b ", "ARGS<--value><a\\b><>"],
-          [" --value 'C:\\foo\\", "ARGS<--value><C:\\foo\\>"],
-        ];
-        for (const [rest, expected] of cases) {
-          const context = `${fixture.programName}${rest}`;
-          deepStrictEqual(
-            runNuCompleter(fixture, context).map((record) =>
-              record.display_override ?? record.value
-            ),
-            [expected],
-            `Context: ${JSON.stringify(context)}`,
-          );
+        const fixture = createNuQuotingFixture(nuArgsEchoCli);
+        try {
+          const cases: readonly (readonly [string, string])[] = [
+            // A space inside an unterminated quote does not start a new
+            // argument (e.g., after Nushell inserted the common prefix 'a ):
+            [" --value 'a ", "ARGS<--value><a >"],
+            [` --value "it's `, "ARGS<--value><it's >"],
+            // When the quoted values share no character but the quote, the
+            // inserted common prefix is a bare quote, which still starts the
+            // value being completed:
+            [" --value '", "ARGS<--value><>"],
+            [` --value "`, "ARGS<--value><>"],
+          ];
+          for (const [rest, expected] of cases) {
+            const context = `${fixture.programName}${rest}`;
+            deepStrictEqual(
+              runNuCompleter(fixture, context).map(
+                (record) => record.display_override ?? record.value,
+              ),
+              [expected],
+              `Context: ${JSON.stringify(context)}`,
+            );
+          }
+        } finally {
+          rmSync(fixture.tempDir, { recursive: true, force: true });
         }
-      } finally {
-        rmSync(fixture.tempDir, { recursive: true, force: true });
-      }
-    });
+      },
+    );
 
-    it("should insert quoted suggestions in an interactive Nushell session", {
-      skip: !isInteractiveNuCompletionAvailable(),
-      timeout: 300_000,
-    }, (t) => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (!isInteractiveNuCompletionAvailable()) {
-        t.skip("interactive nu completion testing not available");
-        return;
-      }
+    it(
+      "should keep tokenizing plain arguments as before",
+      {
+        skip: process.platform === "win32",
+      },
+      (t) => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (process.platform === "win32") return;
+        if (!isShellAvailable("nu")) {
+          t.skip("nu not available");
+          return;
+        }
 
-      const fixture = createNuQuotingFixture(nuQuotingCli, [
-        "a b",
-        "it's",
-        "q'r\\s",
-        "!!x",
-        "m !!",
-        "zz",
-      ]);
-      try {
-        writeFileSync(join(fixture.workDir, "sp ace.txt"), "");
-        // The earlier commands also give !! a history entry to expand to:
-        const argvs = testInteractiveNuCompletion(fixture, [
-          [`${fixture.programName} --value a`, "\t"],
-          [`${fixture.programName} --value it`, "\t"],
-          [`${fixture.programName} --value q`, "\t"],
-          [`${fixture.programName} --file sp`, "\t"],
-          [`${fixture.programName} --value !`, "\t"],
-          [`${fixture.programName} --value m`, "\t"],
+        const fixture = createNuQuotingFixture(nuArgsEchoCli);
+        try {
+          const cases: readonly (readonly [string, string])[] = [
+            ["", "ARGS<>"],
+            [" ", "ARGS<>"],
+            [" --value ", "ARGS<--value><>"],
+            [" --value a", "ARGS<--value><a>"],
+            [" --value 'a b' ", "ARGS<--value><a b><>"],
+            [" --value a\\b ", "ARGS<--value><a\\b><>"],
+            [" --value 'C:\\foo\\", "ARGS<--value><C:\\foo\\>"],
+          ];
+          for (const [rest, expected] of cases) {
+            const context = `${fixture.programName}${rest}`;
+            deepStrictEqual(
+              runNuCompleter(fixture, context).map(
+                (record) => record.display_override ?? record.value,
+              ),
+              [expected],
+              `Context: ${JSON.stringify(context)}`,
+            );
+          }
+        } finally {
+          rmSync(fixture.tempDir, { recursive: true, force: true });
+        }
+      },
+    );
+
+    it(
+      "should insert quoted suggestions in an interactive Nushell session",
+      {
+        skip: !isInteractiveNuCompletionAvailable(),
+        timeout: 300_000,
+      },
+      (t) => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (!isInteractiveNuCompletionAvailable()) {
+          t.skip("interactive nu completion testing not available");
+          return;
+        }
+
+        const fixture = createNuQuotingFixture(nuQuotingCli, [
+          "a b",
+          "it's",
+          "q'r\\s",
+          "!!x",
+          "m !!",
+          "zz",
         ]);
-        deepStrictEqual(argvs, [
-          ["--value", "a b"],
-          ["--value", "it's"],
-          ["--value", "q'r\\s"],
-          ["--file", "sp ace.txt"],
-          ["--value", "!!x"],
-          ["--value", "m !!"],
-        ]);
-      } finally {
-        rmSync(fixture.tempDir, { recursive: true, force: true });
-      }
-    });
+        try {
+          writeFileSync(join(fixture.workDir, "sp ace.txt"), "");
+          // The earlier commands also give !! a history entry to expand to:
+          const argvs = testInteractiveNuCompletion(fixture, [
+            [`${fixture.programName} --value a`, "\t"],
+            [`${fixture.programName} --value it`, "\t"],
+            [`${fixture.programName} --value q`, "\t"],
+            [`${fixture.programName} --file sp`, "\t"],
+            [`${fixture.programName} --value !`, "\t"],
+            [`${fixture.programName} --value m`, "\t"],
+          ]);
+          deepStrictEqual(argvs, [
+            ["--value", "a b"],
+            ["--value", "it's"],
+            ["--value", "q'r\\s"],
+            ["--file", "sp ace.txt"],
+            ["--value", "!!x"],
+            ["--value", "m !!"],
+          ]);
+        } finally {
+          rmSync(fixture.tempDir, { recursive: true, force: true });
+        }
+      },
+    );
 
     it(
       "should complete again after a quoted common prefix",
@@ -10880,9 +11187,9 @@ describe("keyValue file completion", () => {
         prefix: "a%3A:",
       };
       ok(
-        [...shell.encodeSuggestions([prefixed])].join("").startsWith(
-          "__FILE__:file::a%253A%3Ab:0:a%253A%3A",
-        ),
+        [...shell.encodeSuggestions([prefixed])]
+          .join("")
+          .startsWith("__FILE__:file::a%253A%3Ab:0:a%253A%3A"),
       );
       for (const prefix of ["mismatch=", "a\t"]) {
         const malformed: Suggestion = { ...legacy, prefix };
@@ -10895,42 +11202,46 @@ describe("keyValue file completion", () => {
   });
 
   for (const shell of [bash, fish, nu, pwsh]) {
-    for (
-      const [inputTemplate, expectedTemplate, type, extensions] of [
-        ["é🚀=b", "é🚀=bundle.txt", "file", undefined],
-        ["output=", "output=bundle.txt", "file", undefined],
-        ["output=b", "output=bundle.txt", "file", undefined],
-        ["[x]*%3A:b", "[x]*%3A:bundle.txt", "file", undefined],
-        ["outer=output=src/b", "outer=output=src/bundle.txt", "file", [".txt"]],
-        ["output=bu", "output=build/", "directory", undefined],
-        ["output=.b", "output=.bundle.txt", "file", undefined],
-        ["output=~/b", "output=~/bundle.txt", "file", undefined],
-      ] as const
-    ) {
+    for (const [inputTemplate, expectedTemplate, type, extensions] of [
+      ["é🚀=b", "é🚀=bundle.txt", "file", undefined],
+      ["output=", "output=bundle.txt", "file", undefined],
+      ["output=b", "output=bundle.txt", "file", undefined],
+      ["[x]*%3A:b", "[x]*%3A:bundle.txt", "file", undefined],
+      ["outer=output=src/b", "outer=output=src/bundle.txt", "file", [".txt"]],
+      ["output=bu", "output=build/", "directory", undefined],
+      ["output=.b", "output=.bundle.txt", "file", undefined],
+      ["output=~/b", "output=~/bundle.txt", "file", undefined],
+    ] as const) {
       const requiresHome = inputTemplate.includes("~/");
       it(
         `matches value paths and preserves keys in actual ${shell.name}: ${inputTemplate}`,
         {
-          skip: process.platform === "win32" || !isShellAvailable(shell.name) ||
+          skip:
+            process.platform === "win32" ||
+            !isShellAvailable(shell.name) ||
             (requiresHome && process.env.HOME == null),
         },
         () => {
           if (
-            process.platform === "win32" || !isShellAvailable(shell.name) ||
+            process.platform === "win32" ||
+            !isShellAvailable(shell.name) ||
             (requiresHome && process.env.HOME == null)
-          ) return;
+          )
+            return;
           const tempDir = mkdtempSync(join(tmpdir(), "keyvalue-completion-"));
-          const homeDir = process.env.HOME == null
-            ? undefined
-            : mkdtempSync(join(process.env.HOME, ".optique-keyvalue-"));
+          const homeDir =
+            process.env.HOME == null
+              ? undefined
+              : mkdtempSync(join(process.env.HOME, ".optique-keyvalue-"));
           if (homeDir != null) writeFileSync(join(homeDir, "bundle.txt"), "");
-          const input = homeDir == null ? inputTemplate : inputTemplate.replace(
-            "~/",
-            `~/${basename(homeDir)}/`,
-          );
-          const expected = homeDir == null
-            ? expectedTemplate
-            : expectedTemplate.replace("~/", `~/${basename(homeDir)}/`);
+          const input =
+            homeDir == null
+              ? inputTemplate
+              : inputTemplate.replace("~/", `~/${basename(homeDir)}/`);
+          const expected =
+            homeDir == null
+              ? expectedTemplate
+              : expectedTemplate.replace("~/", `~/${basename(homeDir)}/`);
           try {
             mkdirSync(join(tempDir, "src"));
             mkdirSync(join(tempDir, "build"));
@@ -10953,9 +11264,9 @@ describe("keyValue file completion", () => {
             const cliPath = join(tempDir, "kvfixture");
             writeFileSync(
               cliPath,
-              `#!/bin/bash\nprintf '%s' '${
-                Buffer.from(data).toString("base64")
-              }' | base64 --decode; printf '\\n'\n`,
+              `#!/bin/bash\nprintf '%s' '${Buffer.from(data).toString(
+                "base64",
+              )}' | base64 --decode; printf '\\n'\n`,
               { mode: 0o755 },
             );
             const scriptPath = join(
@@ -10965,30 +11276,46 @@ describe("keyValue file completion", () => {
             writeFileSync(scriptPath, shell.generateScript("kvfixture"));
             let output: string;
             if (shell === bash) {
-              output = runCommand("bash", [
-                "-c",
-                `export PATH="${tempDir}:$PATH"\nsource "${scriptPath}"\nCOMP_WORDS=(kvfixture '${input}')\nCOMP_CWORD=1\n_kvfixture\nprintf '%s\\n' "\${COMPREPLY[@]}"`,
-              ], { cwd: tempDir });
+              output = runCommand(
+                "bash",
+                [
+                  "-c",
+                  `export PATH="${tempDir}:$PATH"\nsource "${scriptPath}"\nCOMP_WORDS=(kvfixture '${input}')\nCOMP_CWORD=1\n_kvfixture\nprintf '%s\\n' "\${COMPREPLY[@]}"`,
+                ],
+                { cwd: tempDir },
+              );
             } else if (shell === fish) {
-              output = runCommand("fish", [
-                "-c",
-                `set -x PATH '${tempDir}' $PATH\nsource '${scriptPath}'\ncomplete -C 'kvfixture ${input}'`,
-              ], { cwd: tempDir });
+              output = runCommand(
+                "fish",
+                [
+                  "-c",
+                  `set -x PATH '${tempDir}' $PATH\nsource '${scriptPath}'\ncomplete -C 'kvfixture ${input}'`,
+                ],
+                { cwd: tempDir },
+              );
             } else if (shell === nu) {
-              output = runCommand("nu", [
-                "--no-config-file",
-                "-c",
-                `$env.PATH = ($env.PATH | prepend '${tempDir}'); source '${scriptPath}'; nu-complete-kvfixture 'kvfixture ${input}' | get value | to json -r`,
-              ], { cwd: tempDir });
+              output = runCommand(
+                "nu",
+                [
+                  "--no-config-file",
+                  "-c",
+                  `$env.PATH = ($env.PATH | prepend '${tempDir}'); source '${scriptPath}'; nu-complete-kvfixture 'kvfixture ${input}' | get value | to json -r`,
+                ],
+                { cwd: tempDir },
+              );
             } else {
-              output = runCommand("pwsh", [
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                `$env:PATH = '${tempDir}:' + $env:PATH; . '${scriptPath}'; (TabExpansion2 -inputScript 'kvfixture ${input}' -cursorColumn ${
-                  "kvfixture ".length + input.length
-                }).CompletionMatches | ForEach-Object { $_.CompletionText }`,
-              ], { cwd: tempDir });
+              output = runCommand(
+                "pwsh",
+                [
+                  "-NoProfile",
+                  "-NonInteractive",
+                  "-Command",
+                  `$env:PATH = '${tempDir}:' + $env:PATH; . '${scriptPath}'; (TabExpansion2 -inputScript 'kvfixture ${input}' -cursorColumn ${
+                    "kvfixture ".length + input.length
+                  }).CompletionMatches | ForEach-Object { $_.CompletionText }`,
+                ],
+                { cwd: tempDir },
+              );
             }
             ok(
               output.includes(expected),
@@ -11007,29 +11334,36 @@ describe("keyValue file completion", () => {
     }
   }
 
-  it("preserves the key in actual Bash Readline with split and unsplit words", {
-    skip: process.platform !== "linux" || !isShellAvailable("python3") ||
-      !isShellAvailable("bash"),
-  }, () => {
-    if (
-      process.platform !== "linux" || !isShellAvailable("python3") ||
-      !isShellAvailable("bash")
-    ) return;
-    const tempDir = mkdtempSync(join(tmpdir(), "keyvalue-readline-"));
-    try {
-      writeFileSync(join(tempDir, "bundle.txt"), "");
-      writeFileSync(
-        join(tempDir, "completion.bash"),
-        bash.generateScript("kvfixture"),
-      );
-      writeFileSync(
-        join(tempDir, "kvfixture"),
-        "#!/bin/bash\n" +
-          'if [[ $# == 1 && "$1" == "output=b" ]]; then\n' +
-          "printf '__FILE__:file::output=b:0:output=\\n'\nfi\n",
-        { mode: 0o755 },
-      );
-      const driver = `
+  it(
+    "preserves the key in actual Bash Readline with split and unsplit words",
+    {
+      skip:
+        process.platform !== "linux" ||
+        !isShellAvailable("python3") ||
+        !isShellAvailable("bash"),
+    },
+    () => {
+      if (
+        process.platform !== "linux" ||
+        !isShellAvailable("python3") ||
+        !isShellAvailable("bash")
+      )
+        return;
+      const tempDir = mkdtempSync(join(tmpdir(), "keyvalue-readline-"));
+      try {
+        writeFileSync(join(tempDir, "bundle.txt"), "");
+        writeFileSync(
+          join(tempDir, "completion.bash"),
+          bash.generateScript("kvfixture"),
+        );
+        writeFileSync(
+          join(tempDir, "kvfixture"),
+          "#!/bin/bash\n" +
+            'if [[ $# == 1 && "$1" == "output=b" ]]; then\n' +
+            "printf '__FILE__:file::output=b:0:output=\\n'\nfi\n",
+          { mode: 0o755 },
+        );
+        const driver = `
 import os, pathlib, pty, select, signal, sys, time
 root = pathlib.Path(sys.argv[1])
 snapshot = root / 'snapshot'
@@ -11073,71 +11407,90 @@ finally:
         os.waitpid(pid, 0)
     os.close(fd)
 `;
-      for (const mode of ["default", "unsplit"]) {
-        const output = runCommand("python3", ["-c", driver, tempDir, mode]);
-        // Default word breaks split at "=", but the completion function
-        // reassembles the adjacent fragments into the KEY=PATH word.
-        deepStrictEqual(output.trim(), "kvfixture output=bundle.txt");
+        for (const mode of ["default", "unsplit"]) {
+          const output = runCommand("python3", ["-c", driver, tempDir, mode]);
+          // Default word breaks split at "=", but the completion function
+          // reassembles the adjacent fragments into the KEY=PATH word.
+          deepStrictEqual(output.trim(), "kvfixture output=bundle.txt");
+        }
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
       }
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
+    },
+  );
 
   for (const prefix of ["output=", "out:", "out%=", "out%3A:"]) {
-    it(`inserts ${prefix} through actual zsh ZLE completion`, {
-      skip: !isInteractiveZshCompletionAvailable(),
-    }, () => {
-      if (!isInteractiveZshCompletionAvailable()) return;
-      const directive = [...zsh.encodeSuggestions([{
-        kind: "file",
-        type: "file",
-        pattern: `${prefix}b`,
-        prefix,
-      }])].join("").replaceAll("\0", "\\0");
-      const output = testInteractiveZshCompletion(
-        zsh.generateScript("extapp"),
-        directive,
-        [{ path: "bundle.txt" }],
-        { input: `extapp ${prefix}b` },
-      );
-      ok(output.includes(`extapp ${prefix}bundle.txt`), output);
-    });
+    it(
+      `inserts ${prefix} through actual zsh ZLE completion`,
+      {
+        skip: !isInteractiveZshCompletionAvailable(),
+      },
+      () => {
+        if (!isInteractiveZshCompletionAvailable()) return;
+        const directive = [
+          ...zsh.encodeSuggestions([
+            {
+              kind: "file",
+              type: "file",
+              pattern: `${prefix}b`,
+              prefix,
+            },
+          ]),
+        ]
+          .join("")
+          .replaceAll("\0", "\\0");
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          directive,
+          [{ path: "bundle.txt" }],
+          { input: `extapp ${prefix}b` },
+        );
+        ok(output.includes(`extapp ${prefix}bundle.txt`), output);
+      },
+    );
   }
 
-  it("keeps inserted keys out of later Bash filesystem filters", {
-    skip: process.platform === "win32" || !isShellAvailable("bash"),
-  }, () => {
-    if (process.platform === "win32" || !isShellAvailable("bash")) return;
-    const tempDir = mkdtempSync(join(tmpdir(), "keyvalue-bash-mixed-"));
-    try {
-      writeFileSync(join(tempDir, "bundle.txt"), "");
-      const suggestions: Suggestion[] = [
-        { kind: "file", type: "file", pattern: ".out=b", prefix: ".out=" },
-        { kind: "file", type: "file", pattern: "b" },
-      ];
-      const data = [...bash.encodeSuggestions(suggestions)].join("");
-      writeFileSync(
-        join(tempDir, "kvfixture"),
-        `#!/bin/bash\nprintf '%s' '${
-          Buffer.from(data).toString("base64")
-        }' | base64 --decode; printf '\\n'\n`,
-        { mode: 0o755 },
-      );
-      const scriptPath = join(tempDir, "completion.bash");
-      writeFileSync(scriptPath, bash.generateScript("kvfixture"));
-      const output = runCommand("bash", [
-        "-c",
-        `export PATH="${tempDir}:$PATH"\nsource "${scriptPath}"\nCOMP_WORDS=(kvfixture .out=b)\nCOMP_CWORD=1\n_kvfixture\nprintf '%s\\n' "\${COMPREPLY[@]}"`,
-      ], { cwd: tempDir });
-      deepStrictEqual(
-        output.trim().split("\n").sort(),
-        [".out=bundle.txt", "bundle.txt"].sort(),
-      );
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
+  it(
+    "keeps inserted keys out of later Bash filesystem filters",
+    {
+      skip: process.platform === "win32" || !isShellAvailable("bash"),
+    },
+    () => {
+      if (process.platform === "win32" || !isShellAvailable("bash")) return;
+      const tempDir = mkdtempSync(join(tmpdir(), "keyvalue-bash-mixed-"));
+      try {
+        writeFileSync(join(tempDir, "bundle.txt"), "");
+        const suggestions: Suggestion[] = [
+          { kind: "file", type: "file", pattern: ".out=b", prefix: ".out=" },
+          { kind: "file", type: "file", pattern: "b" },
+        ];
+        const data = [...bash.encodeSuggestions(suggestions)].join("");
+        writeFileSync(
+          join(tempDir, "kvfixture"),
+          `#!/bin/bash\nprintf '%s' '${Buffer.from(data).toString(
+            "base64",
+          )}' | base64 --decode; printf '\\n'\n`,
+          { mode: 0o755 },
+        );
+        const scriptPath = join(tempDir, "completion.bash");
+        writeFileSync(scriptPath, bash.generateScript("kvfixture"));
+        const output = runCommand(
+          "bash",
+          [
+            "-c",
+            `export PATH="${tempDir}:$PATH"\nsource "${scriptPath}"\nCOMP_WORDS=(kvfixture .out=b)\nCOMP_CWORD=1\n_kvfixture\nprintf '%s\\n' "\${COMPREPLY[@]}"`,
+          ],
+          { cwd: tempDir },
+        );
+        deepStrictEqual(
+          output.trim().split("\n").sort(),
+          [".out=bundle.txt", "bundle.txt"].sort(),
+        );
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    },
+  );
 });
 
 describe("reserved literal transport markers", () => {
@@ -11161,103 +11514,119 @@ describe("reserved literal transport markers", () => {
     it(`should escape reserved literal markers for ${shell.name}`, () => {
       for (const value of [...values, "__FILE__:\t\n\r\0"]) {
         const sanitized = value.replace(/[\t\n\r\0]/g, " ");
-        const escaped = sanitized.startsWith("__FILE__:") ||
-            sanitized.startsWith("__LITERAL__:")
-          ? `__LITERAL__:${sanitized}`
-          : sanitized;
-        const encoded = Array.from(shell.encodeSuggestions([{
-          kind: "literal",
-          text: value,
-          description: message`Literal description`,
-        }])).join("");
-        const expected = shell === bash
-          ? escaped
-          : shell === zsh
-          ? `${escaped}\0Literal description\0`
-          : shell === pwsh
-          ? `${escaped}\t${sanitized}\tLiteral description`
-          : `${escaped}\tLiteral description`;
+        const escaped =
+          sanitized.startsWith("__FILE__:") ||
+          sanitized.startsWith("__LITERAL__:")
+            ? `__LITERAL__:${sanitized}`
+            : sanitized;
+        const encoded = Array.from(
+          shell.encodeSuggestions([
+            {
+              kind: "literal",
+              text: value,
+              description: message`Literal description`,
+            },
+          ]),
+        ).join("");
+        const expected =
+          shell === bash
+            ? escaped
+            : shell === zsh
+              ? `${escaped}\0Literal description\0`
+              : shell === pwsh
+                ? `${escaped}\t${sanitized}\tLiteral description`
+                : `${escaped}\tLiteral description`;
         deepStrictEqual(encoded, expected);
       }
       // Genuine directives keep their wire representation.
-      const encoded = Array.from(shell.encodeSuggestions([{
-        kind: "file",
-        type: "directory",
-      }])).join("");
+      const encoded = Array.from(
+        shell.encodeSuggestions([
+          {
+            kind: "file",
+            type: "directory",
+          },
+        ]),
+      ).join("");
       const directive = "__FILE__:directory:::0";
       deepStrictEqual(
         encoded,
         shell === bash
           ? directive
           : shell === zsh
-          ? `${directive}\0\0`
-          : shell === pwsh
-          ? `${directive}\t[file]\t`
-          : `${directive}\t`,
+            ? `${directive}\0\0`
+            : shell === pwsh
+              ? `${directive}\t[file]\t`
+              : `${directive}\t`,
       );
     });
 
-    const available = process.platform !== "win32" &&
-      isShellAvailable(shell.name);
-    it(`should round-trip reserved literal markers in ${shell.name}`, {
-      skip: !available,
-      timeout: 15000,
-    }, () => {
-      if (!available) return;
-      const dir = mkdtempSync(join(tmpdir(), "optique-literal-markers-"));
-      try {
-        const bin = join(dir, "bin");
-        const work = join(dir, "work");
-        mkdirSync(bin);
-        mkdirSync(work);
-        mkdirSync(join(work, "child"));
-        const suggestions: Suggestion[] = [
-          ...values.slice(0, 6).map((value): Suggestion => ({
-            kind: "literal",
-            text: value,
-            description: message`Literal description`,
-          })),
-          // Check that the escaped flag is reset for a following directive.
-          { kind: "file", type: "directory" },
-          ...values.slice(6).map((value): Suggestion => ({
-            kind: "literal",
-            text: value,
-            description: message`Literal description`,
-          })),
-        ];
-        const records = join(bin, "records");
-        writeFileSync(
-          records,
-          // zsh's default stdout writer adds a newline after each chunk.
-          Array.from(shell.encodeSuggestions(suggestions)).join(
-            shell === zsh ? "\n" : "",
-          ) + "\n",
-        );
-        const prefixRecords = join(bin, "prefix-records");
-        writeFileSync(
-          prefixRecords,
-          Array.from(shell.encodeSuggestions([suggestions[0]])).join("") + "\n",
-        );
-        writeFileSync(
-          join(bin, "markercli"),
-          `#!/bin/sh
+    const available =
+      process.platform !== "win32" && isShellAvailable(shell.name);
+    it(
+      `should round-trip reserved literal markers in ${shell.name}`,
+      {
+        skip: !available,
+        timeout: 15000,
+      },
+      () => {
+        if (!available) return;
+        const dir = mkdtempSync(join(tmpdir(), "optique-literal-markers-"));
+        try {
+          const bin = join(dir, "bin");
+          const work = join(dir, "work");
+          mkdirSync(bin);
+          mkdirSync(work);
+          mkdirSync(join(work, "child"));
+          const suggestions: Suggestion[] = [
+            ...values.slice(0, 6).map((value): Suggestion => ({
+              kind: "literal",
+              text: value,
+              description: message`Literal description`,
+            })),
+            // Check that the escaped flag is reset for a following directive.
+            { kind: "file", type: "directory" },
+            ...values.slice(6).map((value): Suggestion => ({
+              kind: "literal",
+              text: value,
+              description: message`Literal description`,
+            })),
+          ];
+          const records = join(bin, "records");
+          writeFileSync(
+            records,
+            // zsh's default stdout writer adds a newline after each chunk.
+            Array.from(shell.encodeSuggestions(suggestions)).join(
+              shell === zsh ? "\n" : "",
+            ) + "\n",
+          );
+          const prefixRecords = join(bin, "prefix-records");
+          writeFileSync(
+            prefixRecords,
+            Array.from(shell.encodeSuggestions([suggestions[0]])).join("") +
+              "\n",
+          );
+          writeFileSync(
+            join(bin, "markercli"),
+            `#!/bin/sh
 current=''
 for current do :; done
 if [ -n "$current" ]; then cat '${prefixRecords}'; else cat '${records}'; fi
 `,
-          { mode: 0o755 },
-        );
-        const scriptPath = join(
-          bin,
-          shell === pwsh ? "completion.ps1" : "completion",
-        );
-        writeFileSync(scriptPath, shell.generateScript("markercli"));
-        for (const prefix of ["", "__"]) {
-          let output: string;
-          if (shell === bash) {
-            output = runCommand("bash", [
-              "-c",
-              `
+            { mode: 0o755 },
+          );
+          const scriptPath = join(
+            bin,
+            shell === pwsh ? "completion.ps1" : "completion",
+          );
+          writeFileSync(scriptPath, shell.generateScript("markercli"));
+          for (const prefix of ["", "__"]) {
+            let output: string;
+            if (shell === bash) {
+              output = runCommand(
+                "bash",
+                [
+                  "-c",
+                  `
 export PATH='${bin}':$PATH
 source '${scriptPath}'
 shopt -s nocasematch
@@ -11266,13 +11635,17 @@ COMP_CWORD=1
 _markercli
 printf '%s\\n' "\${COMPREPLY[@]}"
 `,
-            ], { cwd: work });
-          } else if (shell === zsh) {
-            // _describe receives escaped, colon-delimited fields.  Decode the
-            // values in its mock so this test checks literal/file dispatch.
-            output = runCommand("zsh", [
-              "-fc",
-              `
+                ],
+                { cwd: work },
+              );
+            } else if (shell === zsh) {
+              // _describe receives escaped, colon-delimited fields.  Decode the
+              // values in its mock so this test checks literal/file dispatch.
+              output = runCommand(
+                "zsh",
+                [
+                  "-fc",
+                  `
 export PATH='${bin}':$PATH
 source '${scriptPath}'
 _describe() {
@@ -11290,87 +11663,109 @@ CURRENT=2
 PREFIX='${prefix}'
 _markercli
 `,
-            ], { cwd: work });
-          } else if (shell === fish) {
-            output = runCommand("fish", [
-              "-c",
-              `
+                ],
+                { cwd: work },
+              );
+            } else if (shell === fish) {
+              output = runCommand(
+                "fish",
+                [
+                  "-c",
+                  `
 set -x PATH '${bin}' $PATH
 source '${scriptPath}'
 complete -C 'markercli ${prefix}'
 `,
-            ], { cwd: work });
-          } else if (shell === pwsh) {
-            output = runCommand("pwsh", [
-              "-NoProfile",
-              "-NonInteractive",
-              "-Command",
-              `$env:PATH = '${bin}:' + $env:PATH
+                ],
+                { cwd: work },
+              );
+            } else if (shell === pwsh) {
+              output = runCommand(
+                "pwsh",
+                [
+                  "-NoProfile",
+                  "-NonInteractive",
+                  "-Command",
+                  `$env:PATH = '${bin}:' + $env:PATH
 . '${scriptPath}'
 [System.Management.Automation.CommandCompletion]::CompleteInput('markercli ${prefix}', ${
-                10 + prefix.length
-              }, $null).CompletionMatches | ForEach-Object { $_.CompletionText }
+                    10 + prefix.length
+                  }, $null).CompletionMatches | ForEach-Object { $_.CompletionText }
 `,
-            ], { cwd: work });
-          } else {
-            output = runCommand("nu", [
-              "-c",
-              `
+                ],
+                { cwd: work },
+              );
+            } else {
+              output = runCommand(
+                "nu",
+                [
+                  "-c",
+                  `
 $env.PATH = ($env.PATH | prepend '${bin}')
 source '${scriptPath}'
 do $env.config.completions.external.completer ['markercli' '${prefix}'] | get value | str join (char newline)
 `,
-            ], { cwd: work });
-          }
-          const actual = output.trimEnd().split(/\r?\n/).map((line) => {
-            if (shell === zsh) {
-              const value = line.endsWith(":Literal description")
-                ? line.slice(0, -":Literal description".length)
-                : line;
-              return value.replace(/\\([\\:])/g, "$1");
+                ],
+                { cwd: work },
+              );
             }
-            return line.split("\t")[0];
-          });
-          const expected = (prefix === "" ? [...values, "child/"] : [values[0]])
-            .map((value) =>
+            const actual = output
+              .trimEnd()
+              .split(/\r?\n/)
+              .map((line) => {
+                if (shell === zsh) {
+                  const value = line.endsWith(":Literal description")
+                    ? line.slice(0, -":Literal description".length)
+                    : line;
+                  return value.replace(/\\([\\:])/g, "$1");
+                }
+                return line.split("\t")[0];
+              });
+            const expected = (
+              prefix === "" ? [...values, "child/"] : [values[0]]
+            ).map((value) =>
               shell === pwsh
                 ? value.trim()
                 : shell === nu && value.startsWith(" ")
-                ? `'${value}'`
-                : value
+                  ? `'${value}'`
+                  : value,
             );
-          deepStrictEqual(actual.sort(), expected.sort());
+            deepStrictEqual(actual.sort(), expected.sort());
+          }
+        } finally {
+          rmSync(dir, { recursive: true, force: true });
         }
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
-      }
-    });
+      },
+    );
   }
 
-  const bashAvailable = process.platform !== "win32" &&
-    isShellAvailable("bash");
-  it("should insert a reserved literal marker through Bash Readline", {
-    skip: !bashAvailable,
-    timeout: 15000,
-  }, () => {
-    if (!bashAvailable) return;
-    const dir = mkdtempSync(join(tmpdir(), "optique-marker-readline-"));
-    try {
-      const script = join(dir, "completion.bash");
-      const literal = "__FILE__:directory:::0";
-      writeFileSync(script, bash.generateScript("markercli", ["complete"]));
-      const encoded = Array.from(bash.encodeSuggestions([{
-        kind: "literal",
-        text: literal,
-      }])).join("");
-      for (const prefix of ["", "__FI"]) {
-        const output = runCommand("bash", [
-          "--noprofile",
-          "--norc",
-          "-i",
-        ], {
-          cwd: dir,
-          input: `PS1= PS2=
+  const bashAvailable =
+    process.platform !== "win32" && isShellAvailable("bash");
+  it(
+    "should insert a reserved literal marker through Bash Readline",
+    {
+      skip: !bashAvailable,
+      timeout: 15000,
+    },
+    () => {
+      if (!bashAvailable) return;
+      const dir = mkdtempSync(join(tmpdir(), "optique-marker-readline-"));
+      try {
+        const script = join(dir, "completion.bash");
+        const literal = "__FILE__:directory:::0";
+        writeFileSync(script, bash.generateScript("markercli", ["complete"]));
+        const encoded = Array.from(
+          bash.encodeSuggestions([
+            {
+              kind: "literal",
+              text: literal,
+            },
+          ]),
+        ).join("");
+        for (const prefix of ["", "__FI"]) {
+          const output = runCommand("bash", ["--noprofile", "--norc", "-i"], {
+            cwd: dir,
+            input: `PS1= PS2=
 set +o history
 bind 'set enable-bracketed-paste off' 2>/dev/null
 bind '"\\C-i": complete'
@@ -11379,13 +11774,14 @@ source '${script}'
 markercli --value ${prefix}\t
 exit
 `,
-        });
-        deepStrictEqual(output.split("\0"), ["--value", literal, ""]);
+          });
+          deepStrictEqual(output.split("\0"), ["--value", literal, ""]);
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
       }
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
+    },
+  );
 });
 
 const fixedGlobFixtures: Parameters<typeof testInteractiveZshCompletion>[2] = [
@@ -11508,10 +11904,12 @@ function testFixedGlobPrefix(
     );
     const values: unknown = JSON.parse(output);
     ok(Array.isArray(values), `Expected completion array: ${output}`);
-    return values.map((value: unknown) => {
-      ok(typeof value === "string", `Expected completion text: ${output}`);
-      return value;
-    }).join("\n");
+    return values
+      .map((value: unknown) => {
+        ok(typeof value === "string", `Expected completion text: ${output}`);
+        return value;
+      })
+      .join("\n");
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -11632,172 +12030,255 @@ describe("fixed glob prefix completion", () => {
     },
   ];
   for (const shell of ["nu", "pwsh", "zsh"] as const) {
-    const available = process.platform !== "win32" &&
+    const available =
+      process.platform !== "win32" &&
       (shell === "zsh"
         ? isInteractiveZshCompletionAvailable()
         : isShellAvailable(shell));
     for (const scenario of cases) {
-      it(`${shell}: ${scenario.name}`, {
-        skip: !available,
-        timeout: shell === "zsh"
-          ? ZSH_PTY_TEST_TIMEOUT
-          : shell === "pwsh"
-          ? pwshTestTimeout
-          : undefined,
-      }, () => {
-        // Bun ignores skip, so keep the early return as well.
-        if (!available) return;
-        const output = testFixedGlobPrefix(
-          shell,
-          {
-            kind: "file",
-            type: scenario.type ?? "file",
-            pattern: scenario.pattern,
-            extensions: scenario.extensions,
-          },
-          scenario.prefix,
-          scenario.absolutePrefix,
-        );
-        for (const value of scenario.include) {
-          ok(output.includes(value), `Expected ${value}:\n${output}`);
-        }
-        for (const value of scenario.exclude) {
-          ok(!output.includes(value), `Unexpected ${value}:\n${output}`);
-        }
-      });
+      it(
+        `${shell}: ${scenario.name}`,
+        {
+          skip: !available,
+          timeout:
+            shell === "zsh"
+              ? ZSH_PTY_TEST_TIMEOUT
+              : shell === "pwsh"
+                ? pwshTestTimeout
+                : undefined,
+        },
+        () => {
+          // Bun ignores skip, so keep the early return as well.
+          if (!available) return;
+          const output = testFixedGlobPrefix(
+            shell,
+            {
+              kind: "file",
+              type: scenario.type ?? "file",
+              pattern: scenario.pattern,
+              extensions: scenario.extensions,
+            },
+            scenario.prefix,
+            scenario.absolutePrefix,
+          );
+          for (const value of scenario.include) {
+            ok(output.includes(value), `Expected ${value}:\n${output}`);
+          }
+          for (const value of scenario.exclude) {
+            ok(!output.includes(value), `Unexpected ${value}:\n${output}`);
+          }
+        },
+      );
     }
   }
 });
 
-it("PowerShell fixed glob after directory normalization", {
-  skip: process.platform === "win32" || !isShellAvailable("pwsh"),
-  timeout: pwshTestTimeout,
-}, () => {
-  if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
-  const output = testFixedGlobPrefix("pwsh", {
-    kind: "file",
-    type: "file",
-    pattern: "fixtures/*.txt",
-  }, "fixtures/reports");
-  ok(output.includes("inside/"), `Expected navigation directory:\n${output}`);
-  ok(!output.includes("inner.txt"), `Unexpected descendant file:\n${output}`);
-  ok(!output.includes("inner.json"), `Unexpected descendant file:\n${output}`);
-});
-
-it("zsh fixed glob retains literal hash in directories", {
-  skip: process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
-  timeout: ZSH_PTY_TEST_TIMEOUT,
-}, () => {
-  if (process.platform === "win32" || !isInteractiveZshCompletionAvailable()) {
-    return;
-  }
-  const output = testFixedGlobPrefix("zsh", {
-    kind: "file",
-    type: "file",
-    pattern: "C#/*.cs",
-  }, "C#/P");
-  ok(output.includes("Program.cs"), `Expected fixed-glob match:\n${output}`);
-  ok(
-    !output.includes("Program.txt"),
-    `Unexpected nonmatching file:\n${output}`,
-  );
-});
-
-it("Nu fixed glob preserves literal tilde filenames", {
-  skip: process.platform === "win32" || !isShellAvailable("nu"),
-}, () => {
-  if (process.platform === "win32" || !isShellAvailable("nu")) return;
-  const output = testFixedGlobPrefix("nu", {
-    kind: "file",
-    type: "file",
-    pattern: "*.txt",
-  }, "re");
-  ok(output.includes("report.txt"), `Expected fixed match:\n${output}`);
-  ok(!output.includes("report.json"), `Unexpected nonmatch:\n${output}`);
-});
-
-it("Nu fixed glob preserves literal tilde directories", {
-  skip: process.platform === "win32" || !isShellAvailable("nu"),
-}, () => {
-  if (process.platform === "win32" || !isShellAvailable("nu")) return;
-  const output = testFixedGlobPrefix(
-    "nu",
-    {
-      kind: "file",
-      type: "file",
-      pattern: "*/*.txt",
-    },
-    "~/re",
-    true,
-  );
-  ok(output.includes("report.txt"), `Expected fixed match:\n${output}`);
-  ok(output.includes("reports/"), `Expected navigation directory:\n${output}`);
-  ok(!output.includes("report.json"), `Unexpected nonmatch:\n${output}`);
-});
-
-it("zsh fixed glob preserves negated character classes", {
-  skip: process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
-  timeout: ZSH_PTY_TEST_TIMEOUT,
-}, () => {
-  if (process.platform === "win32" || !isInteractiveZshCompletionAvailable()) {
-    return;
-  }
-  const output = testFixedGlobPrefix("zsh", {
-    kind: "file",
-    type: "file",
-    pattern: "fixtures/[^o]*.txt",
-  }, "fixtures/re");
-  ok(output.includes("report.txt"), `Expected negated-class match:\n${output}`);
-  ok(
-    !output.includes("other.txt"),
-    `Unexpected negated-class match:\n${output}`,
-  );
-  ok(!output.includes("report.json"), `Unexpected extension:\n${output}`);
-});
-
-it("zsh fixed glob preserves quoted parenthesized directories", {
-  skip: process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
-  timeout: ZSH_PTY_TEST_TIMEOUT,
-}, () => {
-  if (process.platform === "win32" || !isInteractiveZshCompletionAvailable()) {
-    return;
-  }
-  const output = testFixedGlobPrefix("zsh", {
-    kind: "file",
-    type: "file",
-    pattern: "P (1)/*.cs",
-  }, "'P (1)/a");
-  ok(output.includes("a.cs"), `Expected quoted match:\n${output}`);
-  ok(!output.includes("a.txt"), `Unexpected nonmatch:\n${output}`);
-});
-
-it("zsh fixed glob preserves whitespace with SH_WORD_SPLIT", {
-  skip: process.platform === "win32" || !isShellAvailable("zsh"),
-}, () => {
-  if (process.platform === "win32" || !isShellAvailable("zsh")) return;
-  const tempDir = mkdtempSync(join(tmpdir(), "zsh-fixed-glob-word-split-"));
-  try {
-    mkdirSync(join(tempDir, "P (1)"));
-    writeFileSync(join(tempDir, "P (1)/a.cs"), "");
-    writeFileSync(join(tempDir, "P (1)/a.txt"), "");
-    const directive = Array.from(zsh.encodeSuggestions([{
-      kind: "file",
-      type: "file",
-      pattern: "P (1)/*.cs",
-    }])).join("").replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
-    writeFileSync(
-      join(tempDir, "extapp"),
-      `#!/bin/bash\nprintf '${directive}'\n`,
-      { mode: 0o755 },
+it(
+  "PowerShell fixed glob after directory normalization",
+  {
+    skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+    timeout: pwshTestTimeout,
+  },
+  () => {
+    if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
+    const output = testFixedGlobPrefix(
+      "pwsh",
+      {
+        kind: "file",
+        type: "file",
+        pattern: "fixtures/*.txt",
+      },
+      "fixtures/reports",
     );
-    const scriptPath = join(tempDir, "completion.zsh");
-    writeFileSync(scriptPath, zsh.generateScript("extapp"));
-    // _main_complete normally disables SH_WORD_SPLIT.  Call the generated
-    // function directly to exercise callers that retain this option, while
-    // the native expansion still runs in zsh rather than a string assertion.
-    const output = runCommand("zsh", [
-      "-fc",
-      `
+    ok(output.includes("inside/"), `Expected navigation directory:\n${output}`);
+    ok(!output.includes("inner.txt"), `Unexpected descendant file:\n${output}`);
+    ok(
+      !output.includes("inner.json"),
+      `Unexpected descendant file:\n${output}`,
+    );
+  },
+);
+
+it(
+  "zsh fixed glob retains literal hash in directories",
+  {
+    skip:
+      process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+    timeout: ZSH_PTY_TEST_TIMEOUT,
+  },
+  () => {
+    if (
+      process.platform === "win32" ||
+      !isInteractiveZshCompletionAvailable()
+    ) {
+      return;
+    }
+    const output = testFixedGlobPrefix(
+      "zsh",
+      {
+        kind: "file",
+        type: "file",
+        pattern: "C#/*.cs",
+      },
+      "C#/P",
+    );
+    ok(output.includes("Program.cs"), `Expected fixed-glob match:\n${output}`);
+    ok(
+      !output.includes("Program.txt"),
+      `Unexpected nonmatching file:\n${output}`,
+    );
+  },
+);
+
+it(
+  "Nu fixed glob preserves literal tilde filenames",
+  {
+    skip: process.platform === "win32" || !isShellAvailable("nu"),
+  },
+  () => {
+    if (process.platform === "win32" || !isShellAvailable("nu")) return;
+    const output = testFixedGlobPrefix(
+      "nu",
+      {
+        kind: "file",
+        type: "file",
+        pattern: "*.txt",
+      },
+      "re",
+    );
+    ok(output.includes("report.txt"), `Expected fixed match:\n${output}`);
+    ok(!output.includes("report.json"), `Unexpected nonmatch:\n${output}`);
+  },
+);
+
+it(
+  "Nu fixed glob preserves literal tilde directories",
+  {
+    skip: process.platform === "win32" || !isShellAvailable("nu"),
+  },
+  () => {
+    if (process.platform === "win32" || !isShellAvailable("nu")) return;
+    const output = testFixedGlobPrefix(
+      "nu",
+      {
+        kind: "file",
+        type: "file",
+        pattern: "*/*.txt",
+      },
+      "~/re",
+      true,
+    );
+    ok(output.includes("report.txt"), `Expected fixed match:\n${output}`);
+    ok(
+      output.includes("reports/"),
+      `Expected navigation directory:\n${output}`,
+    );
+    ok(!output.includes("report.json"), `Unexpected nonmatch:\n${output}`);
+  },
+);
+
+it(
+  "zsh fixed glob preserves negated character classes",
+  {
+    skip:
+      process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+    timeout: ZSH_PTY_TEST_TIMEOUT,
+  },
+  () => {
+    if (
+      process.platform === "win32" ||
+      !isInteractiveZshCompletionAvailable()
+    ) {
+      return;
+    }
+    const output = testFixedGlobPrefix(
+      "zsh",
+      {
+        kind: "file",
+        type: "file",
+        pattern: "fixtures/[^o]*.txt",
+      },
+      "fixtures/re",
+    );
+    ok(
+      output.includes("report.txt"),
+      `Expected negated-class match:\n${output}`,
+    );
+    ok(
+      !output.includes("other.txt"),
+      `Unexpected negated-class match:\n${output}`,
+    );
+    ok(!output.includes("report.json"), `Unexpected extension:\n${output}`);
+  },
+);
+
+it(
+  "zsh fixed glob preserves quoted parenthesized directories",
+  {
+    skip:
+      process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+    timeout: ZSH_PTY_TEST_TIMEOUT,
+  },
+  () => {
+    if (
+      process.platform === "win32" ||
+      !isInteractiveZshCompletionAvailable()
+    ) {
+      return;
+    }
+    const output = testFixedGlobPrefix(
+      "zsh",
+      {
+        kind: "file",
+        type: "file",
+        pattern: "P (1)/*.cs",
+      },
+      "'P (1)/a",
+    );
+    ok(output.includes("a.cs"), `Expected quoted match:\n${output}`);
+    ok(!output.includes("a.txt"), `Unexpected nonmatch:\n${output}`);
+  },
+);
+
+it(
+  "zsh fixed glob preserves whitespace with SH_WORD_SPLIT",
+  {
+    skip: process.platform === "win32" || !isShellAvailable("zsh"),
+  },
+  () => {
+    if (process.platform === "win32" || !isShellAvailable("zsh")) return;
+    const tempDir = mkdtempSync(join(tmpdir(), "zsh-fixed-glob-word-split-"));
+    try {
+      mkdirSync(join(tempDir, "P (1)"));
+      writeFileSync(join(tempDir, "P (1)/a.cs"), "");
+      writeFileSync(join(tempDir, "P (1)/a.txt"), "");
+      const directive = Array.from(
+        zsh.encodeSuggestions([
+          {
+            kind: "file",
+            type: "file",
+            pattern: "P (1)/*.cs",
+          },
+        ]),
+      )
+        .join("")
+        .replaceAll("\\", "\\\\")
+        .replaceAll("\0", "\\0");
+      writeFileSync(
+        join(tempDir, "extapp"),
+        `#!/bin/bash\nprintf '${directive}'\n`,
+        { mode: 0o755 },
+      );
+      const scriptPath = join(tempDir, "completion.zsh");
+      writeFileSync(scriptPath, zsh.generateScript("extapp"));
+      // _main_complete normally disables SH_WORD_SPLIT.  Call the generated
+      // function directly to exercise callers that retain this option, while
+      // the native expansion still runs in zsh rather than a string assertion.
+      const output = runCommand(
+        "zsh",
+        [
+          "-fc",
+          `
 export PATH="${tempDir}:$PATH"
 compdef() { :; }
 source "${scriptPath}"
@@ -11809,244 +12290,317 @@ setopt extended_glob sh_word_split sh_glob
 _extapp
 [[ -o sh_word_split && -o sh_glob ]] || exit 1
 `,
-    ], { cwd: tempDir });
-    ok(output.includes("a.cs"), `Expected quoted match:\n${output}`);
-    ok(!output.includes("a.txt"), `Unexpected nonmatch:\n${output}`);
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
-  }
-});
+        ],
+        { cwd: tempDir },
+      );
+      ok(output.includes("a.cs"), `Expected quoted match:\n${output}`);
+      ok(!output.includes("a.txt"), `Unexpected nonmatch:\n${output}`);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  },
+);
 
 for (const pattern of ["*[()#~].txt", "*[]()#~].txt"]) {
-  it(`zsh fixed glob preserves literal metacharacters in classes: ${pattern}`, {
-    skip: process.platform === "win32" ||
-      !isInteractiveZshCompletionAvailable(),
-    timeout: ZSH_PTY_TEST_TIMEOUT,
-  }, () => {
-    if (
-      process.platform === "win32" || !isInteractiveZshCompletionAvailable()
-    ) {
-      return;
-    }
-    const output = testFixedGlobPrefix("zsh", {
-      kind: "file",
-      type: "file",
-      pattern,
-    }, "a");
-    for (const name of ["a(.txt", "a).txt", "a#.txt", "a~.txt"]) {
-      const escapedName = name.replace(/([()#~])/g, "\\$1");
-      ok(
-        output.includes(escapedName),
-        `Expected class match ${name}:\n${output}`,
+  it(
+    `zsh fixed glob preserves literal metacharacters in classes: ${pattern}`,
+    {
+      skip:
+        process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+      timeout: ZSH_PTY_TEST_TIMEOUT,
+    },
+    () => {
+      if (
+        process.platform === "win32" ||
+        !isInteractiveZshCompletionAvailable()
+      ) {
+        return;
+      }
+      const output = testFixedGlobPrefix(
+        "zsh",
+        {
+          kind: "file",
+          type: "file",
+          pattern,
+        },
+        "a",
       );
-    }
-    if (pattern.includes("[]")) {
+      for (const name of ["a(.txt", "a).txt", "a#.txt", "a~.txt"]) {
+        const escapedName = name.replace(/([()#~])/g, "\\$1");
+        ok(
+          output.includes(escapedName),
+          `Expected class match ${name}:\n${output}`,
+        );
+      }
+      if (pattern.includes("[]")) {
+        ok(
+          output.includes("a\\].txt"),
+          `Expected leading closing bracket:\n${output}`,
+        );
+      }
       ok(
-        output.includes("a\\].txt"),
-        `Expected leading closing bracket:\n${output}`,
+        !output.includes("a\\\\.txt"),
+        `Unexpected backslash match:\n${output}`,
       );
-    }
-    ok(!output.includes("a\\\\.txt"), `Unexpected backslash match:\n${output}`);
-  });
+    },
+  );
 }
 
-it("zsh fixed glob matches explicitly typed hidden parents", {
-  skip: process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
-  timeout: ZSH_PTY_TEST_TIMEOUT,
-}, () => {
-  if (process.platform === "win32" || !isInteractiveZshCompletionAvailable()) {
-    return;
-  }
-  const output = testFixedGlobPrefix("zsh", {
-    kind: "file",
-    type: "file",
-    pattern: "fixtures/*/*.txt",
-  }, "fixtures/.reports/in");
-  ok(output.includes("inner.txt"), `Expected hidden-parent match:\n${output}`);
-  ok(!output.includes("inner.json"), `Unexpected extension:\n${output}`);
-});
-
-it("zsh fixed glob preserves a lone class negation character", {
-  skip: process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
-  timeout: ZSH_PTY_TEST_TIMEOUT,
-}, () => {
-  if (process.platform === "win32" || !isInteractiveZshCompletionAvailable()) {
-    return;
-  }
-  const output = testFixedGlobPrefix("zsh", {
-    kind: "file",
-    type: "file",
-    pattern: "*[!](1).txt",
-  }, "a!");
-  ok(
-    output.includes("a\\!\\(1\\).txt"),
-    `Expected literal-class match:\n${output}`,
-  );
-  ok(!output.includes("a\\\\.txt"), `Unexpected backslash match:\n${output}`);
-});
-
-for (
-  const scenario of [
-    {
-      pattern: "fixtures/*.txt",
-      prefix: "./fixtures/",
-      label: "relative parent",
-      include: "report.txt",
-      exclude: ".report.txt",
-      includeHidden: false,
-    },
-    {
-      pattern: "fixtures/.reports/*.txt",
-      prefix: "fixtures/.reports/",
-      label: "hidden parent",
-      include: "inner.txt",
-      exclude: ".secret.txt",
-      includeHidden: false,
-    },
-    {
-      pattern: "fixtures/.reports/*.txt",
-      prefix: "fixtures/.reports/",
-      label: "explicit hidden children",
-      include: ".secret.txt",
-      exclude: "inner.json",
-      includeHidden: true,
-    },
-  ]
-) {
-  it(`zsh fixed glob keeps hidden-child policy: ${scenario.label}`, {
-    skip: process.platform === "win32" ||
-      !isInteractiveZshCompletionAvailable(),
+it(
+  "zsh fixed glob matches explicitly typed hidden parents",
+  {
+    skip:
+      process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
     timeout: ZSH_PTY_TEST_TIMEOUT,
-  }, () => {
+  },
+  () => {
     if (
-      process.platform === "win32" || !isInteractiveZshCompletionAvailable()
+      process.platform === "win32" ||
+      !isInteractiveZshCompletionAvailable()
     ) {
       return;
     }
-    const output = testFixedGlobPrefix("zsh", {
-      kind: "file",
-      type: "file",
-      pattern: scenario.pattern,
-      includeHidden: scenario.includeHidden,
-    }, scenario.prefix);
-    ok(output.includes(scenario.include), `Expected visible match:\n${output}`);
-    ok(
-      !output.includes(scenario.exclude),
-      `Unexpected hidden child:\n${output}`,
+    const output = testFixedGlobPrefix(
+      "zsh",
+      {
+        kind: "file",
+        type: "file",
+        pattern: "fixtures/*/*.txt",
+      },
+      "fixtures/.reports/in",
     );
-  });
+    ok(
+      output.includes("inner.txt"),
+      `Expected hidden-parent match:\n${output}`,
+    );
+    ok(!output.includes("inner.json"), `Unexpected extension:\n${output}`);
+  },
+);
+
+it(
+  "zsh fixed glob preserves a lone class negation character",
+  {
+    skip:
+      process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+    timeout: ZSH_PTY_TEST_TIMEOUT,
+  },
+  () => {
+    if (
+      process.platform === "win32" ||
+      !isInteractiveZshCompletionAvailable()
+    ) {
+      return;
+    }
+    const output = testFixedGlobPrefix(
+      "zsh",
+      {
+        kind: "file",
+        type: "file",
+        pattern: "*[!](1).txt",
+      },
+      "a!",
+    );
+    ok(
+      output.includes("a\\!\\(1\\).txt"),
+      `Expected literal-class match:\n${output}`,
+    );
+    ok(!output.includes("a\\\\.txt"), `Unexpected backslash match:\n${output}`);
+  },
+);
+
+for (const scenario of [
+  {
+    pattern: "fixtures/*.txt",
+    prefix: "./fixtures/",
+    label: "relative parent",
+    include: "report.txt",
+    exclude: ".report.txt",
+    includeHidden: false,
+  },
+  {
+    pattern: "fixtures/.reports/*.txt",
+    prefix: "fixtures/.reports/",
+    label: "hidden parent",
+    include: "inner.txt",
+    exclude: ".secret.txt",
+    includeHidden: false,
+  },
+  {
+    pattern: "fixtures/.reports/*.txt",
+    prefix: "fixtures/.reports/",
+    label: "explicit hidden children",
+    include: ".secret.txt",
+    exclude: "inner.json",
+    includeHidden: true,
+  },
+]) {
+  it(
+    `zsh fixed glob keeps hidden-child policy: ${scenario.label}`,
+    {
+      skip:
+        process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+      timeout: ZSH_PTY_TEST_TIMEOUT,
+    },
+    () => {
+      if (
+        process.platform === "win32" ||
+        !isInteractiveZshCompletionAvailable()
+      ) {
+        return;
+      }
+      const output = testFixedGlobPrefix(
+        "zsh",
+        {
+          kind: "file",
+          type: "file",
+          pattern: scenario.pattern,
+          includeHidden: scenario.includeHidden,
+        },
+        scenario.prefix,
+      );
+      ok(
+        output.includes(scenario.include),
+        `Expected visible match:\n${output}`,
+      );
+      ok(
+        !output.includes(scenario.exclude),
+        `Unexpected hidden child:\n${output}`,
+      );
+    },
+  );
 }
 
 for (const member of [".", "="]) {
-  it(`zsh fixed glob preserves literal bracket members: ${member}`, {
-    skip: process.platform === "win32" ||
-      !isInteractiveZshCompletionAvailable(),
-    timeout: ZSH_PTY_TEST_TIMEOUT,
-  }, () => {
-    if (
-      process.platform === "win32" || !isInteractiveZshCompletionAvailable()
-    ) {
-      return;
-    }
-    const output = testFixedGlobPrefix("zsh", {
-      kind: "file",
-      type: "file",
-      pattern: `*[[${member}](1).txt`,
-    }, "a");
-    ok(
-      output.includes(`a${member}\\(1\\).txt`),
-      `Expected literal parentheses:\n${output}`,
-    );
-    ok(
-      output.includes("a\\[\\(1\\).txt"),
-      `Expected bracket member:\n${output}`,
-    );
-    ok(
-      !output.includes(`a${member}1.txt`),
-      `Unexpected glob group match:\n${output}`,
-    );
-  });
+  it(
+    `zsh fixed glob preserves literal bracket members: ${member}`,
+    {
+      skip:
+        process.platform === "win32" || !isInteractiveZshCompletionAvailable(),
+      timeout: ZSH_PTY_TEST_TIMEOUT,
+    },
+    () => {
+      if (
+        process.platform === "win32" ||
+        !isInteractiveZshCompletionAvailable()
+      ) {
+        return;
+      }
+      const output = testFixedGlobPrefix(
+        "zsh",
+        {
+          kind: "file",
+          type: "file",
+          pattern: `*[[${member}](1).txt`,
+        },
+        "a",
+      );
+      ok(
+        output.includes(`a${member}\\(1\\).txt`),
+        `Expected literal parentheses:\n${output}`,
+      );
+      ok(
+        output.includes("a\\[\\(1\\).txt"),
+        `Expected bracket member:\n${output}`,
+      );
+      ok(
+        !output.includes(`a${member}1.txt`),
+        `Unexpected glob group match:\n${output}`,
+      );
+    },
+  );
 }
 
-for (
-  const scenario of [
+for (const scenario of [
+  {
+    name: "typed hidden parent",
+    prefix: "fixtures/.reports/in",
+    hidden: false,
+    include: ["inner.txt"],
+    exclude: ["inner.json", ".secret.txt"],
+  },
+  {
+    name: "relative typed hidden parent",
+    prefix: "./fixtures/.reports/in",
+    hidden: false,
+    include: ["inner.txt"],
+    exclude: ["inner.json"],
+  },
+  {
+    name: "hidden parent without hidden children",
+    prefix: "fixtures/.reports/",
+    hidden: false,
+    include: ["inner.txt"],
+    exclude: ["inner.json", ".secret.txt"],
+  },
+  {
+    name: "explicit hidden child",
+    prefix: "fixtures/.reports/.s",
+    hidden: false,
+    include: [".secret.txt"],
+    exclude: ["inner.txt"],
+  },
+  {
+    name: "included hidden children",
+    prefix: "fixtures/.reports/",
+    hidden: true,
+    include: ["inner.txt", ".secret.txt"],
+    exclude: ["inner.json"],
+  },
+]) {
+  it(
+    `Nu fixed glob ${scenario.name}`,
     {
-      name: "typed hidden parent",
-      prefix: "fixtures/.reports/in",
-      hidden: false,
-      include: ["inner.txt"],
-      exclude: ["inner.json", ".secret.txt"],
+      skip: process.platform === "win32" || !isShellAvailable("nu"),
     },
-    {
-      name: "relative typed hidden parent",
-      prefix: "./fixtures/.reports/in",
-      hidden: false,
-      include: ["inner.txt"],
-      exclude: ["inner.json"],
+    () => {
+      if (process.platform === "win32" || !isShellAvailable("nu")) return;
+      const output = testFixedGlobPrefix(
+        "nu",
+        {
+          kind: "file",
+          type: "file",
+          pattern: "fixtures/*/*.txt",
+          includeHidden: scenario.hidden,
+        },
+        scenario.prefix,
+      );
+      for (const value of scenario.include) {
+        ok(output.includes(value), `Expected ${value}:\n${output}`);
+      }
+      for (const value of scenario.exclude) {
+        ok(!output.includes(value), `Unexpected ${value}:\n${output}`);
+      }
     },
-    {
-      name: "hidden parent without hidden children",
-      prefix: "fixtures/.reports/",
-      hidden: false,
-      include: ["inner.txt"],
-      exclude: ["inner.json", ".secret.txt"],
-    },
-    {
-      name: "explicit hidden child",
-      prefix: "fixtures/.reports/.s",
-      hidden: false,
-      include: [".secret.txt"],
-      exclude: ["inner.txt"],
-    },
-    {
-      name: "included hidden children",
-      prefix: "fixtures/.reports/",
-      hidden: true,
-      include: ["inner.txt", ".secret.txt"],
-      exclude: ["inner.json"],
-    },
-  ]
-) {
-  it(`Nu fixed glob ${scenario.name}`, {
-    skip: process.platform === "win32" || !isShellAvailable("nu"),
-  }, () => {
-    if (process.platform === "win32" || !isShellAvailable("nu")) return;
-    const output = testFixedGlobPrefix("nu", {
-      kind: "file",
-      type: "file",
-      pattern: "fixtures/*/*.txt",
-      includeHidden: scenario.hidden,
-    }, scenario.prefix);
-    for (const value of scenario.include) {
-      ok(output.includes(value), `Expected ${value}:\n${output}`);
-    }
-    for (const value of scenario.exclude) {
-      ok(!output.includes(value), `Unexpected ${value}:\n${output}`);
-    }
-  });
+  );
 }
 
-for (
-  const prefix of [
-    "'fixtures/re",
-    '"fixtures/re',
-    "'fixtures/re'",
-    '"fixtures/re"',
-  ]
-) {
-  it(`PowerShell fixed glob with quoted prefix ${prefix}`, {
-    skip: process.platform === "win32" || !isShellAvailable("pwsh"),
-    timeout: pwshTestTimeout,
-  }, () => {
-    if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
-    const output = testFixedGlobPrefix("pwsh", {
-      kind: "file",
-      type: "file",
-      pattern: "fixtures/*.txt",
-    }, prefix);
-    ok(output.includes("report.txt"), `Expected fixed match:\n${output}`);
-    ok(!output.includes("report.json"), `Unexpected nonmatch:\n${output}`);
-  });
+for (const prefix of [
+  "'fixtures/re",
+  '"fixtures/re',
+  "'fixtures/re'",
+  '"fixtures/re"',
+]) {
+  it(
+    `PowerShell fixed glob with quoted prefix ${prefix}`,
+    {
+      skip: process.platform === "win32" || !isShellAvailable("pwsh"),
+      timeout: pwshTestTimeout,
+    },
+    () => {
+      if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
+      const output = testFixedGlobPrefix(
+        "pwsh",
+        {
+          kind: "file",
+          type: "file",
+          pattern: "fixtures/*.txt",
+        },
+        prefix,
+      );
+      ok(output.includes("report.txt"), `Expected fixed match:\n${output}`);
+      ok(!output.includes("report.json"), `Unexpected nonmatch:\n${output}`);
+    },
+  );
 }
 
 for (const includeHidden of [false, true]) {
@@ -12059,13 +12613,17 @@ for (const includeHidden of [false, true]) {
     () => {
       if (process.platform === "win32" || !isShellAvailable("pwsh")) return;
       for (const prefix of ["fixtures/.reports/in", "fixtures/reports/"]) {
-        const output = testFixedGlobPrefix("pwsh", {
-          kind: "file",
-          type: "file",
-          pattern: "fixtures/*/*.txt",
-          extensions: ["txt"],
-          includeHidden,
-        }, prefix);
+        const output = testFixedGlobPrefix(
+          "pwsh",
+          {
+            kind: "file",
+            type: "file",
+            pattern: "fixtures/*/*.txt",
+            extensions: ["txt"],
+            includeHidden,
+          },
+          prefix,
+        );
         ok(output.includes("inner.txt"), `Expected fixed match:\n${output}`);
         ok(!output.includes("inner.json"), `Unexpected nonmatch:\n${output}`);
         if (prefix.endsWith("/")) {
@@ -12074,10 +12632,12 @@ for (const includeHidden of [false, true]) {
               output.includes(".secret.txt"),
               `Expected hidden child:\n${output}`,
             );
-          } else {ok(
+          } else {
+            ok(
               !output.includes(".secret.txt"),
               `Unexpected hidden child:\n${output}`,
-            );}
+            );
+          }
         }
       }
     },
@@ -12090,21 +12650,28 @@ for (const firstTag of [undefined, "files", "directories"]) {
       firstTag ?? "default"
     })`,
     {
-      skip: !isInteractiveZshCompletionAvailable() ||
-        !isShellAvailable("mkfifo"),
+      skip:
+        !isInteractiveZshCompletionAvailable() || !isShellAvailable("mkfifo"),
       timeout: 10000,
     },
     () => {
       if (
-        !isInteractiveZshCompletionAvailable() || !isShellAvailable("mkfifo")
+        !isInteractiveZshCompletionAvailable() ||
+        !isShellAvailable("mkfifo")
       ) {
         return;
       }
-      const directive = Array.from(zsh.encodeSuggestions([{
-        kind: "file",
-        type: "file",
-        pattern: "*.txt",
-      }]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
+      const directive = Array.from(
+        zsh.encodeSuggestions([
+          {
+            kind: "file",
+            type: "file",
+            pattern: "*.txt",
+          },
+        ]),
+      )[0]
+        .replaceAll("\\", "\\\\")
+        .replaceAll("\0", "\\0");
       const output = testInteractiveZshCompletion(
         zsh.generateScript("extapp"),
         directive,
@@ -12117,11 +12684,12 @@ for (const firstTag of [undefined, "files", "directories"]) {
         ],
         {
           prefix: "re",
-          setup: firstTag == null
-            ? ""
-            : `zstyle ':completion:*' tag-order '${firstTag}' '${
-              firstTag === "files" ? "directories" : "files"
-            }'`,
+          setup:
+            firstTag == null
+              ? ""
+              : `zstyle ':completion:*' tag-order '${firstTag}' '${
+                  firstTag === "files" ? "directories" : "files"
+                }'`,
         },
       );
       ok(!output.includes("report.json"), output);
@@ -12140,79 +12708,90 @@ for (const firstTag of [undefined, "files", "directories"]) {
 }
 
 describe("zsh fixed glob fignore", () => {
-  for (
-    const scenario of [
+  for (const scenario of [
+    {
+      name: "fixed glob bypasses automatic suffix ignores",
+      pattern: "*.txt",
+      extensions: undefined,
+      setup: "fignore=(.txt)",
+      include: ["report.txt", "result.skip.txt", "reports/"],
+      exclude: ["report.json"],
+    },
+    {
+      name: "extension filtering bypasses automatic suffix ignores",
+      pattern: "*.txt",
+      extensions: ["txt"],
+      setup: "fignore=(.txt)",
+      include: ["report.txt", "result.skip.txt", "reports/"],
+      exclude: ["report.json"],
+    },
+    {
+      name: "fixed glob retains explicit tag ignore patterns",
+      pattern: "*.txt",
+      extensions: undefined,
+      setup:
+        "fignore=(.txt)\nzstyle ':completion:*:files' ignored-patterns '*skip*'",
+      include: ["report.txt", "reports/"],
+      exclude: ["report.json", "result.skip.txt"],
+    },
+    {
+      name: "bare star retains automatic suffix ignores",
+      pattern: "*",
+      extensions: undefined,
+      setup: "fignore=(.txt)",
+      include: ["report.json", "reports/"],
+      exclude: ["report.txt", "result.skip.txt"],
+    },
+    {
+      name: "unfiltered prefix retains automatic suffix ignores",
+      pattern: "re",
+      extensions: undefined,
+      setup: "fignore=(.txt)",
+      include: ["report.json", "reports/"],
+      exclude: ["report.txt", "result.skip.txt"],
+    },
+  ]) {
+    it(
+      scenario.name,
       {
-        name: "fixed glob bypasses automatic suffix ignores",
-        pattern: "*.txt",
-        extensions: undefined,
-        setup: "fignore=(.txt)",
-        include: ["report.txt", "result.skip.txt", "reports/"],
-        exclude: ["report.json"],
+        skip: !isInteractiveZshCompletionAvailable(),
+        timeout: 10000,
       },
-      {
-        name: "extension filtering bypasses automatic suffix ignores",
-        pattern: "*.txt",
-        extensions: ["txt"],
-        setup: "fignore=(.txt)",
-        include: ["report.txt", "result.skip.txt", "reports/"],
-        exclude: ["report.json"],
+      () => {
+        if (!isInteractiveZshCompletionAvailable()) return;
+        const directive = Array.from(
+          zsh.encodeSuggestions([
+            {
+              kind: "file",
+              type: "file",
+              pattern: scenario.pattern,
+              extensions: scenario.extensions,
+            },
+          ]),
+        )[0]
+          .replaceAll("\\", "\\\\")
+          .replaceAll("\0", "\\0");
+        const output = testInteractiveZshCompletion(
+          zsh.generateScript("extapp"),
+          directive,
+          [
+            { path: "report.txt" },
+            { path: "result.skip.txt" },
+            { path: "report.json" },
+            { path: "reports", type: "directory" },
+          ],
+          { prefix: "re", setup: scenario.setup },
+        );
+        for (const candidate of scenario.include) {
+          ok(output.includes(candidate), `Expected ${candidate}:\n${output}`);
+        }
+        for (const candidate of scenario.exclude) {
+          ok(
+            !output.includes(candidate),
+            `Unexpected ${candidate}:\n${output}`,
+          );
+        }
       },
-      {
-        name: "fixed glob retains explicit tag ignore patterns",
-        pattern: "*.txt",
-        extensions: undefined,
-        setup:
-          "fignore=(.txt)\nzstyle ':completion:*:files' ignored-patterns '*skip*'",
-        include: ["report.txt", "reports/"],
-        exclude: ["report.json", "result.skip.txt"],
-      },
-      {
-        name: "bare star retains automatic suffix ignores",
-        pattern: "*",
-        extensions: undefined,
-        setup: "fignore=(.txt)",
-        include: ["report.json", "reports/"],
-        exclude: ["report.txt", "result.skip.txt"],
-      },
-      {
-        name: "unfiltered prefix retains automatic suffix ignores",
-        pattern: "re",
-        extensions: undefined,
-        setup: "fignore=(.txt)",
-        include: ["report.json", "reports/"],
-        exclude: ["report.txt", "result.skip.txt"],
-      },
-    ]
-  ) {
-    it(scenario.name, {
-      skip: !isInteractiveZshCompletionAvailable(),
-      timeout: 10000,
-    }, () => {
-      if (!isInteractiveZshCompletionAvailable()) return;
-      const directive = Array.from(zsh.encodeSuggestions([{
-        kind: "file",
-        type: "file",
-        pattern: scenario.pattern,
-        extensions: scenario.extensions,
-      }]))[0].replaceAll("\\", "\\\\").replaceAll("\0", "\\0");
-      const output = testInteractiveZshCompletion(
-        zsh.generateScript("extapp"),
-        directive,
-        [
-          { path: "report.txt" },
-          { path: "result.skip.txt" },
-          { path: "report.json" },
-          { path: "reports", type: "directory" },
-        ],
-        { prefix: "re", setup: scenario.setup },
-      );
-      for (const candidate of scenario.include) {
-        ok(output.includes(candidate), `Expected ${candidate}:\n${output}`);
-      }
-      for (const candidate of scenario.exclude) {
-        ok(!output.includes(candidate), `Unexpected ${candidate}:\n${output}`);
-      }
-    });
+    );
   }
 });

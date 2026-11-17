@@ -30,12 +30,9 @@ describe("message template function", () => {
     const msg = message`This is a simple message`;
 
     assert.ok(Array.isArray(msg));
-    assert.deepEqual(
-      msg,
-      [
-        { type: "text", text: "This is a simple message" },
-      ] as const,
-    );
+    assert.deepEqual(msg, [
+      { type: "text", text: "This is a simple message" },
+    ] as const);
   });
 
   it("should create message with interpolated strings", () => {
@@ -43,13 +40,10 @@ describe("message template function", () => {
     const msg = message`Expected valid input, got ${val}`;
 
     assert.ok(Array.isArray(msg));
-    assert.deepEqual(
-      msg,
-      [
-        { type: "text", text: "Expected valid input, got " },
-        { type: "value", value: "testValue" },
-      ] as const,
-    );
+    assert.deepEqual(msg, [
+      { type: "text", text: "Expected valid input, got " },
+      { type: "value", value: "testValue" },
+    ] as const);
   });
 
   it("should create message with multiple interpolated values", () => {
@@ -59,17 +53,14 @@ describe("message template function", () => {
     const msg = message`Value ${actual} is not between ${min} and ${max}`;
 
     assert.ok(Array.isArray(msg));
-    assert.deepEqual(
-      msg,
-      [
-        { type: "text", text: "Value " },
-        { type: "value", value: "150" },
-        { type: "text", text: " is not between " },
-        { type: "value", value: "10" },
-        { type: "text", text: " and " },
-        { type: "value", value: "100" },
-      ] as const,
-    );
+    assert.deepEqual(msg, [
+      { type: "text", text: "Value " },
+      { type: "value", value: "150" },
+      { type: "text", text: " is not between " },
+      { type: "value", value: "10" },
+      { type: "text", text: " and " },
+      { type: "value", value: "100" },
+    ] as const);
   });
 
   it("should handle MessageTerm objects in interpolation", () => {
@@ -77,14 +68,11 @@ describe("message template function", () => {
     const msg = message`Option ${optName} is required`;
 
     assert.ok(Array.isArray(msg));
-    assert.deepEqual(
-      msg,
-      [
-        { type: "text", text: "Option " },
-        { type: "optionName", optionName: "--port" },
-        { type: "text", text: " is required" },
-      ] as const,
-    );
+    assert.deepEqual(msg, [
+      { type: "text", text: "Option " },
+      { type: "optionName", optionName: "--port" },
+      { type: "text", text: " is required" },
+    ] as const);
   });
 
   it("should handle nested Message arrays", () => {
@@ -92,13 +80,10 @@ describe("message template function", () => {
     const msg = message`Parsing failed: ${innerMessage}`;
 
     assert.ok(Array.isArray(msg));
-    assert.deepEqual(
-      msg,
-      [
-        { type: "text", text: "Parsing failed: " },
-        { type: "text", text: "invalid value" },
-      ] as const,
-    );
+    assert.deepEqual(msg, [
+      { type: "text", text: "Parsing failed: " },
+      { type: "text", text: "invalid value" },
+    ] as const);
   });
 
   it("should create message with text ending (dot case)", () => {
@@ -107,16 +92,13 @@ describe("message template function", () => {
     const msg = message`Expected ${expected}, got ${actual}.`;
 
     assert.ok(Array.isArray(msg));
-    assert.deepEqual(
-      msg,
-      [
-        { type: "text", text: "Expected " },
-        { type: "value", value: expected },
-        { type: "text", text: ", got " },
-        { type: "value", value: actual },
-        { type: "text", text: "." },
-      ] as const,
-    );
+    assert.deepEqual(msg, [
+      { type: "text", text: "Expected " },
+      { type: "value", value: expected },
+      { type: "text", text: ", got " },
+      { type: "value", value: actual },
+      { type: "text", text: "." },
+    ] as const);
   });
 
   it("should create message with range format", () => {
@@ -126,18 +108,15 @@ describe("message template function", () => {
     const msg = message`Value ${value} is out of range [${min}, ${max}]`;
 
     assert.ok(Array.isArray(msg));
-    assert.deepEqual(
-      msg,
-      [
-        { type: "text", text: "Value " },
-        { type: "value", value: "150" },
-        { type: "text", text: " is out of range [" },
-        { type: "value", value: "1" },
-        { type: "text", text: ", " },
-        { type: "value", value: "100" },
-        { type: "text", text: "]" },
-      ] as const,
-    );
+    assert.deepEqual(msg, [
+      { type: "text", text: "Value " },
+      { type: "value", value: "150" },
+      { type: "text", text: " is out of range [" },
+      { type: "value", value: "1" },
+      { type: "text", text: ", " },
+      { type: "value", value: "100" },
+      { type: "text", text: "]" },
+    ] as const);
   });
 
   it("should clone interpolated MessageTerm objects", () => {
@@ -203,10 +182,7 @@ describe("message term constructors", () => {
   });
 
   it("should throw TypeError for empty values array", () => {
-    assert.throws(
-      () => values([]),
-      { name: "TypeError", message: /empty/ },
-    );
+    assert.throws(() => values([]), { name: "TypeError", message: /empty/ });
   });
 
   it("should create envVar term", () => {
@@ -256,17 +232,11 @@ describe("message term constructors", () => {
   });
 
   it("should throw RangeError for invalid URL string", () => {
-    assert.throws(
-      () => url("not a valid url"),
-      RangeError,
-    );
+    assert.throws(() => url("not a valid url"), RangeError);
   });
 
   it("should throw RangeError for empty string", () => {
-    assert.throws(
-      () => url(""),
-      RangeError,
-    );
+    assert.throws(() => url(""), RangeError);
   });
 
   it("should handle URL with query parameters", () => {
@@ -310,10 +280,7 @@ describe("message term constructors", () => {
   });
 
   it("link() should throw RangeError for invalid URL", () => {
-    assert.throws(
-      () => link("not valid"),
-      RangeError,
-    );
+    assert.throws(() => link("not valid"), RangeError);
   });
 
   it("optionNames() should not be affected by later mutation of the input array", () => {
@@ -566,8 +533,7 @@ describe("formatMessage", () => {
     const msg: Message = [
       {
         type: "text",
-        text:
-          "This is a very long message that should not be wrapped without maxWidth option ",
+        text: "This is a very long message that should not be wrapped without maxWidth option ",
       },
       { type: "optionName", optionName: "--port" },
     ];
@@ -639,9 +605,9 @@ describe("formatMessage", () => {
       for (const line of lines) {
         assert.ok(
           getDisplayWidth(line) <= 9,
-          `Line display width exceeds 9: "${line}" (${
-            getDisplayWidth(line)
-          } columns)`,
+          `Line display width exceeds 9: "${line}" (${getDisplayWidth(
+            line,
+          )} columns)`,
         );
       }
     });
@@ -674,9 +640,9 @@ describe("formatMessage", () => {
       for (const line of lines) {
         assert.ok(
           getDisplayWidth(line) <= 5,
-          `Line display width exceeds 5: "${line}" (${
-            getDisplayWidth(line)
-          } columns)`,
+          `Line display width exceeds 5: "${line}" (${getDisplayWidth(
+            line,
+          )} columns)`,
         );
       }
     });
@@ -782,9 +748,9 @@ describe("integration tests", () => {
     const expected = "NUMBER";
     const actual = "not-a-number";
 
-    const msg = message`Option ${optionName(option)} expects ${
-      metavar(expected)
-    }, got ${actual}`;
+    const msg = message`Option ${optionName(option)} expects ${metavar(
+      expected,
+    )}, got ${actual}`;
     const formatted = formatMessage(msg, { quotes: true });
 
     assert.equal(
@@ -824,16 +790,13 @@ describe("integration tests", () => {
       quotes: false,
     });
 
-    assert.equal(
-      formatted,
-      "Port: \x1b[32m8080\x1b[0m\x1b[2m",
-    );
+    assert.equal(formatted, "Port: \x1b[32m8080\x1b[0m\x1b[2m");
   });
 
   it("should handle resetSuffix with multiple terms", () => {
-    const msg = message`Options: ${optionName("--verbose")} and ${
-      value("true")
-    }`;
+    const msg = message`Options: ${optionName("--verbose")} and ${value(
+      "true",
+    )}`;
     const formatted = formatMessage(msg, {
       colors: { resetSuffix: "\x1b[2m" },
       quotes: false,
@@ -849,10 +812,7 @@ describe("integration tests", () => {
     const msg = message`Port: ${value("8080")}`;
     const formatted = formatMessage(msg, { colors: true, quotes: false });
 
-    assert.equal(
-      formatted,
-      "Port: \x1b[32m8080\x1b[0m",
-    );
+    assert.equal(formatted, "Port: \x1b[32m8080\x1b[0m");
   });
 
   it("should handle resetSuffix with envVar term", () => {
@@ -875,10 +835,7 @@ describe("integration tests", () => {
       quotes: false,
     });
 
-    assert.equal(
-      formatted,
-      "Run: \x1b[36mmyapp --help\x1b[0m\x1b[2m",
-    );
+    assert.equal(formatted, "Run: \x1b[36mmyapp --help\x1b[0m\x1b[2m");
   });
 
   it("should handle resetSuffix with values term", () => {
@@ -888,10 +845,7 @@ describe("integration tests", () => {
       quotes: false,
     });
 
-    assert.equal(
-      formatted,
-      "Values: \x1b[32mred green blue\x1b[0m\x1b[2m",
-    );
+    assert.equal(formatted, "Values: \x1b[32mred green blue\x1b[0m\x1b[2m");
   });
 
   for (const quotes of [false, true]) {
@@ -933,10 +887,7 @@ describe("integration tests", () => {
       quotes: false,
     });
 
-    assert.equal(
-      formatted,
-      "Port: \x1b[32m8080\x1b[0m",
-    );
+    assert.equal(formatted, "Port: \x1b[32m8080\x1b[0m");
   });
 });
 
@@ -972,9 +923,7 @@ describe("formatMessage - explicit line breaks", () => {
   });
 
   it("should treat single newline within text as space", () => {
-    const msg: Message = [
-      { type: "text", text: "Line 1.\nLine 2." },
-    ];
+    const msg: Message = [{ type: "text", text: "Line 1.\nLine 2." }];
     const formatted = formatMessage(msg, { quotes: false });
 
     // Single newline is converted to space
@@ -982,9 +931,7 @@ describe("formatMessage - explicit line breaks", () => {
   });
 
   it("should treat double newline as hard break", () => {
-    const msg: Message = [
-      { type: "text", text: "Para 1.\n\nPara 2." },
-    ];
+    const msg: Message = [{ type: "text", text: "Para 1.\n\nPara 2." }];
     const formatted = formatMessage(msg, { quotes: false });
 
     // Double newline creates paragraph break (double newline in output)
@@ -992,18 +939,14 @@ describe("formatMessage - explicit line breaks", () => {
   });
 
   it("should handle multiple double newlines", () => {
-    const msg: Message = [
-      { type: "text", text: "A\n\nB\n\nC" },
-    ];
+    const msg: Message = [{ type: "text", text: "A\n\nB\n\nC" }];
     const formatted = formatMessage(msg, { quotes: false });
 
     assert.equal(formatted, "A\n\nB\n\nC");
   });
 
   it("should handle triple+ newlines as single hard break", () => {
-    const msg: Message = [
-      { type: "text", text: "Line 1\n\n\nLine 2" },
-    ];
+    const msg: Message = [{ type: "text", text: "Line 1\n\n\nLine 2" }];
     const formatted = formatMessage(msg, { quotes: false });
 
     // Triple newlines still treated as single paragraph break
@@ -1062,8 +1005,7 @@ describe("formatMessage - explicit line breaks", () => {
     const msg: Message = [
       {
         type: "text",
-        text:
-          "Para 1 line 1.\nPara 1 line 2.\n\nPara 2 line 1.\nPara 2 line 2.",
+        text: "Para 1 line 1.\nPara 1 line 2.\n\nPara 2 line 1.\nPara 2 line 2.",
       },
     ];
     const formatted = formatMessage(msg, { quotes: false });
@@ -1075,9 +1017,7 @@ describe("formatMessage - explicit line breaks", () => {
   });
 
   it("should handle empty paragraphs (multiple consecutive double newlines)", () => {
-    const msg: Message = [
-      { type: "text", text: "Line 1\n\n\n\nLine 2" },
-    ];
+    const msg: Message = [{ type: "text", text: "Line 1\n\n\n\nLine 2" }];
     const formatted = formatMessage(msg, { quotes: false });
 
     // Multiple double newlines still create single paragraph break
@@ -1125,15 +1065,15 @@ ${commandLine("myapp status")}        Show status`;
     assert.equal(lines[0], "Common:");
     assert.ok(
       lines[1].startsWith("myapp add ."),
-      `Expected line to start with "myapp add .", got: ${
-        JSON.stringify(lines[1])
-      }`,
+      `Expected line to start with "myapp add .", got: ${JSON.stringify(
+        lines[1],
+      )}`,
     );
     assert.ok(
       lines[2].startsWith("myapp status"),
-      `Expected line to start with "myapp status", got: ${
-        JSON.stringify(lines[2])
-      }`,
+      `Expected line to start with "myapp status", got: ${JSON.stringify(
+        lines[2],
+      )}`,
     );
   });
 
@@ -1186,12 +1126,15 @@ describe("formatMessage - carriage-return line endings", () => {
     it(`should absorb ${JSON.stringify(ending)} after lineBreak()`, () => {
       const options = { colors: false, quotes: false };
       assert.equal(
-        formatMessage([
-          text("Examples:"),
-          lineBreak(),
-          text(`${ending}  `),
-          commandLine("kayra status"),
-        ], options),
+        formatMessage(
+          [
+            text("Examples:"),
+            lineBreak(),
+            text(`${ending}  `),
+            commandLine("kayra status"),
+          ],
+          options,
+        ),
         "Examples:\n  kayra status",
       );
       assert.equal(
@@ -1239,10 +1182,7 @@ describe("formatMessage - whitespace-only text terms", () => {
     assert.equal(formatMessage([text("\t")]), "\t");
     assert.equal(formatMessage([text("　")]), "　");
     assert.equal(formatMessage([text(" \n\t　")]), "  \t　");
-    assert.equal(
-      formatMessage([text("a"), text("\n  "), text("b")]),
-      "a   b",
-    );
+    assert.equal(formatMessage([text("a"), text("\n  "), text("b")]), "a   b");
     assert.equal(formatMessage([text("")]), "");
   });
 
@@ -1373,10 +1313,7 @@ describe("formatMessage - whitespace at automatic wraps", () => {
 
   it("should keep zero-width content after a dropped space on the new line", () => {
     const msg: Message = [text("abc"), text(" "), value("́")];
-    assert.equal(
-      formatMessage(msg, { quotes: false, maxWidth: 3 }),
-      "abc\ń",
-    );
+    assert.equal(formatMessage(msg, { quotes: false, maxWidth: 3 }), "abc\ń");
   });
 
   it("should keep trimming at a wrapped line start after empty values", () => {
@@ -1672,22 +1609,21 @@ describe("valueSet", () => {
   });
 
   it("should integrate with message template", () => {
-    const msg = message`Expected ${
-      valueSet(["a", "b"], { fallback: "", locale: "en" })
-    }.`;
+    const msg = message`Expected ${valueSet(["a", "b"], {
+      fallback: "",
+      locale: "en",
+    })}.`;
 
     const formatted = formatMessage(msg, { quotes: true });
     assert.equal(formatted, 'Expected "a" and "b".');
   });
 
   it("should integrate with message template using disjunction", () => {
-    const msg = message`Expected one of ${
-      valueSet(["error", "warn", "info"], {
-        fallback: "",
-        locale: "en",
-        type: "disjunction",
-      })
-    }.`;
+    const msg = message`Expected one of ${valueSet(["error", "warn", "info"], {
+      fallback: "",
+      locale: "en",
+      type: "disjunction",
+    })}.`;
 
     const formatted = formatMessage(msg, { quotes: true });
     assert.equal(formatted, 'Expected one of "error", "warn", or "info".');
@@ -1769,18 +1705,18 @@ describe("formatMessage with url term", () => {
   });
 
   it("should handle multiple urls in one message", () => {
-    const msg = message`Check ${url("https://docs.example.com")} and ${
-      url("https://github.com/example")
-    }.`;
+    const msg = message`Check ${url("https://docs.example.com")} and ${url(
+      "https://github.com/example",
+    )}.`;
     const formatted = formatMessage(msg, { colors: false, quotes: true });
     assert.ok(formatted.includes("<https://docs.example.com/>"));
     assert.ok(formatted.includes("<https://github.com/example>"));
   });
 
   it("should work with mixed message components", () => {
-    const msg = message`Run ${commandLine("myapp --help")} or visit ${
-      url("https://example.com/help")
-    } for ${metavar("INFO")}.`;
+    const msg = message`Run ${commandLine("myapp --help")} or visit ${url(
+      "https://example.com/help",
+    )} for ${metavar("INFO")}.`;
     const formatted = formatMessage(msg, { quotes: true });
     assert.ok(formatted.includes("`myapp --help`"));
     assert.ok(formatted.includes("<https://example.com/help>"));
@@ -1819,9 +1755,7 @@ describe("formatMessage with url term", () => {
   });
 
   it("should calculate width based on display text, not ANSI codes", () => {
-    const msg: Message = [
-      { type: "url", url: new URL("https://example.com") },
-    ];
+    const msg: Message = [{ type: "url", url: new URL("https://example.com") }];
     const formatted = formatMessage(msg, { colors: true, quotes: false });
     // The ANSI codes are long, but display width should be ~21 chars (https://example.com/)
     // Not the full length including escape sequences
@@ -1852,8 +1786,8 @@ describe("property-based tests", () => {
   const safeSingleLineStringArbitrary = safeStringArbitrary.filter(
     (value: string) => !value.includes("\n"),
   );
-  const nonEmptySingleLineStringArbitrary = safeSingleLineStringArbitrary
-    .filter((value: string) => value.length > 0);
+  const nonEmptySingleLineStringArbitrary =
+    safeSingleLineStringArbitrary.filter((value: string) => value.length > 0);
   const optionNameArbitrary = safeSingleLineStringArbitrary
     .filter((value: string) => value.length > 0)
     .map((value: string) => `--${value}`);
@@ -1886,26 +1820,29 @@ describe("property-based tests", () => {
         type: "optionName" as const,
         optionName: name,
       })),
-      fc.uniqueArray(optionNameArbitrary, { minLength: 1, maxLength: 3 }).map(
-        (names: readonly string[]) => ({
+      fc
+        .uniqueArray(optionNameArbitrary, { minLength: 1, maxLength: 3 })
+        .map((names: readonly string[]) => ({
           type: "optionNames" as const,
           optionNames: names,
-        }),
-      ),
-      fc.constantFrom<"ARG" | "FILE" | "PATH" | "VALUE">(
-        "ARG",
-        "FILE",
-        "PATH",
-        "VALUE",
-      ).map((name: "ARG" | "FILE" | "PATH" | "VALUE") => ({
-        type: "metavar" as const,
-        metavar: name,
-      })),
+        })),
+      fc
+        .constantFrom<"ARG" | "FILE" | "PATH" | "VALUE">(
+          "ARG",
+          "FILE",
+          "PATH",
+          "VALUE",
+        )
+        .map((name: "ARG" | "FILE" | "PATH" | "VALUE") => ({
+          type: "metavar" as const,
+          metavar: name,
+        })),
       safeSingleLineStringArbitrary.map((singleValue: string) => ({
         type: "value" as const,
         value: singleValue,
       })),
-      fc.array(safeSingleLineStringArbitrary, { minLength: 0, maxLength: 4 })
+      fc
+        .array(safeSingleLineStringArbitrary, { minLength: 0, maxLength: 4 })
         .map((manyValues: readonly string[]) => ({
           type: "values" as const,
           values: manyValues,
@@ -1948,11 +1885,7 @@ describe("property-based tests", () => {
           "disjunction",
           "unit",
         ),
-        fc.constantFrom<"long" | "short" | "narrow">(
-          "long",
-          "short",
-          "narrow",
-        ),
+        fc.constantFrom<"long" | "short" | "narrow">("long", "short", "narrow"),
         (
           valuesInput: readonly string[],
           locale: string | undefined,
@@ -1995,7 +1928,7 @@ describe("property-based tests", () => {
               `${term.leadingSpace && i > 0 ? " " : ""}${term.words.join(" ")}${
                 term.trailingSpace ? " " : ""
               }`,
-            )
+            ),
           );
           const formatted = formatMessage(msg, { maxWidth });
           for (const line of formatted.split("\n")) {
@@ -2003,7 +1936,9 @@ describe("property-based tests", () => {
           }
           assert.equal(
             formatted.replace(/\s/g, ""),
-            msg.map((term) => term.type === "text" ? term.text : "").join("")
+            msg
+              .map((term) => (term.type === "text" ? term.text : ""))
+              .join("")
               .replace(/\s/g, ""),
           );
         },

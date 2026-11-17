@@ -6,10 +6,8 @@ import type {
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-function getPhase2Parsed<T>(
-  request?: SourceContextRequest,
-): T | undefined {
-  return request?.phase === "phase2" ? request.parsed as T : undefined;
+function getPhase2Parsed<T>(request?: SourceContextRequest): T | undefined {
+  return request?.phase === "phase2" ? (request.parsed as T) : undefined;
 }
 
 describe("SourceContext", () => {

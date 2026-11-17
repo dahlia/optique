@@ -92,10 +92,10 @@ async function renderCase(
   caseName: string,
   args: readonly string[] = [],
 ): Promise<Rendered> {
-  const result = await spawnAndCapture(
-    [...runtimeCommand(fixture), ...args],
-    { OPTIQUE_FIXTURE_CASE: caseName, OPTIQUE_FIXTURE_RENDER: "1" },
-  );
+  const result = await spawnAndCapture([...runtimeCommand(fixture), ...args], {
+    OPTIQUE_FIXTURE_CASE: caseName,
+    OPTIQUE_FIXTURE_RENDER: "1",
+  });
   assert.notEqual(result.status, null, "render mode was killed");
   return { ...result, status: result.status ?? -1 };
 }
@@ -131,21 +131,22 @@ async function deliverCase(
     const statusFile = join(dir, "status");
     const otherFile = join(dir, "other");
     const targetFile = join(dir, "target");
-    const redirect = target === "stdout"
-      ? `2>"$OTHER_FILE"`
-      : `2>&1 >"$OTHER_FILE"`;
-    const producer = sink === "file"
-      ? `{ "$@" ${
-        target === "stdout"
-          ? `>"$TARGET_FILE" 2>"$OTHER_FILE"`
-          : `2>"$TARGET_FILE" >"$OTHER_FILE"`
-      }; echo $? >"$STATUS_FILE"; }`
-      : `{ "$@" ${redirect}; echo $? >"$STATUS_FILE"; }`;
-    const script = sink === "slow-pipe"
-      ? `${producer} | { dd bs=1 count=1 2>/dev/null; sleep 1; cat; }`
-      : sink === "closed-pipe"
-      ? `${producer} | head -c 10 >/dev/null`
-      : producer;
+    const redirect =
+      target === "stdout" ? `2>"$OTHER_FILE"` : `2>&1 >"$OTHER_FILE"`;
+    const producer =
+      sink === "file"
+        ? `{ "$@" ${
+            target === "stdout"
+              ? `>"$TARGET_FILE" 2>"$OTHER_FILE"`
+              : `2>"$TARGET_FILE" >"$OTHER_FILE"`
+          }; echo $? >"$STATUS_FILE"; }`
+        : `{ "$@" ${redirect}; echo $? >"$STATUS_FILE"; }`;
+    const script =
+      sink === "slow-pipe"
+        ? `${producer} | { dd bs=1 count=1 2>/dev/null; sleep 1; cat; }`
+        : sink === "closed-pipe"
+          ? `${producer} | head -c 10 >/dev/null`
+          : producer;
     const result = await spawnAndCapture(
       ["sh", "-c", script, "sh", ...runtimeCommand(fixture), ...args],
       {
@@ -162,10 +163,7 @@ async function deliverCase(
     );
     const statusText = await readFile(statusFile, "utf8");
     const status = Number.parseInt(statusText.trim(), 10);
-    assert.ok(
-      Number.isInteger(status),
-      `invalid status file: ${statusText}`,
-    );
+    assert.ok(Number.isInteger(status), `invalid status file: ${statusText}`);
     return {
       target: sink === "file" ? await readFile(targetFile) : result.stdout,
       other: await readFile(otherFile),
@@ -222,9 +220,9 @@ async function assertCompleteDelivery(
   assert.equal(
     delivered.status,
     expectedStatus,
-    `unexpected exit status; other stream: ${
-      delivered.other.toString("utf8").slice(-2000)
-    }`,
+    `unexpected exit status; other stream: ${delivered.other
+      .toString("utf8")
+      .slice(-2000)}`,
   );
   assert.ok(
     delivered.other.equals(expected[other]),
@@ -235,91 +233,97 @@ async function assertCompleteDelivery(
   assert.ok(delivered.target.equals(expected[target]));
 }
 
-describe("output written before exit", {
-  skip: isWindows,
-}, () => {
-  const cases: readonly {
-    readonly name: string;
-    readonly target: "stdout" | "stderr";
-    readonly status: number;
-    readonly args?: readonly string[];
-    readonly includes?: string;
-  }[] = [
-    { name: "run-sync-help", target: "stdout", status: 0 },
-    { name: "runsync-help", target: "stdout", status: 0 },
-    { name: "run-async-help", target: "stdout", status: 0 },
-    { name: "runasync-help", target: "stdout", status: 0 },
-    { name: "runsync-version", target: "stdout", status: 0 },
-    { name: "completion-script", target: "stdout", status: 0 },
-    { name: "completion-suggestions", target: "stdout", status: 0 },
-    { name: "sync-error", target: "stderr", status: 3 },
-    { name: "async-error", target: "stderr", status: 3 },
-    { name: "contexts-error", target: "stderr", status: 3 },
-    { name: "custom-on-exit", target: "stdout", status: 5 },
-    {
-      name: "default-handlers",
-      target: "stdout",
-      status: 0,
-      args: ["--help"],
-      // The default program name is the basename of process.argv[1]:
-      includes: "Usage: output-exit.mjs",
-    },
-    {
-      name: "default-handlers",
-      target: "stderr",
-      status: 1,
-      args: [],
-      includes: "Usage: output-exit.mjs",
-    },
-    { name: "print-error-stderr", target: "stderr", status: 4 },
-    { name: "print-error-stdout", target: "stdout", status: 0 },
-  ];
+describe(
+  "output written before exit",
+  {
+    skip: isWindows,
+  },
+  () => {
+    const cases: readonly {
+      readonly name: string;
+      readonly target: "stdout" | "stderr";
+      readonly status: number;
+      readonly args?: readonly string[];
+      readonly includes?: string;
+    }[] = [
+      { name: "run-sync-help", target: "stdout", status: 0 },
+      { name: "runsync-help", target: "stdout", status: 0 },
+      { name: "run-async-help", target: "stdout", status: 0 },
+      { name: "runasync-help", target: "stdout", status: 0 },
+      { name: "runsync-version", target: "stdout", status: 0 },
+      { name: "completion-script", target: "stdout", status: 0 },
+      { name: "completion-suggestions", target: "stdout", status: 0 },
+      { name: "sync-error", target: "stderr", status: 3 },
+      { name: "async-error", target: "stderr", status: 3 },
+      { name: "contexts-error", target: "stderr", status: 3 },
+      { name: "custom-on-exit", target: "stdout", status: 5 },
+      {
+        name: "default-handlers",
+        target: "stdout",
+        status: 0,
+        args: ["--help"],
+        // The default program name is the basename of process.argv[1]:
+        includes: "Usage: output-exit.mjs",
+      },
+      {
+        name: "default-handlers",
+        target: "stderr",
+        status: 1,
+        args: [],
+        includes: "Usage: output-exit.mjs",
+      },
+      { name: "print-error-stderr", target: "stderr", status: 4 },
+      { name: "print-error-stdout", target: "stdout", status: 0 },
+    ];
 
-  for (const { name, target, status, args, includes } of cases) {
-    it(`delivers complete ${target} to a slow pipe (${name})`, async () => {
-      // Bun ignores the skip option, so we need an early return as well:
+    for (const { name, target, status, args, includes } of cases) {
+      it(`delivers complete ${target} to a slow pipe (${name})`, async () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (isWindows) return;
+        await assertCompleteDelivery(name, target, status, { args, includes });
+      });
+    }
+
+    it("delivers complete output to a regular file", async () => {
       if (isWindows) return;
-      await assertCompleteDelivery(name, target, status, { args, includes });
+      await assertCompleteDelivery("run-sync-help", "stdout", 0, {
+        sink: "file",
+      });
+      await assertCompleteDelivery("sync-error", "stderr", 3, { sink: "file" });
     });
-  }
 
-  it("delivers complete output to a regular file", async () => {
-    if (isWindows) return;
-    await assertCompleteDelivery("run-sync-help", "stdout", 0, {
-      sink: "file",
-    });
-    await assertCompleteDelivery("sync-error", "stderr", 3, { sink: "file" });
-  });
-
-  it("keeps the exit code when the reader closes the pipe early", async () => {
-    if (isWindows) return;
-    for (
-      const [name, target, status] of [
+    it("keeps the exit code when the reader closes the pipe early", async () => {
+      if (isWindows) return;
+      for (const [name, target, status] of [
         ["run-sync-help", "stdout", 0],
         ["sync-error", "stderr", 3],
         ["print-error-stderr", "stderr", 4],
-      ] as const
-    ) {
-      const delivered = await deliverCase(
-        esmFixture,
-        name,
-        target,
-        "closed-pipe",
-      );
-      assert.equal(delivered.status, status, name);
-      if (target === "stdout") {
-        // Nothing, including an uncaught EPIPE error, goes to stderr:
-        assert.equal(delivered.other.toString("utf8"), "", name);
+      ] as const) {
+        const delivered = await deliverCase(
+          esmFixture,
+          name,
+          target,
+          "closed-pipe",
+        );
+        assert.equal(delivered.status, status, name);
+        if (target === "stdout") {
+          // Nothing, including an uncaught EPIPE error, goes to stderr:
+          assert.equal(delivered.other.toString("utf8"), "", name);
+        }
       }
-    }
-  });
-
-  it("delivers complete output from the CommonJS build", {
-    skip: isDeno,
-  }, async () => {
-    if (isWindows || isDeno) return;
-    await assertCompleteDelivery("cjs", "stdout", 0, {
-      fixture: cjsFixture,
     });
-  });
-});
+
+    it(
+      "delivers complete output from the CommonJS build",
+      {
+        skip: isDeno,
+      },
+      async () => {
+        if (isWindows || isDeno) return;
+        await assertCompleteDelivery("cjs", "stdout", 0, {
+          fixture: cjsFixture,
+        });
+      },
+    );
+  },
+);

@@ -11,7 +11,8 @@ import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
 const prefix = "optique-startup-consumers-";
-const temporaryRoots = [...new Set([tmpdir(), "/var/tmp"])].filter(existsSync)
+const temporaryRoots = [...new Set([tmpdir(), "/var/tmp"])]
+  .filter(existsSync)
   .map((path) => realpathSync(path));
 
 /**
@@ -20,7 +21,7 @@ const temporaryRoots = [...new Set([tmpdir(), "/var/tmp"])].filter(existsSync)
  * @throws {TypeError} If a package search ancestor contains node_modules.
  */
 export function verifyConsumerAncestors(root: string): void {
-  for (let path = realpathSync(root);; path = dirname(path)) {
+  for (let path = realpathSync(root); ; path = dirname(path)) {
     if (existsSync(join(path, "node_modules"))) {
       throw new TypeError(`Consumer ancestor contains node_modules: ${path}`);
     }
@@ -75,7 +76,8 @@ export function consumerRoot(work: string): string {
   if (
     realpathSync(root) !== root ||
     readFileSync(join(root, ".owned"), "utf8") !== realpathSync(work)
-  ) throw new TypeError("Invalid consumer directory ownership.");
+  )
+    throw new TypeError("Invalid consumer directory ownership.");
   return root;
 }
 
@@ -84,9 +86,11 @@ function recordedConsumerRoot(work: string): string {
     readFileSync(join(work, "consumer-root.json"), "utf8"),
   );
   if (
-    typeof root !== "string" || !basename(root).startsWith(prefix) ||
+    typeof root !== "string" ||
+    !basename(root).startsWith(prefix) ||
     !temporaryRoots.includes(dirname(root))
-  ) throw new TypeError("Invalid consumer directory ownership.");
+  )
+    throw new TypeError("Invalid consumer directory ownership.");
   return root;
 }
 

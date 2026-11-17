@@ -37,9 +37,7 @@ describe("pass-through known-option errors", () => {
             const known = optional(option("-m", "--message", string()));
             const result = parseSync<unknown>(
               compose(known, passThrough({ format })),
-              [
-                spelling,
-              ],
+              [spelling],
             );
             assert.deepEqual(result, parseSync<unknown>(known, [spelling]));
             assert.ok(!result.success);
@@ -55,14 +53,12 @@ describe("pass-through known-option errors", () => {
             rest: passThrough({ format }),
           });
           const parser = compose(extra, known);
-          for (
-            const wrappedExtra of [
-              extra,
-              optional(extra),
-              multiple(extra),
-              or(extra, constant(undefined)),
-            ]
-          ) {
+          for (const wrappedExtra of [
+            extra,
+            optional(extra),
+            multiple(extra),
+            or(extra, constant(undefined)),
+          ]) {
             for (const spelling of ["-m", "--message"]) {
               assert.deepEqual(
                 parseSync<unknown>(compose(wrappedExtra, known), [spelling]),
@@ -70,15 +66,14 @@ describe("pass-through known-option errors", () => {
               );
             }
           }
-          for (
-            const input of [["-m", "hello"], ["--message=hello"]]
-          ) {
+          for (const input of [["-m", "hello"], ["--message=hello"]]) {
             const result = parseSync<unknown>(parser, input);
             assert.deepEqual(result, {
               success: true,
-              value: name === "object"
-                ? { known: { other: false, rest: [] }, extra: "hello" }
-                : [{ other: false, rest: [] }, "hello"],
+              value:
+                name === "object"
+                  ? { known: { other: false, rest: [] }, extra: "hello" }
+                  : [{ other: false, rest: [] }, "hello"],
             });
           }
           assert.ok(parseSync<unknown>(parser, ["--unknown=value"]).success);
@@ -86,12 +81,10 @@ describe("pass-through known-option errors", () => {
       }
 
       it("checks attached known flags before tied nested capture", () => {
-        for (
-          const [known, input, format] of [
-            [option("--debug"), "--debug=1", "equalsOnly"],
-            [option("/D"), "/D:1", "greedy"],
-          ] as const
-        ) {
+        for (const [known, input, format] of [
+          [option("--debug"), "--debug=1", "equalsOnly"],
+          [option("/D"), "/D:1", "greedy"],
+        ] as const) {
           const extra = object({
             other: option("--other"),
             rest: passThrough({ format }),
@@ -110,21 +103,23 @@ describe("pass-through known-option errors", () => {
           other: option("--other"),
           rest: passThrough({ format: "nextToken" }),
         });
-        const parser = name === "object"
-          ? object({ extra, ordinary, known }, { allowDuplicates: true })
-          : name === "tuple"
-          ? tuple([extra, ordinary, known], { allowDuplicates: true })
-          : concat(tuple([extra]), tuple([ordinary]), tuple([known]));
+        const parser =
+          name === "object"
+            ? object({ extra, ordinary, known }, { allowDuplicates: true })
+            : name === "tuple"
+              ? tuple([extra, ordinary, known], { allowDuplicates: true })
+              : concat(tuple([extra]), tuple([ordinary]), tuple([known]));
         const result = parseSync<unknown>(parser, ["-m"]);
         assert.deepEqual(result, {
           success: true,
-          value: name === "object"
-            ? {
-              extra: { other: false, rest: [] },
-              ordinary: true,
-              known: undefined,
-            }
-            : [{ other: false, rest: [] }, true, undefined],
+          value:
+            name === "object"
+              ? {
+                  extra: { other: false, rest: [] },
+                  ordinary: true,
+                  known: undefined,
+                }
+              : [{ other: false, rest: [] }, true, undefined],
         });
       });
 
@@ -151,12 +146,16 @@ describe("pass-through known-option errors", () => {
         const parser = compose(extra, known);
         assert.deepEqual(parseSync<unknown>(parser, ["-vd"]), {
           success: true,
-          value: name === "object"
-            ? {
-              known: { other: false, rest: [] },
-              extra: { verbose: true, debug: true },
-            }
-            : [{ other: false, rest: [] }, { verbose: true, debug: true }],
+          value:
+            name === "object"
+              ? {
+                  known: { other: false, rest: [] },
+                  extra: { verbose: true, debug: true },
+                }
+              : [
+                  { other: false, rest: [] },
+                  { verbose: true, debug: true },
+                ],
         });
         for (const input of [["-vv"], ["-v", "-vd"]]) {
           const expected = parseSync<unknown>(known, input);
@@ -170,32 +169,34 @@ describe("pass-through known-option errors", () => {
           other: option("--other"),
           rest: passThrough({ format: "nextToken" }),
         });
-        const parser = name === "object"
-          ? object({
-            extra,
-            value: optional(option("-m", string())),
-            positional: optional(argument(string())),
-          })
-          : name === "tuple"
-          ? tuple([
-            extra,
-            optional(option("-m", string())),
-            optional(argument(string())),
-          ])
-          : concat(
-            tuple([extra]),
-            tuple([optional(option("-m", string()))]),
-            tuple([optional(argument(string()))]),
-          );
+        const parser =
+          name === "object"
+            ? object({
+                extra,
+                value: optional(option("-m", string())),
+                positional: optional(argument(string())),
+              })
+            : name === "tuple"
+              ? tuple([
+                  extra,
+                  optional(option("-m", string())),
+                  optional(argument(string())),
+                ])
+              : concat(
+                  tuple([extra]),
+                  tuple([optional(option("-m", string()))]),
+                  tuple([optional(argument(string()))]),
+                );
         assert.deepEqual(parseSync<unknown>(parser, ["-mhello"]), {
           success: true,
-          value: name === "object"
-            ? {
-              extra: { other: false, rest: ["-mhello"] },
-              value: undefined,
-              positional: undefined,
-            }
-            : [{ other: false, rest: ["-mhello"] }, undefined, undefined],
+          value:
+            name === "object"
+              ? {
+                  extra: { other: false, rest: ["-mhello"] },
+                  value: undefined,
+                  positional: undefined,
+                }
+              : [{ other: false, rest: ["-mhello"] }, undefined, undefined],
         });
       });
 
@@ -208,10 +209,10 @@ describe("pass-through known-option errors", () => {
             parse: (context) =>
               context.buffer[0] === "-m"
                 ? {
-                  success: false,
-                  consumed: 1,
-                  error: message`Try another parser.`,
-                }
+                    success: false,
+                    consumed: 1,
+                    error: message`Try another parser.`,
+                  }
                 : base.parse(context),
           }),
         });
@@ -219,32 +220,39 @@ describe("pass-through known-option errors", () => {
           recovered: option("-m"),
           rest: passThrough({ format: "nextToken" }),
         });
-        const parser = name === "object"
-          ? object({ known, extra }, { allowDuplicates: true })
-          : name === "tuple"
-          ? tuple([known, extra], { allowDuplicates: true })
-          : concat(tuple([known]), tuple([extra]));
+        const parser =
+          name === "object"
+            ? object({ known, extra }, { allowDuplicates: true })
+            : name === "tuple"
+              ? tuple([known, extra], { allowDuplicates: true })
+              : concat(tuple([known]), tuple([extra]));
         assert.deepEqual(
           parseSync<unknown>(parser, ["-v", "-m", "--unknown"]),
           {
             success: true,
-            value: name === "object"
-              ? {
-                known: { verbose: true, value: undefined },
-                extra: { recovered: true, rest: ["--unknown"] },
-              }
-              : [{ verbose: true, value: undefined }, {
-                recovered: true,
-                rest: ["--unknown"],
-              }],
+            value:
+              name === "object"
+                ? {
+                    known: { verbose: true, value: undefined },
+                    extra: { recovered: true, rest: ["--unknown"] },
+                  }
+                : [
+                    { verbose: true, value: undefined },
+                    {
+                      recovered: true,
+                      rest: ["--unknown"],
+                    },
+                  ],
           },
         );
       });
 
       it("preserves a custom missing-value diagnostic after earlier input", () => {
-        const known = optional(option("-m", string(), {
-          errors: { endOfInput: message`Please supply a message.` },
-        }));
+        const known = optional(
+          option("-m", string(), {
+            errors: { endOfInput: message`Please supply a message.` },
+          }),
+        );
         const result = parseSync<unknown>(
           compose(known, passThrough({ format: "nextToken" })),
           ["--unknown", "value", "-m"],
@@ -260,9 +268,7 @@ describe("pass-through known-option errors", () => {
           const known = option("--debug");
           const result = parseSync<unknown>(
             compose(known, passThrough({ format })),
-            [
-              "--debug=1",
-            ],
+            ["--debug=1"],
           );
           assert.deepEqual(result, parseSync<unknown>(known, ["--debug=1"]));
           assert.ok(!result.success);
@@ -367,22 +373,20 @@ describe("pass-through known-option errors", () => {
             context.buffer.length === 0
               ? { success: true, next: context, consumed: [] }
               : {
-                success: false,
-                consumed: 1,
-                error: message`Speculative failure.`,
-              },
+                  success: false,
+                  consumed: 1,
+                  error: message`Speculative failure.`,
+                },
           complete: () => ({ success: true, value: undefined }),
         };
-        for (
-          const token of [
-            "positional",
-            "--unknown",
-            "-x",
-            "/X",
-            "+x",
-            "--unknown=value",
-          ]
-        ) {
+        for (const token of [
+          "positional",
+          "--unknown",
+          "-x",
+          "/X",
+          "+x",
+          "--unknown=value",
+        ]) {
           assert.deepEqual(
             parseSync<unknown>(
               compose(failing, passThrough({ format: "greedy" })),
@@ -390,9 +394,10 @@ describe("pass-through known-option errors", () => {
             ),
             {
               success: true,
-              value: name === "object"
-                ? { known: undefined, extra: [token] }
-                : [undefined, [token]],
+              value:
+                name === "object"
+                  ? { known: undefined, extra: [token] }
+                  : [undefined, [token]],
             },
           );
         }
@@ -405,10 +410,10 @@ describe("pass-through known-option errors", () => {
           parse: (context) =>
             context.buffer[0] === "-m"
               ? {
-                success: false,
-                consumed: 1,
-                error: message`Try another parser.`,
-              }
+                  success: false,
+                  consumed: 1,
+                  error: message`Try another parser.`,
+                }
               : base.parse(context),
         });
         const extra = object({
@@ -419,8 +424,8 @@ describe("pass-through known-option errors", () => {
           name === "object"
             ? object({ known, extra }, { allowDuplicates: true })
             : name === "tuple"
-            ? tuple([known, extra], { allowDuplicates: true })
-            : concat(tuple([known]), tuple([extra])),
+              ? tuple([known, extra], { allowDuplicates: true })
+              : concat(tuple([known]), tuple([extra])),
           ["-m", "--unknown=value"],
         );
         assert.ok(result.success);
@@ -477,9 +482,10 @@ describe("pass-through known-option errors", () => {
         const result = await parseAsync<unknown>(parser, ["-m", "hello"]);
         assert.deepEqual(result, {
           success: true,
-          value: name === "object"
-            ? { extra: { other: false, rest: [] }, known: "hello" }
-            : [{ other: false, rest: [] }, "hello"],
+          value:
+            name === "object"
+              ? { extra: { other: false, rest: [] }, known: "hello" }
+              : [{ other: false, rest: [] }, "hello"],
         });
         assert.ok(
           (await parseAsync<unknown>(parser, ["--unknown=value"])).success,
@@ -497,25 +503,27 @@ describe("pass-through known-option errors", () => {
             context.buffer.length === 0
               ? { success: true, next: context, consumed: [] }
               : {
-                success: false,
-                consumed: 1,
-                error: message`Speculative failure.`,
-              },
+                  success: false,
+                  consumed: 1,
+                  error: message`Speculative failure.`,
+                },
           ),
         complete: () => Promise.resolve({ success: true, value: undefined }),
       };
       const extra = passThrough({ format: "greedy" });
-      const parser = name === "object"
-        ? object({ failing, extra })
-        : name === "tuple"
-        ? tuple([failing, extra])
-        : concat(tuple([failing]), tuple([extra]));
+      const parser =
+        name === "object"
+          ? object({ failing, extra })
+          : name === "tuple"
+            ? tuple([failing, extra])
+            : concat(tuple([failing]), tuple([extra]));
       for (const token of ["--unknown", "-x", "/X", "+x", "--unknown=value"]) {
         assert.deepEqual(await parseAsync<unknown>(parser, [token]), {
           success: true,
-          value: name === "object"
-            ? { failing: undefined, extra: [token] }
-            : [undefined, [token]],
+          value:
+            name === "object"
+              ? { failing: undefined, extra: [token] }
+              : [undefined, [token]],
         });
       }
     });
@@ -530,23 +538,28 @@ describe("pass-through known-option errors", () => {
         other: option("--other"),
         rest: passThrough({ format: "nextToken" }),
       });
-      const parser = name === "object"
-        ? object({ extra, known })
-        : name === "tuple"
-        ? tuple([extra, known])
-        : concat(tuple([extra]), tuple([known]));
+      const parser =
+        name === "object"
+          ? object({ extra, known })
+          : name === "tuple"
+            ? tuple([extra, known])
+            : concat(tuple([extra]), tuple([known]));
       assert.deepEqual(await parseAsync<unknown>(parser, ["-vd"]), {
         success: true,
-        value: name === "object"
-          ? {
-            extra: { other: false, rest: [] },
-            known: { verbose: true, debug: true, marker: undefined },
-          }
-          : [{ other: false, rest: [] }, {
-            verbose: true,
-            debug: true,
-            marker: undefined,
-          }],
+        value:
+          name === "object"
+            ? {
+                extra: { other: false, rest: [] },
+                known: { verbose: true, debug: true, marker: undefined },
+              }
+            : [
+                { other: false, rest: [] },
+                {
+                  verbose: true,
+                  debug: true,
+                  marker: undefined,
+                },
+              ],
       });
       for (const input of [["-vv"], ["-v", "-vd"]]) {
         const expected = await parseAsync<unknown>(known, input);

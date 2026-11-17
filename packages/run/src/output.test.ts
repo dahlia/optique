@@ -42,7 +42,7 @@ function fakeWriteSync(steps: readonly (number | string)[]) {
 
 function written(calls: readonly WriteCall[], accepted: readonly number[]) {
   const chunks = calls.map((call, i) =>
-    call.bytes.slice(0, accepted[i] ?? call.bytes.length)
+    call.bytes.slice(0, accepted[i] ?? call.bytes.length),
   );
   return Buffer.concat(chunks);
 }

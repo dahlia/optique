@@ -52,17 +52,17 @@ const modeOptions = group(
           metavar: "MODE",
           errors: {
             invalidChoice: (input, choices) =>
-              message`Unknown reset mode ${input}. Choose ${
-                resetModeChoices(choices)
-              }.`,
+              message`Unknown reset mode ${input}. Choose ${resetModeChoices(
+                choices,
+              )}.`,
           },
         }),
         {
-          description: message`Reset mode: ${
-            text("soft")
-          } keeps changes staged, ${text("mixed")} unstages changes, ${
-            text("hard")
-          } discards all changes`,
+          description: message`Reset mode: ${text(
+            "soft",
+          )} keeps changes staged, ${text("mixed")} unstages changes, ${text(
+            "hard",
+          )} discards all changes`,
         },
       ),
     ),
@@ -70,9 +70,9 @@ const modeOptions = group(
       description: message`Shorthand for ${commandLine("--mode=soft")}`,
     }),
     hard: option("--hard", {
-      description: message`Shorthand for ${
-        commandLine("--mode=hard")
-      } (DANGEROUS: discards all changes)`,
+      description: message`Shorthand for ${commandLine(
+        "--mode=hard",
+      )} (DANGEROUS: discards all changes)`,
     }),
   }),
 );
@@ -121,17 +121,15 @@ const resetOptionsParser = map(
   ),
   (result) => {
     if ((result.soft || result.hard) && result.mode !== undefined) {
-      throw new Error(
-        "Cannot use --soft or --hard together with --mode.",
-      );
+      throw new Error("Cannot use --soft or --hard together with --mode.");
     }
     return {
       ...result,
       mode: result.soft
         ? ("soft" as const)
         : result.hard
-        ? ("hard" as const)
-        : (result.mode ?? ("mixed" as const)),
+          ? ("hard" as const)
+          : (result.mode ?? ("mixed" as const)),
     };
   },
 );
@@ -141,23 +139,23 @@ const resetOptionsParser = map(
  */
 export const resetCommand = command("reset", resetOptionsParser, {
   brief: message`Reset current HEAD`,
-  description: message`Reset current HEAD to the specified state. Use ${
-    optionName("--soft")
-  } to keep changes staged, omit a mode flag (or use ${
-    optionName("--mode=mixed")
-  }) for the default mixed reset, or ${
-    optionName("--hard")
-  } to discard all changes (dangerous).`,
+  description: message`Reset current HEAD to the specified state. Use ${optionName(
+    "--soft",
+  )} to keep changes staged, omit a mode flag (or use ${optionName(
+    "--mode=mixed",
+  )}) for the default mixed reset, or ${optionName(
+    "--hard",
+  )} to discard all changes (dangerous).`,
   footer: message`Examples:${lineBreak()}
-  ${
-    commandLine("gitique reset")
-  }                    Mixed reset to HEAD${lineBreak()}
-  ${
-    commandLine("gitique reset --soft HEAD~1")
-  }      Soft reset, keep changes staged${lineBreak()}
-  ${
-    commandLine("gitique reset --hard")
-  }             Hard reset (DANGER: loses changes)${lineBreak()}
+  ${commandLine(
+    "gitique reset",
+  )}                    Mixed reset to HEAD${lineBreak()}
+  ${commandLine(
+    "gitique reset --soft HEAD~1",
+  )}      Soft reset, keep changes staged${lineBreak()}
+  ${commandLine(
+    "gitique reset --hard",
+  )}             Hard reset (DANGER: loses changes)${lineBreak()}
   ${commandLine("gitique reset --file file.ts")}      Unstage a specific file`,
 });
 
@@ -212,11 +210,9 @@ function resetFiles(
     } catch (error) {
       hadError = true;
       printError(
-        message`Failed to reset ${file}: ${
-          text(
-            error instanceof Error ? error.message : String(error),
-          )
-        }`,
+        message`Failed to reset ${file}: ${text(
+          error instanceof Error ? error.message : String(error),
+        )}`,
       );
     }
   }
@@ -276,10 +272,9 @@ function resetToCommit(
             message`Hard reset: HEAD, index, and working directory reset.`,
             { stream: "stderr" },
           );
-          print(
-            message`All uncommitted changes have been lost.`,
-            { stream: "stderr" },
-          );
+          print(message`All uncommitted changes have been lost.`, {
+            stream: "stderr",
+          });
         }
         break;
     }

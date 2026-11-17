@@ -10,9 +10,9 @@ const read = (path) => JSON.parse(readFileSync(path, "utf8"));
 
 export function loadMembers(root) {
   const config = read(resolve(root, "deno.json"));
-  const dirs = config.workspace.flatMap((
-    pattern,
-  ) => [...globSync(pattern, { cwd: root })]);
+  const dirs = config.workspace.flatMap((pattern) => [
+    ...globSync(pattern, { cwd: root }),
+  ]);
   return dirs.flatMap((dir) => {
     const directory = resolve(root, dir);
     const metadata = resolve(directory, "deno.json");
@@ -44,16 +44,23 @@ export function createSourceResolver(root, members) {
     const parts = relative(root, parent).split(sep);
     if (
       parts.some((p) =>
-        ["node_modules", "dist", "tmp", ".git", "fixtures", "test-fixtures"]
-          .includes(p)
+        [
+          "node_modules",
+          "dist",
+          "tmp",
+          ".git",
+          "fixtures",
+          "test-fixtures",
+        ].includes(p),
       )
-    ) return;
-    const owner = members.filter((m) => within(m.directory, parent))
+    )
+      return;
+    const owner = members
+      .filter((m) => within(m.directory, parent))
       .sort((a, b) => b.directory.length - a.directory.length)[0];
     // Root-level tests and repository script/docs tests have no private owner.
-    if (
-      !owner && parts.length !== 1 && !["scripts", "docs"].includes(parts[0])
-    ) return;
+    if (!owner && parts.length !== 1 && !["scripts", "docs"].includes(parts[0]))
+      return;
     const match = specifier.match(/^([^?#]*)(.*)$/);
     // A leading # is a private specifier, not a fragment.
     const privateMatch = specifier.startsWith("#")
@@ -91,9 +98,10 @@ export function createSourceResolver(root, members) {
       if (!targetOwner) return;
       const subpath = bare === name ? "." : `.${bare.slice(name.length)}`;
       const exports = targetOwner.exports;
-      target = typeof exports === "string" && subpath === "."
-        ? exports
-        : exports?.[subpath];
+      target =
+        typeof exports === "string" && subpath === "."
+          ? exports
+          : exports?.[subpath];
       if (typeof target !== "string") {
         throw Object.assign(
           new Error(`Workspace subpath is not exported: ${bare}`),
@@ -104,9 +112,9 @@ export function createSourceResolver(root, members) {
     const filename = resolve(targetOwner.directory, target);
     if (
       !within(targetOwner.directory, filename) ||
-      relative(targetOwner.directory, filename).split(sep).some((p) =>
-        ["dist", "node_modules"].includes(p)
-      )
+      relative(targetOwner.directory, filename)
+        .split(sep)
+        .some((p) => ["dist", "node_modules"].includes(p))
     ) {
       throw new TypeError(`Unsafe workspace source mapping: ${specifier}`);
     }

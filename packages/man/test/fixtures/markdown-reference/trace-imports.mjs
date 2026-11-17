@@ -7,16 +7,19 @@ const loaded = [];
 registerHooks({
   load(url, context, nextLoad) {
     if (
-      url.startsWith("file:") && /\/packages\/(core|run|man)\/dist\//.test(url)
+      url.startsWith("file:") &&
+      /\/packages\/(core|run|man)\/dist\//.test(url)
     ) {
       if (/\/(?:doc-pages|markdown)(?:[.-])/.test(url)) {
         throw new Error(`Optional documentation entry loaded: ${url}`);
       }
       const source = readFileSync(fileURLToPath(url), "utf8");
       if (
-        /(?:function|const|let|var)\s+(?:collectDocPages|formatCommandReference)\b/
-          .test(source)
-      ) throw new Error(`Optional implementation loaded: ${url}`);
+        /(?:function|const|let|var)\s+(?:collectDocPages|formatCommandReference)\b/.test(
+          source,
+        )
+      )
+        throw new Error(`Optional implementation loaded: ${url}`);
       loaded.push(url);
     }
     return nextLoad(url, context);

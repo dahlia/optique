@@ -311,17 +311,15 @@ describe("empty-input behavior", () => {
     assert.ok(parse(custom, []).success);
     assert.ok(!parse(parser, []).success);
     assert.equal(getEmptyInputBehavior(aggregate).step, undefined);
-    for (
-      const wrapped of [
-        tuple([custom]),
-        map(custom, (value) => value),
-        nonEmpty(custom),
-        optional(custom),
-        withDefault(custom, "fallback"),
-        longestMatch(custom, fail()),
-        or(custom, fail()),
-      ]
-    ) {
+    for (const wrapped of [
+      tuple([custom]),
+      map(custom, (value) => value),
+      nonEmpty(custom),
+      optional(custom),
+      withDefault(custom, "fallback"),
+      longestMatch(custom, fail()),
+      or(custom, fail()),
+    ]) {
       const nested = object({ wrapped });
       assert.ok(!parse(nested, []).success);
       assert.equal(getEmptyInputBehavior(nested).step, undefined);
@@ -381,15 +379,13 @@ describe("empty-input behavior", () => {
 
   it("should reject malformed JavaScript declarations before replacing facts", () => {
     const parser = constant("value");
-    for (
-      const declaration of [
-        { step: "sucess" },
-        { step: null },
-        { afterStep: 1 },
-        { fromInitial: null },
-        { step: "failure", afterStep: false },
-      ]
-    ) {
+    for (const declaration of [
+      { step: "sucess" },
+      { step: null },
+      { afterStep: 1 },
+      { fromInitial: null },
+      { step: "failure", afterStep: false },
+    ]) {
       assert.throws(
         () =>
           Reflect.apply(defineEmptyInputBehavior, undefined, [
@@ -403,18 +399,22 @@ describe("empty-input behavior", () => {
   });
 
   it("should invalidate replaced methods, data states and modes, and drop spreads", () => {
-    for (
-      const member of ["parse", "complete", "initialState", "mode"] as const
-    ) {
+    for (const member of [
+      "parse",
+      "complete",
+      "initialState",
+      "mode",
+    ] as const) {
       const parser = constant("value");
       Object.defineProperty(parser, member, {
-        value: member === "parse"
-          ? fail().parse
-          : member === "complete"
-          ? fail().complete
-          : member === "mode"
-          ? "async"
-          : "changed",
+        value:
+          member === "parse"
+            ? fail().parse
+            : member === "complete"
+              ? fail().complete
+              : member === "mode"
+                ? "async"
+                : "changed",
         configurable: true,
       });
       assert.deepEqual(getEmptyInputBehavior(parser), {});
@@ -471,9 +471,9 @@ describe("empty-input behavior", () => {
       ) {
         return exec?.phase === "parse"
           ? {
-            success: false as const,
-            error: message`Completion phase required.`,
-          }
+              success: false as const,
+              error: message`Completion phase required.`,
+            }
           : inner.complete(state, exec);
       },
     };
@@ -571,8 +571,8 @@ describe("empty-input behavior", () => {
                 !result.success
                   ? "failure"
                   : result.provisional
-                  ? "provisional"
-                  : "success",
+                    ? "provisional"
+                    : "success",
               );
             }
             if (behavior.afterStep !== undefined && result.success) {
@@ -631,8 +631,8 @@ describe("empty-input behavior", () => {
                 !result.success
                   ? "failure"
                   : result.provisional
-                  ? "provisional"
-                  : "success",
+                    ? "provisional"
+                    : "success",
               );
             }
             if (behavior.afterStep !== undefined && result.success) {
@@ -682,11 +682,11 @@ function staticEmptyParser(
       return step === "failure"
         ? { success: false, consumed: 0, error: message`No value.` }
         : {
-          success: true,
-          ...(step === "provisional" ? { provisional: true } : {}),
-          next: { ...context, state: true },
-          consumed: [],
-        };
+            success: true,
+            ...(step === "provisional" ? { provisional: true } : {}),
+            next: { ...context, state: true },
+            consumed: [],
+          };
     },
     complete(state) {
       return (state ? afterStep : fromInitial)

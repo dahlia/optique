@@ -33,12 +33,11 @@ if (process.argv[2] == null) {
       const offset = round % arms.length;
       const order = [...arms.slice(offset), ...arms.slice(0, offset)];
       for (const [arm, root] of order) {
-        const child = spawnSync(process.execPath, [
-          fileURLToPath(import.meta.url),
-          root,
-          mode,
-          String(pathCount),
-        ], { encoding: "utf8", cwd: repoRoot });
+        const child = spawnSync(
+          process.execPath,
+          [fileURLToPath(import.meta.url), root, mode, String(pathCount)],
+          { encoding: "utf8", cwd: repoRoot },
+        );
         if (child.error) throw child.error;
         if (child.status !== 0) {
           throw new Error(
@@ -66,8 +65,8 @@ if (process.argv[2] == null) {
     const stable = records.filter((r) => r.mode === mode && r.arm === "stable");
     for (const [arm] of arms) {
       const rows = records.filter((r) => r.mode === mode && r.arm === arm);
-      const ratios = rows.map((r, i) =>
-        r.result.medianMs / stable[i].result.medianMs
+      const ratios = rows.map(
+        (r, i) => r.result.medianMs / stable[i].result.medianMs,
       );
       summary.push({
         mode,
@@ -116,19 +115,18 @@ const packageRoot = pathToFileURL(rootPath).href;
 // Fingerprint the actual built JS, including unpublished working-tree changes.
 const digest = createHash("sha256");
 function hashDist(directory, prefix = "") {
-  for (
-    const entry of readdirSync(directory, { withFileTypes: true }).sort((
-      a,
-      b,
-    ) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
-  ) {
+  for (const entry of readdirSync(directory, { withFileTypes: true }).sort(
+    (a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+  )) {
     const relative = `${prefix}${entry.name}`;
     const path = resolve(directory, entry.name);
     if (entry.isDirectory()) hashDist(path, `${relative}/`);
     else if (entry.isFile() && entry.name.endsWith(".js")) {
-      digest.update(relative).update("\0").update(readFileSync(path)).update(
-        "\0",
-      );
+      digest
+        .update(relative)
+        .update("\0")
+        .update(readFileSync(path))
+        .update("\0");
     }
   }
 }
@@ -212,10 +210,9 @@ for (let index = 0; index < timedParses; index += 1) {
   if (!result.success) throw new Error("Parse failed.");
   deepStrictEqual(result.value.paths, paths);
   parsedPaths = result.value.paths.length;
-  const currentHash = createHash("sha256").update(JSON.stringify(result.value))
-    .digest(
-      "hex",
-    );
+  const currentHash = createHash("sha256")
+    .update(JSON.stringify(result.value))
+    .digest("hex");
   if (resultHash !== "" && resultHash !== currentHash) {
     throw new Error("Parse results differ between samples.");
   }
@@ -223,13 +220,15 @@ for (let index = 0; index < timedParses; index += 1) {
 }
 samples.sort((left, right) => left - right);
 
-console.log(JSON.stringify({
-  paths: pathCount,
-  distHash,
-  node: process.version,
-  resultHash,
-  samples,
-  parsedPaths,
-  medianMs: samples[Math.floor(samples.length / 2)],
-  minMs: samples[0],
-}));
+console.log(
+  JSON.stringify({
+    paths: pathCount,
+    distHash,
+    node: process.version,
+    resultHash,
+    samples,
+    parsedPaths,
+    medianMs: samples[Math.floor(samples.length / 2)],
+    minMs: samples[0],
+  }),
+);

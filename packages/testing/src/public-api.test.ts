@@ -132,10 +132,9 @@ describe("public surface", () => {
       "CliInvocationError",
       "createCliRunner",
     ]);
-    assert.deepEqual(
-      Object.keys(await import("@optique/testing/discover")),
-      ["captureProgramRun"],
-    );
+    assert.deepEqual(Object.keys(await import("@optique/testing/discover")), [
+      "captureProgramRun",
+    ]);
     assert.deepEqual(
       Object.keys(await import("@optique/testing/parser")).sort(),
       ["parseArgs", "parseArgsSync"],
@@ -147,23 +146,27 @@ describe("public surface", () => {
 });
 
 describe("npm build output", () => {
-  it("should emit every artifact the export map promises", {
-    skip: isDeno,
-  }, () => {
-    // Bun ignores the `skip` option, so bail out explicitly as well.
-    if (isDeno) return;
+  it(
+    "should emit every artifact the export map promises",
+    {
+      skip: isDeno,
+    },
+    () => {
+      // Bun ignores the `skip` option, so bail out explicitly as well.
+      if (isDeno) return;
 
-    for (const subpath of SUBPATHS) {
-      const basename = DIST_BASENAMES[subpath];
-      for (const extension of ["js", "cjs", "d.ts", "d.cts"]) {
-        const fileName = `${basename}.${extension}`;
-        assert.ok(
-          existsSync(distPath(fileName)),
-          `Missing build output: dist/${fileName}`,
-        );
+      for (const subpath of SUBPATHS) {
+        const basename = DIST_BASENAMES[subpath];
+        for (const extension of ["js", "cjs", "d.ts", "d.cts"]) {
+          const fileName = `${basename}.${extension}`;
+          assert.ok(
+            existsSync(distPath(fileName)),
+            `Missing build output: dist/${fileName}`,
+          );
+        }
       }
-    }
-  });
+    },
+  );
 
   it("should be requirable from CommonJS", { skip: isDeno }, () => {
     if (isDeno) return;
@@ -179,10 +182,10 @@ describe("npm build output", () => {
     assert.deepEqual(Object.keys(require("@optique/testing/discover")), [
       "captureProgramRun",
     ]);
-    assert.deepEqual(
-      Object.keys(require("@optique/testing/parser")).sort(),
-      ["parseArgs", "parseArgsSync"],
-    );
+    assert.deepEqual(Object.keys(require("@optique/testing/parser")).sort(), [
+      "parseArgs",
+      "parseArgsSync",
+    ]);
     assert.deepEqual(Object.keys(require("@optique/testing/run")), [
       "captureRun",
     ]);

@@ -38,24 +38,24 @@ const hasReliableSubprocess = await isSubprocessReliable();
 const cli = createCliRunner(
   "Deno" in globalThis
     ? {
-      entrypoint: cliPathTs,
-      runtimeArgs: [
-        "--allow-read",
-        "--allow-write",
-        "--allow-env",
-        "--allow-sys",
-      ],
-      cwd: __dirname,
-      timeout: 60_000,
-    }
+        entrypoint: cliPathTs,
+        runtimeArgs: [
+          "--allow-read",
+          "--allow-write",
+          "--allow-env",
+          "--allow-sys",
+        ],
+        cwd: __dirname,
+        timeout: 60_000,
+      }
     : "Bun" in globalThis
-    ? { entrypoint: cliPathJs, cwd: __dirname, timeout: 60_000 }
-    : {
-      entrypoint: cliPathJs,
-      runtimeArgs: ["--no-warnings"],
-      cwd: __dirname,
-      timeout: 60_000,
-    },
+      ? { entrypoint: cliPathJs, cwd: __dirname, timeout: 60_000 }
+      : {
+          entrypoint: cliPathJs,
+          runtimeArgs: ["--no-warnings"],
+          cwd: __dirname,
+          timeout: 60_000,
+        },
 );
 
 describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
@@ -186,9 +186,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
 
     it("generates man page when input path contains #", async () => {
       const sourceFile = join(fixturesDir, "parser.ts");
-      const tempDir = await mkdtemp(
-        join(fixturesDir, "tmp-optique-man-hash-"),
-      );
+      const tempDir = await mkdtemp(join(fixturesDir, "tmp-optique-man-hash-"));
       const parserFile = join(tempDir, "hash#parser.ts");
 
       try {
@@ -219,11 +217,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       try {
         await writeFile(parserFile, await readFile(sourceFile, "utf-8"));
 
-        const result = await cli.invoke(
-          parserFile,
-          "-s",
-          "1",
-        );
+        const result = await cli.invoke(parserFile, "-s", "1");
 
         assert.equal(result.exitCode, 0);
         assert.ok(result.stdout.includes('.TH "MYAPP" 1'));
@@ -267,11 +261,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
     it("defaults --date to the current date", async () => {
       const programFile = join(fixturesDir, "program.ts");
       const before = new Date();
-      const result = await cli.invoke(
-        programFile,
-        "-s",
-        "1",
-      );
+      const result = await cli.invoke(programFile, "-s", "1");
       const after = new Date();
 
       assert.equal(result.exitCode, 0);
@@ -289,29 +279,21 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       ]);
       assert.ok(
         allowed.has(dateField),
-        `Expected date to be one of ${
-          JSON.stringify([...allowed])
-        }, got: "${dateField}"`,
+        `Expected date to be one of ${JSON.stringify([
+          ...allowed,
+        ])}, got: "${dateField}"`,
       );
     });
 
     it("defaults --date to the current date for Parser export", async () => {
       const parserFile = join(fixturesDir, "parser.ts");
       const before = new Date();
-      const result = await cli.invoke(
-        parserFile,
-        "-s",
-        "1",
-        "--name",
-        "myapp",
-      );
+      const result = await cli.invoke(parserFile, "-s", "1", "--name", "myapp");
       const after = new Date();
 
       assert.equal(result.exitCode, 0);
       const thLine = result.stdout.split("\n")[0];
-      const thMatch = thLine.match(
-        /^\.TH\s+"[^"]+"\s+\S+\s+"([^"]*)"/,
-      );
+      const thMatch = thLine.match(/^\.TH\s+"[^"]+"\s+\S+\s+"([^"]*)"/);
       assert.ok(thMatch, `Expected .TH header, got: ${thLine}`);
       const dateField = thMatch[1];
       const allowed = new Set([
@@ -320,9 +302,9 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       ]);
       assert.ok(
         allowed.has(dateField),
-        `Expected date to be one of ${
-          JSON.stringify([...allowed])
-        }, got: "${dateField}"`,
+        `Expected date to be one of ${JSON.stringify([
+          ...allowed,
+        ])}, got: "${dateField}"`,
       );
     });
 
@@ -431,10 +413,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
     });
 
     it("fails with exit code 3 for program with missing metadata name", async () => {
-      const malformedFile = join(
-        fixturesDir,
-        "malformed-program-metadata.ts",
-      );
+      const malformedFile = join(fixturesDir, "malformed-program-metadata.ts");
       const result = await cli.invoke(malformedFile, "-s", "1");
 
       assert.equal(result.exitCode, 3);
@@ -442,10 +421,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
     });
 
     it("fails with exit code 3 for parser with throwing getter", async () => {
-      const malformedFile = join(
-        fixturesDir,
-        "throwing-getter-parser.ts",
-      );
+      const malformedFile = join(fixturesDir, "throwing-getter-parser.ts");
       const result = await cli.invoke(malformedFile, "-s", "1");
 
       assert.equal(result.exitCode, 3);
@@ -453,10 +429,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
     });
 
     it("fails with exit code 3 for program with throwing parser getter", async () => {
-      const malformedFile = join(
-        fixturesDir,
-        "throwing-getter-program.ts",
-      );
+      const malformedFile = join(fixturesDir, "throwing-getter-program.ts");
       const result = await cli.invoke(malformedFile, "-s", "1");
 
       assert.equal(result.exitCode, 3);
@@ -490,9 +463,7 @@ describe("optique-man CLI", { skip: !hasReliableSubprocess }, () => {
       );
 
       assert.notEqual(result.exitCode, 0);
-      assert.ok(
-        result.stderr.includes("Version string must not be empty"),
-      );
+      assert.ok(result.stderr.includes("Version string must not be empty"));
     });
 
     it("rejects empty --manual", async () => {

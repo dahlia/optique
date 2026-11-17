@@ -436,9 +436,7 @@ export interface Parser<
    *          the result.
    * @since 1.0.0
    */
-  validateValue?(
-    value: TValue,
-  ): ModeValue<M, ValueParserResult<TValue>>;
+  validateValue?(value: TValue): ModeValue<M, ValueParserResult<TValue>>;
 
   /**
    * Internal dependency metadata describing this parser's dependency
@@ -762,10 +760,8 @@ export interface ExecutionContext {
  *
  * @internal
  */
-export const unmatchedNonCliDependencySourceStateMarker: unique symbol = Symbol
-  .for(
-    "@optique/core/parser/unmatchedNonCliDependencySourceStateMarker",
-  );
+export const unmatchedNonCliDependencySourceStateMarker: unique symbol =
+  Symbol.for("@optique/core/parser/unmatchedNonCliDependencySourceStateMarker");
 
 /**
  * Internal marker for parsers that want parent-state annotations injected
@@ -789,10 +785,8 @@ export const inheritParentAnnotationsKey: unique symbol = Symbol.for(
  *
  * @internal
  */
-export const annotationWrapperRequiresSourceBindingKey: unique symbol = Symbol
-  .for(
-    "@optique/core/annotationWrapperRequiresSourceBinding",
-  );
+export const annotationWrapperRequiresSourceBindingKey: unique symbol =
+  Symbol.for("@optique/core/annotationWrapperRequiresSourceBinding");
 
 /**
  * The context of the parser, which includes the input buffer and the state.
@@ -895,55 +889,55 @@ export function createParserContext<TState>(
  */
 export type Suggestion =
   | {
-    /**
-     * A literal text suggestion.
-     */
-    readonly kind: "literal";
-    /**
-     * The suggestion text that can be used for completion or guidance.
-     */
-    readonly text: string;
-    /**
-     * An optional description providing additional context
-     * or information about the suggestion.
-     */
-    readonly description?: Message;
-  }
+      /**
+       * A literal text suggestion.
+       */
+      readonly kind: "literal";
+      /**
+       * The suggestion text that can be used for completion or guidance.
+       */
+      readonly text: string;
+      /**
+       * An optional description providing additional context
+       * or information about the suggestion.
+       */
+      readonly description?: Message;
+    }
   | {
-    /**
-     * A file system completion suggestion that uses native shell completion.
-     */
-    readonly kind: "file";
-    /**
-     * The current prefix/pattern for fallback when native completion is unavailable.
-     */
-    readonly pattern?: string;
-    /**
-     * Literal text at the start of `pattern` that is preserved on insertion
-     * but excluded from native filesystem matching, such as `output=`.
-     * Shell adapters ignore it if it does not lead both the pattern and
-     * the current word.  Regenerate installed scripts to use this field.
-     * @since 1.1.13
-     */
-    readonly prefix?: string;
-    /**
-     * The type of file system entries to complete.
-     */
-    readonly type: "file" | "directory" | "any";
-    /**
-     * File extensions to filter by (e.g., [".ts", ".js"]).
-     */
-    readonly extensions?: readonly string[];
-    /**
-     * Whether to include hidden files (those starting with a dot).
-     */
-    readonly includeHidden?: boolean;
-    /**
-     * An optional description providing additional context
-     * or information about the suggestion.
-     */
-    readonly description?: Message;
-  };
+      /**
+       * A file system completion suggestion that uses native shell completion.
+       */
+      readonly kind: "file";
+      /**
+       * The current prefix/pattern for fallback when native completion is unavailable.
+       */
+      readonly pattern?: string;
+      /**
+       * Literal text at the start of `pattern` that is preserved on insertion
+       * but excluded from native filesystem matching, such as `output=`.
+       * Shell adapters ignore it if it does not lead both the pattern and
+       * the current word.  Regenerate installed scripts to use this field.
+       * @since 1.1.13
+       */
+      readonly prefix?: string;
+      /**
+       * The type of file system entries to complete.
+       */
+      readonly type: "file" | "directory" | "any";
+      /**
+       * File extensions to filter by (e.g., [".ts", ".js"]).
+       */
+      readonly extensions?: readonly string[];
+      /**
+       * Whether to include hidden files (those starting with a dot).
+       */
+      readonly includeHidden?: boolean;
+      /**
+       * An optional description providing additional context
+       * or information about the suggestion.
+       */
+      readonly description?: Message;
+    };
 
 /**
  * A discriminated union type representing the result of a parser operation.
@@ -954,63 +948,63 @@ export type Suggestion =
  */
 export type ParserResult<TState> =
   | {
-    /**
-     * Indicates that the parsing operation was successful.
-     */
-    readonly success: true;
+      /**
+       * Indicates that the parsing operation was successful.
+       */
+      readonly success: true;
 
-    /**
-     * The next context after parsing, which includes the updated input buffer.
-     */
-    readonly next: ParserContext<TState>;
+      /**
+       * The next context after parsing, which includes the updated input buffer.
+       */
+      readonly next: ParserContext<TState>;
 
-    /**
-     * The input elements consumed by the parser during this operation.
-     */
-    readonly consumed: readonly string[];
+      /**
+       * The input elements consumed by the parser during this operation.
+       */
+      readonly consumed: readonly string[];
 
-    /**
-     * When `true`, indicates that this success is tentative or
-     * speculative: the parser matched something but the match has not
-     * been confirmed yet.  This covers two cases:
-     *
-     * - A zero-consuming discriminator resolved to a branch key, but
-     *   the selected sub-parser has not consumed any input yet.
-     * - A {@link conditional} parser speculatively committed to a
-     *   named branch that consumed tokens, before the discriminator
-     *   has had a chance to confirm the choice.  In this case the
-     *   marker stays set across subsequent parse calls until
-     *   `complete()` verifies the speculative selection.
-     *
-     * Outer combinators should not treat provisional successes as
-     * definitive.  For example, {@link or} should still allow a
-     * definitive branch to take priority, and a definitive
-     * zero-consuming fallback must not be displaced by a provisional
-     * consuming hit.  {@link longestMatch} may still prefer a longer
-     * provisional match over a shorter definitive one; when match
-     * lengths are equal, definitive results take priority over
-     * provisional ones.
-     *
-     * @since 1.0.0
-     */
-    readonly provisional?: true;
-  }
+      /**
+       * When `true`, indicates that this success is tentative or
+       * speculative: the parser matched something but the match has not
+       * been confirmed yet.  This covers two cases:
+       *
+       * - A zero-consuming discriminator resolved to a branch key, but
+       *   the selected sub-parser has not consumed any input yet.
+       * - A {@link conditional} parser speculatively committed to a
+       *   named branch that consumed tokens, before the discriminator
+       *   has had a chance to confirm the choice.  In this case the
+       *   marker stays set across subsequent parse calls until
+       *   `complete()` verifies the speculative selection.
+       *
+       * Outer combinators should not treat provisional successes as
+       * definitive.  For example, {@link or} should still allow a
+       * definitive branch to take priority, and a definitive
+       * zero-consuming fallback must not be displaced by a provisional
+       * consuming hit.  {@link longestMatch} may still prefer a longer
+       * provisional match over a shorter definitive one; when match
+       * lengths are equal, definitive results take priority over
+       * provisional ones.
+       *
+       * @since 1.0.0
+       */
+      readonly provisional?: true;
+    }
   | {
-    /**
-     * Indicates that the parsing operation failed.
-     */
-    readonly success: false;
+      /**
+       * Indicates that the parsing operation failed.
+       */
+      readonly success: false;
 
-    /**
-     * The number of the consumed input elements.
-     */
-    readonly consumed: number;
+      /**
+       * The number of the consumed input elements.
+       */
+      readonly consumed: number;
 
-    /**
-     * The error message describing why the parsing failed.
-     */
-    readonly error: Message;
-  };
+      /**
+       * The error message describing why the parsing failed.
+       */
+      readonly error: Message;
+    };
 
 /**
  * Infers the result value type of a {@link Parser}.
@@ -1033,40 +1027,40 @@ export type InferMode<T extends Parser<Mode, unknown, unknown>> = T["mode"];
  */
 export type Result<T> =
   | {
-    /**
-     * Indicates that the parsing operation was successful.
-     */
-    readonly success: true;
-    /**
-     * The successfully parsed value of type {@link T}.
-     * This is the final result of the parsing operation after all parsers
-     * have been applied and completed.
-     */
-    readonly value: T;
-    /**
-     * When `true`, indicates that the value contains deferred prompt
-     * placeholders.  Propagated from {@link ValueParserResult.deferred}.
-     * @since 1.0.0
-     */
-    readonly deferred?: true;
-    /**
-     * Property keys (object field names or array indices) whose values are
-     * deferred placeholders.
-     * Propagated from {@link ValueParserResult.deferredKeys}.
-     * @since 1.0.0
-     */
-    readonly deferredKeys?: DeferredMap;
-  }
+      /**
+       * Indicates that the parsing operation was successful.
+       */
+      readonly success: true;
+      /**
+       * The successfully parsed value of type {@link T}.
+       * This is the final result of the parsing operation after all parsers
+       * have been applied and completed.
+       */
+      readonly value: T;
+      /**
+       * When `true`, indicates that the value contains deferred prompt
+       * placeholders.  Propagated from {@link ValueParserResult.deferred}.
+       * @since 1.0.0
+       */
+      readonly deferred?: true;
+      /**
+       * Property keys (object field names or array indices) whose values are
+       * deferred placeholders.
+       * Propagated from {@link ValueParserResult.deferredKeys}.
+       * @since 1.0.0
+       */
+      readonly deferredKeys?: DeferredMap;
+    }
   | {
-    /**
-     * Indicates that the parsing operation failed.
-     */
-    readonly success: false;
-    /**
-     * The error message describing why the parsing failed.
-     */
-    readonly error: Message;
-  };
+      /**
+       * Indicates that the parsing operation failed.
+       */
+      readonly success: false;
+      /**
+       * The error message describing why the parsing failed.
+       */
+      readonly error: Message;
+    };
 
 /**
  * The result of a whole parser operation with failure progress preserved.
@@ -1081,30 +1075,30 @@ export type Result<T> =
 export type DetailedParseResult<T> =
   | Extract<Result<T>, { readonly success: true }>
   | {
-    /** Indicates that the parsing operation failed. */
-    readonly success: false;
-    /** The error message describing why parsing failed. */
-    readonly error: Message;
-    /** The arguments that remained at the point of failure. */
-    readonly remainingArgs: readonly string[];
-    /** The canonical names of commands matched before the failure. */
-    readonly commandPath: readonly string[];
-  };
+      /** Indicates that the parsing operation failed. */
+      readonly success: false;
+      /** The error message describing why parsing failed. */
+      readonly error: Message;
+      /** The arguments that remained at the point of failure. */
+      readonly remainingArgs: readonly string[];
+      /** The canonical names of commands matched before the failure. */
+      readonly commandPath: readonly string[];
+    };
 
 /** @internal */
 export type ParseAttempt<T> =
   | {
-    readonly kind: "success";
-    readonly result: Extract<Result<T>, { readonly success: true }>;
-  }
+      readonly kind: "success";
+      readonly result: Extract<Result<T>, { readonly success: true }>;
+    }
   | {
-    readonly kind: "failure";
-    readonly error: Message;
-    readonly remainingArgs: readonly string[];
-    readonly consumedCount: number;
-    readonly optionsTerminated: boolean;
-    readonly commandPath: readonly string[];
-  };
+      readonly kind: "failure";
+      readonly error: Message;
+      readonly remainingArgs: readonly string[];
+      readonly consumedCount: number;
+      readonly optionsTerminated: boolean;
+      readonly commandPath: readonly string[];
+    };
 
 interface ParseAttemptOptions {
   readonly mode?: "complete" | "parse-only";
@@ -1488,28 +1482,30 @@ export function parseDetailed<M extends Mode, T>(
   return dispatchParserByMode(
     parser,
     (parser) => {
-      const attempted = attemptParseSync(
-        parser,
-        args,
-        { parseOptions: options },
-      );
-      return attempted.kind === "success" ? attempted.result : {
-        success: false as const,
-        error: attempted.error,
-        remainingArgs: attempted.remainingArgs,
-        commandPath: attempted.commandPath,
-      };
+      const attempted = attemptParseSync(parser, args, {
+        parseOptions: options,
+      });
+      return attempted.kind === "success"
+        ? attempted.result
+        : {
+            success: false as const,
+            error: attempted.error,
+            remainingArgs: attempted.remainingArgs,
+            commandPath: attempted.commandPath,
+          };
     },
     async (parser) => {
       const attempted = await attemptParseAsync(parser, args, {
         parseOptions: options,
       });
-      return attempted.kind === "success" ? attempted.result : {
-        success: false as const,
-        error: attempted.error,
-        remainingArgs: attempted.remainingArgs,
-        commandPath: attempted.commandPath,
-      };
+      return attempted.kind === "success"
+        ? attempted.result
+        : {
+            success: false as const,
+            error: attempted.error,
+            remainingArgs: attempted.remainingArgs,
+            commandPath: attempted.commandPath,
+          };
     },
   );
 }
@@ -1590,7 +1586,7 @@ export function parse<M extends Mode, T>(
  */
 export function suggestSync<T>(
   parser: Parser<"sync", T, unknown>,
-  args: readonly [string, ...readonly string[]],
+  args: readonly [string, ...(readonly string[])],
   options?: ParseOptions,
 ): readonly Suggestion[] {
   const allButLast = args.slice(0, -1);
@@ -1654,10 +1650,10 @@ function withSuggestRuntime<TState>(
     dependencyRegistry: runtime.registry,
     exec: context.exec
       ? {
-        ...context.exec,
-        dependencyRuntime: runtime,
-        dependencyRegistry: runtime.registry,
-      }
+          ...context.exec,
+          dependencyRuntime: runtime,
+          dependencyRegistry: runtime.registry,
+        }
       : undefined,
   };
 }
@@ -1680,10 +1676,10 @@ async function withSuggestRuntimeAsync<TState>(
     dependencyRegistry: runtime.registry,
     exec: context.exec
       ? {
-        ...context.exec,
-        dependencyRuntime: runtime,
-        dependencyRegistry: runtime.registry,
-      }
+          ...context.exec,
+          dependencyRuntime: runtime,
+          dependencyRegistry: runtime.registry,
+        }
       : undefined,
   };
 }
@@ -1796,9 +1792,11 @@ export function getOwnParseLanes<TState>(
   parser: object,
 ): readonly ParseLane<TState>[] | undefined {
   if (!Object.hasOwn(parser, parseLanesKey)) return undefined;
-  return (parser as {
-    readonly [parseLanesKey]?: readonly ParseLane<TState>[];
-  })[parseLanesKey];
+  return (
+    parser as {
+      readonly [parseLanesKey]?: readonly ParseLane<TState>[];
+    }
+  )[parseLanesKey];
 }
 
 /**
@@ -1807,9 +1805,7 @@ export function getOwnParseLanes<TState>(
  *
  * @internal
  */
-export function defineInheritedAnnotationParser(
-  parser: object,
-): void {
+export function defineInheritedAnnotationParser(parser: object): void {
   Object.defineProperty(parser, inheritParentAnnotationsKey, {
     value: true,
     configurable: true,
@@ -1855,7 +1851,7 @@ export function defineSourceBindingOnlyAnnotationCompletionParser(
  */
 export async function suggestAsync<T>(
   parser: Parser<Mode, T, unknown>,
-  args: readonly [string, ...readonly string[]],
+  args: readonly [string, ...(readonly string[])],
   options?: ParseOptions,
 ): Promise<readonly Suggestion[]> {
   const allButLast = args.slice(0, -1);
@@ -1927,7 +1923,7 @@ export async function suggestAsync<T>(
  */
 export function suggest<M extends Mode, T>(
   parser: Parser<M, T, unknown>,
-  args: readonly [string, ...readonly string[]],
+  args: readonly [string, ...(readonly string[])],
   options?: ParseOptions,
 ): ModeValue<M, readonly Suggestion[]> {
   return dispatchByMode(
@@ -1971,12 +1967,15 @@ function hasSelectedLeadingCommand(
   const first = usage[0];
   if (first?.type === "command") {
     const id = getCommandUsageId(first);
-    return commandTermMatches(first, commandName) && id != null &&
-      selectedCommandUsage.has(id);
+    return (
+      commandTermMatches(first, commandName) &&
+      id != null &&
+      selectedCommandUsage.has(id)
+    );
   }
   if (first?.type === "sequence") {
     return first.terms.some((term) =>
-      hasSelectedLeadingCommand([term], commandName, selectedCommandUsage)
+      hasSelectedLeadingCommand([term], commandName, selectedCommandUsage),
     );
   }
   if (first?.type === "optional" || first?.type === "multiple") {
@@ -1986,10 +1985,12 @@ function hasSelectedLeadingCommand(
       selectedCommandUsage,
     );
   }
-  return first?.type === "exclusive" &&
+  return (
+    first?.type === "exclusive" &&
     first.terms.some((branch) =>
-      hasSelectedLeadingCommand(branch, commandName, selectedCommandUsage)
-    );
+      hasSelectedLeadingCommand(branch, commandName, selectedCommandUsage),
+    )
+  );
 }
 
 // A wrapped command owns only the tail inside its containing usage list.
@@ -2005,15 +2006,13 @@ function applyWrappedCommandUsageLine(
     readonly tail: Usage;
     readonly replace: (tail: Usage) => UsageTerm;
   }[] = [];
-  const visit = (
-    terms: Usage,
-    rebuild: (terms: Usage) => UsageTerm,
-  ): void => {
+  const visit = (terms: Usage, rebuild: (terms: Usage) => UsageTerm): void => {
     const first = terms[0];
     if (first?.type === "command") {
       const id = getCommandUsageId(first);
       if (
-        commandTermMatches(first, commandName) && id != null &&
+        commandTermMatches(first, commandName) &&
+        id != null &&
         selectedCommandUsage.has(id)
       ) {
         candidates.push({
@@ -2025,26 +2024,32 @@ function applyWrappedCommandUsageLine(
     } else if (first?.type === "sequence") {
       first.terms.forEach((child, index) => {
         visit([child, ...first.terms.slice(index + 1)], (children) =>
-          rebuild([{
-            ...first,
-            terms: [...first.terms.slice(0, index), ...children],
-          }, ...terms.slice(1)]));
+          rebuild([
+            {
+              ...first,
+              terms: [...first.terms.slice(0, index), ...children],
+            },
+            ...terms.slice(1),
+          ]),
+        );
       });
     } else if (first?.type === "optional" || first?.type === "multiple") {
-      visit(
-        first.terms,
-        (children) =>
-          rebuild([{ ...first, terms: children }, ...terms.slice(1)]),
+      visit(first.terms, (children) =>
+        rebuild([{ ...first, terms: children }, ...terms.slice(1)]),
       );
     } else if (first?.type === "exclusive") {
       first.terms.forEach((branch, index) => {
         visit(branch, (children) =>
-          rebuild([{
-            ...first,
-            terms: first.terms.map((other, otherIndex) =>
-              otherIndex === index ? children : other
-            ),
-          }, ...terms.slice(1)]));
+          rebuild([
+            {
+              ...first,
+              terms: first.terms.map((other, otherIndex) =>
+                otherIndex === index ? children : other,
+              ),
+            },
+            ...terms.slice(1),
+          ]),
+        );
       });
     }
   };
@@ -2052,9 +2057,10 @@ function applyWrappedCommandUsageLine(
   if (candidates.length !== 1) return term;
   const { command, tail, replace } = candidates[0];
   if (command.usageLine == null) return term;
-  const customUsageLine = typeof command.usageLine === "function"
-    ? command.usageLine(cloneUsage(tail))
-    : command.usageLine;
+  const customUsageLine =
+    typeof command.usageLine === "function"
+      ? command.usageLine(cloneUsage(tail))
+      : command.usageLine;
   return replace(normalizeUsage(customUsageLine));
 }
 
@@ -2148,10 +2154,12 @@ function commandTermMatches(
   term: UsageTerm | null | undefined,
   commandName: string,
 ): boolean {
-  return term?.type === "command" &&
+  return (
+    term?.type === "command" &&
     (term.name === commandName ||
       term.aliases?.includes(commandName) === true ||
-      term.hiddenAliases?.includes(commandName) === true);
+      term.hiddenAliases?.includes(commandName) === true)
+  );
 }
 
 function collectCommandInputNames(
@@ -2281,7 +2289,7 @@ export function getDocPageAsync(
   const args = Array.isArray(argsOrOptions) ? argsOrOptions : [];
   const opts = Array.isArray(argsOrOptions)
     ? options
-    : (argsOrOptions as ParseOptions | undefined) ?? options;
+    : ((argsOrOptions as ParseOptions | undefined) ?? options);
   if (parser.mode === "sync") {
     return Promise.resolve(
       getDocPageSyncImpl(
@@ -2364,7 +2372,7 @@ export function getDocPage(
   const args = Array.isArray(argsOrOptions) ? argsOrOptions : [];
   const opts = Array.isArray(argsOrOptions)
     ? options
-    : (argsOrOptions as ParseOptions | undefined) ?? options;
+    : ((argsOrOptions as ParseOptions | undefined) ?? options);
   if (parser.mode === "sync") {
     return getDocPageSyncImpl(
       parser as Parser<"sync", unknown, unknown>,
@@ -2486,8 +2494,7 @@ function buildDocPage(
   // See: https://github.com/dahlia/optique/issues/200
   if (
     args.length === 0 &&
-    Reflect.get(parser, Symbol.for("@optique/core/commandParser")) ===
-      true &&
+    Reflect.get(parser, Symbol.for("@optique/core/commandParser")) === true &&
     fragments.length === 1 &&
     fragments[0].type === "entry" &&
     fragments[0].term.type === "command"
@@ -2560,7 +2567,8 @@ function buildDocPage(
   ): void => {
     if (!isLastArg) return;
     if (
-      term?.type === "optional" || term?.type === "multiple" ||
+      term?.type === "optional" ||
+      term?.type === "multiple" ||
       term?.type === "exclusive"
     ) {
       usage[usageIndex] = applyWrappedCommandUsageLine(
@@ -2578,9 +2586,10 @@ function buildDocPage(
       return;
     }
     const defaultUsageLine = cloneUsage(usage.slice(usageIndex + 1));
-    const customUsageLine = typeof term.usageLine === "function"
-      ? term.usageLine(defaultUsageLine)
-      : term.usageLine;
+    const customUsageLine =
+      typeof term.usageLine === "function"
+        ? term.usageLine(defaultUsageLine)
+        : term.usageLine;
     const normalizedCustomUsageLine = normalizeUsage(customUsageLine);
     usage.splice(
       usageIndex + 1,
@@ -2598,8 +2607,8 @@ function buildDocPage(
     const arg = effectiveArgs[argIndex];
     if (i >= usage.length) break;
     let term = usage[i];
-    const canSearchCommand = commandArgIndices == null ||
-      commandArgIndices.has(argIndex);
+    const canSearchCommand =
+      commandArgIndices == null || commandArgIndices.has(argIndex);
     if (!canSearchCommand) continue;
     let found: Usage | null = null;
     for (const requireSelectedIdentity of [true, false]) {
@@ -2640,26 +2649,28 @@ function buildDocPage(
     const first = usage[0];
     if (first.type === "command" && first.usageLine != null) {
       const defaultUsageLine = cloneUsage(usage.slice(1));
-      const customUsageLine = typeof first.usageLine === "function"
-        ? first.usageLine(defaultUsageLine)
-        : first.usageLine;
+      const customUsageLine =
+        typeof first.usageLine === "function"
+          ? first.usageLine(defaultUsageLine)
+          : first.usageLine;
       const normalizedCustomUsageLine = normalizeUsage(customUsageLine);
       usage.splice(1, usage.length - 1, ...normalizedCustomUsageLine);
     }
   }
-  const visibleBindings = environmentBindings?.filter((binding) =>
-    !isDocHidden(binding.hidden)
-  ).map((binding) => ({
-    ...binding,
-    ...(binding.description != null && {
-      description: cloneMessage(binding.description),
-    }),
-  }));
+  const visibleBindings = environmentBindings
+    ?.filter((binding) => !isDocHidden(binding.hidden))
+    .map((binding) => ({
+      ...binding,
+      ...(binding.description != null && {
+        description: cloneMessage(binding.description),
+      }),
+    }));
   return {
     ...(showUsage != null && { showUsage }),
-    ...(visibleBindings != null && visibleBindings.length > 0 && {
-      environmentBindings: visibleBindings,
-    }),
+    ...(visibleBindings != null &&
+      visibleBindings.length > 0 && {
+        environmentBindings: visibleBindings,
+      }),
     usage: revealMatchedCommandUsage(
       usage,
       matchedCommandPath,
@@ -2714,7 +2725,8 @@ function revealMatchedCommandUsageTerms(
       // Custom usage leaves do not have parser provenance. Retain the
       // conservative name-path fallback only for these untracked terms.
       if (
-        !nameFallbackEnabled || term.name !== matchedCommandPath[nextPathIndex]
+        !nameFallbackEnabled ||
+        term.name !== matchedCommandPath[nextPathIndex]
       ) {
         // Do not mistake an unmatched command's descendant for the next
         // selected command. Stop name matching in this list and its children,
@@ -2727,7 +2739,8 @@ function revealMatchedCommandUsageTerms(
       terms.push(revealed);
       nextPathIndex++;
     } else if (
-      term.type === "optional" || term.type === "multiple" ||
+      term.type === "optional" ||
+      term.type === "multiple" ||
       term.type === "sequence"
     ) {
       const [nested, afterTerm] = revealMatchedCommandUsageTerms(
@@ -2747,7 +2760,7 @@ function revealMatchedCommandUsageTerms(
           nextPathIndex,
           selectedCommandUsage,
           nameFallbackEnabled,
-        )
+        ),
       );
       terms.push({ ...term, terms: branches.map(([branch]) => branch) });
       nextPathIndex = Math.max(

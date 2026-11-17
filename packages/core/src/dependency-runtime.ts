@@ -57,10 +57,7 @@ const derivedRawInputs = new WeakMap<object, string>();
  * @internal
  * @since 1.3.0
  */
-export function recordDerivedRawInput(
-  state: object,
-  rawInput: string,
-): void {
+export function recordDerivedRawInput(state: object, rawInput: string): void {
   derivedRawInputs.set(state, rawInput);
 }
 
@@ -224,7 +221,9 @@ export interface RuntimeNode {
    *
    * @since 1.3.0
    */
-  readonly prepare?: (ctx: SchedulingBarrierContext) => Promise<
+  readonly prepare?: (
+    ctx: SchedulingBarrierContext,
+  ) => Promise<
     { readonly success: false; readonly error: Message } | undefined
   >;
 
@@ -245,7 +244,9 @@ export interface RuntimeNode {
    *
    * @since 1.3.0
    */
-  readonly resolveBarrier?: (ctx: SchedulingBarrierContext) => Promise<
+  readonly resolveBarrier?: (
+    ctx: SchedulingBarrierContext,
+  ) => Promise<
     | { readonly success: false; readonly error: Message }
     | BarrierResolution
     | undefined
@@ -443,7 +444,9 @@ export interface SchedulingBarrierContext {
    * at the barrier's position.  Results are deduplicated through the
    * run-scoped session and are not cached by the owning construct.
    */
-  readonly schedule: (nodes: readonly RuntimeNode[]) => Promise<
+  readonly schedule: (
+    nodes: readonly RuntimeNode[],
+  ) => Promise<
     { readonly success: false; readonly error: Message } | undefined
   >;
 }
@@ -474,10 +477,7 @@ export interface DependencyRuntimeContext {
   getReplayResult(key: ReplayKey): ValueParserResult<unknown> | undefined;
 
   /** Cache a replay result. */
-  setReplayResult(
-    key: ReplayKey,
-    result: ValueParserResult<unknown>,
-  ): void;
+  setReplayResult(key: ReplayKey, result: ValueParserResult<unknown>): void;
 
   /**
    * Mark a source as explicitly failed (user provided input that did
@@ -523,15 +523,21 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
   readonly registry: FailedAwareRegistry;
   readonly #replayCache = new Map<string, ValueParserResult<unknown>>();
   readonly #failedSources = new Set<symbol>();
-  readonly #sourceMetadata = new Map<symbol, {
-    readonly label: string;
-    readonly dependencyIds: readonly symbol[];
-  }>();
-  readonly #sourceFailures = new Map<symbol, {
-    readonly chain: readonly string[];
-    readonly participants: readonly symbol[];
-    diagnosticChain: readonly string[];
-  }>();
+  readonly #sourceMetadata = new Map<
+    symbol,
+    {
+      readonly label: string;
+      readonly dependencyIds: readonly symbol[];
+    }
+  >();
+  readonly #sourceFailures = new Map<
+    symbol,
+    {
+      readonly chain: readonly string[];
+      readonly participants: readonly symbol[];
+      diagnosticChain: readonly string[];
+    }
+  >();
 
   constructor(registry: DependencyRegistryLike) {
     if (registry instanceof FailedAwareRegistry) {
@@ -563,10 +569,7 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
     return this.#replayCache.get(serializeReplayKey(key));
   }
 
-  setReplayResult(
-    key: ReplayKey,
-    result: ValueParserResult<unknown>,
-  ): void {
+  setReplayResult(key: ReplayKey, result: ValueParserResult<unknown>): void {
     this.#replayCache.set(serializeReplayKey(key), result);
   }
 
@@ -598,23 +601,25 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
   ): boolean {
     const upstream = dependencyIds
       .filter((id) => this.isSourceFailed(id))
-      .map((id) =>
-        this.#sourceFailures.get(id) ?? {
-          chain: [this.#getSourceLabel(id)],
-          participants: [id],
-          diagnosticChain: [this.#getSourceLabel(id)],
-        }
+      .map(
+        (id) =>
+          this.#sourceFailures.get(id) ?? {
+            chain: [this.#getSourceLabel(id)],
+            participants: [id],
+            diagnosticChain: [this.#getSourceLabel(id)],
+          },
       )
       .sort((left, right) => right.chain.length - left.chain.length)[0];
     if (upstream == null) return false;
 
-    const chain = upstream.chain.at(-1) === label
-      ? upstream.chain
-      : [...upstream.chain, label];
-    const participants = sourceId == null ||
-        upstream.participants.includes(sourceId)
-      ? upstream.participants
-      : [...upstream.participants, sourceId];
+    const chain =
+      upstream.chain.at(-1) === label
+        ? upstream.chain
+        : [...upstream.chain, label];
+    const participants =
+      sourceId == null || upstream.participants.includes(sourceId)
+        ? upstream.participants
+        : [...upstream.participants, sourceId];
     const failure = { chain, participants, diagnosticChain: chain };
     if (sourceId != null && !this.registry.isPreserved(sourceId)) {
       this.#failedSources.add(sourceId);
@@ -638,8 +643,11 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
   }
 
   #getSourceLabel(sourceId: symbol): string {
-    return this.#sourceMetadata.get(sourceId)?.label ??
-      sourceId.description ?? String(sourceId);
+    return (
+      this.#sourceMetadata.get(sourceId)?.label ??
+      sourceId.description ??
+      String(sourceId)
+    );
   }
 
   #getSourceLineage(
@@ -663,17 +671,15 @@ class DependencyRuntimeContextImpl implements DependencyRuntimeContext {
     return upstream == null
       ? { labels: [this.#getSourceLabel(sourceId)], sourceIds: [sourceId] }
       : {
-        labels: [...upstream.labels, this.#getSourceLabel(sourceId)],
-        sourceIds: [...upstream.sourceIds, sourceId],
-      };
+          labels: [...upstream.labels, this.#getSourceLabel(sourceId)],
+          sourceIds: [...upstream.sourceIds, sourceId],
+        };
   }
 
-  #promoteDiagnosticChain(
-    failure: {
-      readonly participants: readonly symbol[];
-      readonly diagnosticChain: readonly string[];
-    },
-  ): void {
+  #promoteDiagnosticChain(failure: {
+    readonly participants: readonly symbol[];
+    readonly diagnosticChain: readonly string[];
+  }): void {
     for (const sourceId of failure.participants) {
       const current = this.#sourceFailures.get(sourceId);
       if (
@@ -729,9 +735,10 @@ class FailedAwareRegistry implements DependencyRegistryLike {
     const paths = this.#preserved.get(id);
     if (
       paths != null &&
-      !paths.some((covered) =>
-        covered.length === path.length &&
-        covered.every((segment, index) => segment === path[index])
+      !paths.some(
+        (covered) =>
+          covered.length === path.length &&
+          covered.every((segment, index) => segment === path[index]),
       )
     ) {
       this.#preserved.delete(id);
@@ -873,18 +880,20 @@ export function forkRuntimeForCommittedSubtree(
   const runtime = new DependencyRuntimeContextImpl(
     exec?.dependencyRegistry?.clone() ?? new SimpleRegistry(),
   );
-  const scopes = exec?.dependencyRuntime == null
-    ? undefined
-    : sourceScopes.get(exec.dependencyRuntime);
+  const scopes =
+    exec?.dependencyRuntime == null
+      ? undefined
+      : sourceScopes.get(exec.dependencyRuntime);
   for (const id of sourceIds) {
     // Ignore sibling collections and opaque wrappers that never exposed
     // this occurrence. Among scopes covering it, the most recent pass
     // represents its immediate enclosing scope.
     const scope = scopes?.findLast((candidate) =>
-      candidate.collectedSources.some((source) =>
-        source.sourceId === id &&
-        exec?.path.every((segment, index) => source.path[index] === segment)
-      )
+      candidate.collectedSources.some(
+        (source) =>
+          source.sourceId === id &&
+          exec?.path.every((segment, index) => source.path[index] === segment),
+      ),
     );
     if (scope == null) continue;
     const publication = scope.values.get(id);
@@ -898,9 +907,8 @@ export function forkRuntimeForCommittedSubtree(
     } else if (!runtime.isSourceFailed(id)) {
       continue;
     }
-    const paths = scope.collectedSources.filter((source) =>
-      source.sourceId === id
-    )
+    const paths = scope.collectedSources
+      .filter((source) => source.sourceId === id)
       .map((source) => source.path);
     runtime.registry.preserve(id, paths);
   }
@@ -928,7 +936,8 @@ function resolveRequest(
       usedDefaults.push(false);
       resolvedCount++;
     } else if (
-      request.defaultValues != null && i < request.defaultValues.length
+      request.defaultValues != null &&
+      i < request.defaultValues.length
     ) {
       values.push(request.defaultValues[i]);
       usedDefaults.push(true);
@@ -969,9 +978,9 @@ function serializePathSegment(p: PropertyKey): string {
 
 function serializeReplayKey(key: ReplayKey): string {
   const pathStr = key.path.map(serializePathSegment).join("");
-  return `${pathStr}\x01${
-    lengthPrefix(key.rawInput)
-  }\x01${key.dependencyFingerprint}\x01${key.parserFingerprint}`;
+  return `${pathStr}\x01${lengthPrefix(
+    key.rawInput,
+  )}\x01${key.dependencyFingerprint}\x01${key.parserFingerprint}`;
 }
 
 // =============================================================================
@@ -1028,10 +1037,12 @@ export function createDependencyFingerprint(
 ): string {
   // Length-prefix each component so that values containing the join
   // character cannot collide with multi-value boundaries.
-  return values.map((v) => {
-    const raw = fingerprintValue(v);
-    return `${raw.length}:${raw}`;
-  }).join("");
+  return values
+    .map((v) => {
+      const raw = fingerprintValue(v);
+      return `${raw.length}:${raw}`;
+    })
+    .join("");
 }
 
 // Per-reference identity counter for fingerprinting non-primitive values.
@@ -1110,9 +1121,8 @@ export function createReplayKey(
     path,
     rawInput,
     dependencyFingerprint: createDependencyFingerprint(dependencyValues),
-    parserFingerprint: replayParse != null
-      ? getParserFingerprint(replayParse)
-      : "",
+    parserFingerprint:
+      replayParse != null ? getParserFingerprint(replayParse) : "",
   };
 }
 
@@ -1151,9 +1161,9 @@ export function collectExplicitSourceValues(
     const result = meta.source.extractSourceValue(node.state);
     if (isPromiseLike(result)) {
       throw new TypeError(
-        `collectExplicitSourceValues() received an async extractSourceValue() result for ${
-          String(meta.source.sourceId)
-        }. Use collectExplicitSourceValuesAsync() instead.`,
+        `collectExplicitSourceValues() received an async extractSourceValue() result for ${String(
+          meta.source.sourceId,
+        )}. Use collectExplicitSourceValuesAsync() instead.`,
       );
     }
     registerExplicitSourceValue(meta.source.sourceId, result, runtime);
@@ -1181,10 +1191,12 @@ function registerExplicitSourceValue(
 }
 
 function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
-  return value != null &&
+  return (
+    value != null &&
     (typeof value === "object" || typeof value === "function") &&
     "then" in value &&
-    typeof (value as Record<PropertyKey, unknown>).then === "function";
+    typeof (value as Record<PropertyKey, unknown>).then === "function"
+  );
 }
 
 /**
@@ -1379,8 +1391,9 @@ function drainDependencyGraph(graph: DependencyGraph): readonly RuntimeNode[] {
   const ordered: RuntimeNode[] = [];
   while (true) {
     while (ready.length > 0) {
-      ready.sort((left, right) =>
-        declarationOrder.get(left)! - declarationOrder.get(right)!
+      ready.sort(
+        (left, right) =>
+          declarationOrder.get(left)! - declarationOrder.get(right)!,
       );
       const node = ready.shift()!;
       ordered.push(node);
@@ -1439,13 +1452,15 @@ function findStronglyConnected(
   const strongConnect = (root: RuntimeNode): void => {
     // Iterative Tarjan: each frame tracks the node and its child cursor.
     const frames: { node: RuntimeNode; children: RuntimeNode[]; i: number }[] =
-      [{
-        node: root,
-        children: [...(outgoing.get(root)?.keys() ?? [])].filter((child) =>
-          inSubset.has(child)
-        ),
-        i: 0,
-      }];
+      [
+        {
+          node: root,
+          children: [...(outgoing.get(root)?.keys() ?? [])].filter((child) =>
+            inSubset.has(child),
+          ),
+          i: 0,
+        },
+      ];
     index.set(root, nextIndex);
     lowLink.set(root, nextIndex);
     nextIndex++;
@@ -1464,7 +1479,7 @@ function findStronglyConnected(
           frames.push({
             node: child,
             children: [...(outgoing.get(child)?.keys() ?? [])].filter((c) =>
-              inSubset.has(c)
+              inSubset.has(c),
             ),
             i: 0,
           });
@@ -1663,16 +1678,20 @@ function hasPendingProvider(
   return derived.dependencyIds.some((sourceId) =>
     (providers.get(sourceId) ?? []).some((provider) => {
       if (
-        provider === node || runtime.hasSource(sourceId) ||
+        provider === node ||
+        runtime.hasSource(sourceId) ||
         runtime.isSourceFailed(sourceId)
-      ) return false;
+      )
+        return false;
       const metadata = provider.parser.dependencyMetadata;
       if (metadata?.derived != null && getNodeRawInput(provider) != null) {
         return !settled.has(provider);
       }
-      return options?.effectfulProviders !== "inactive" &&
-        metadata?.source?.completeSource != null;
-    })
+      return (
+        options?.effectfulProviders !== "inactive" &&
+        metadata?.source?.completeSource != null
+      );
+    }),
   );
 }
 
@@ -1740,14 +1759,15 @@ function registerRuntimeSourceMetadata(
     const completion = hasInactiveCompletion(node)
       ? undefined
       : metadata.completion;
-    const dependencyIds = completion == null
-      ? metadata.derived?.dependencyIds
-      : [
-        ...(metadata.derived?.dependencyIds ?? []),
-        ...completion.dependencyIds.filter((id) =>
-          !(metadata.derived?.dependencyIds ?? []).includes(id)
-        ),
-      ];
+    const dependencyIds =
+      completion == null
+        ? metadata.derived?.dependencyIds
+        : [
+            ...(metadata.derived?.dependencyIds ?? []),
+            ...completion.dependencyIds.filter(
+              (id) => !(metadata.derived?.dependencyIds ?? []).includes(id),
+            ),
+          ];
     runtime.registerSourceMetadata(
       metadata.source.sourceId,
       formatDependencyNodeMetavar(node),
@@ -1800,13 +1820,16 @@ export function includeSourceFailureChain(
 }
 
 function formatDependencyNodeMetavar(node: RuntimeNode): string {
-  return node.parser.dependencyMetadata?.derived?.metavar ??
+  return (
+    node.parser.dependencyMetadata?.derived?.metavar ??
     node.parser.dependencyMetadata?.source?.metavar ??
-    (node.path.map(String).join(".") || "<root>");
+    (node.path.map(String).join(".") || "<root>")
+  );
 }
 
 function formatDependencyNodeLabel(node: RuntimeNode): string {
-  const metavar = node.parser.dependencyMetadata?.derived?.metavar ??
+  const metavar =
+    node.parser.dependencyMetadata?.derived?.metavar ??
     node.parser.dependencyMetadata?.source?.metavar;
   const path = node.path.map(String).join(".") || "<root>";
   return metavar == null ? path : `${metavar} (${path})`;
@@ -1870,9 +1893,9 @@ export function fillMissingSourceDefaults(
     }
     if (isPromiseLike(result)) {
       throw new TypeError(
-        `fillMissingSourceDefaults() received an async getMissingSourceValue() result for ${
-          String(meta.source.sourceId)
-        }. Use fillMissingSourceDefaultsAsync() instead.`,
+        `fillMissingSourceDefaults() received an async getMissingSourceValue() result for ${String(
+          meta.source.sourceId,
+        )}. Use fillMissingSourceDefaultsAsync() instead.`,
       );
     }
     if (result.success) {
@@ -2150,7 +2173,8 @@ function extractPreliminaryResultFromStateInner(
 
   if (isDeferredParseState(state)) return state.preliminaryResult;
   if (
-    getRecordedDerivedRawInput(state) != null && "success" in state &&
+    getRecordedDerivedRawInput(state) != null &&
+    "success" in state &&
     typeof state.success === "boolean"
   ) {
     if (state.success === true && "value" in state) {
@@ -2185,8 +2209,8 @@ function getRecordedDerivedRawInput(state: object): string | undefined {
   if (
     derivedRawInputKey in state &&
     typeof (state as { readonly [derivedRawInputKey]?: unknown })[
-        derivedRawInputKey
-      ] === "string"
+      derivedRawInputKey
+    ] === "string"
   ) {
     return (state as { readonly [derivedRawInputKey]: string })[
       derivedRawInputKey
@@ -2360,11 +2384,13 @@ export function defineForwardedEffectfulSchedulingNodes(
   });
   if (inner.dependencyMetadata?.source != null) return;
   Object.defineProperty(wrapper, effectfulSchedulingNodesKey, {
-    value: ((state, parentPath) => [{
-      path: parentPath ?? [],
-      parser: inner,
-      state: adaptState == null ? state : adaptState(state),
-    }]) satisfies EffectfulSchedulingNodesFn,
+    value: ((state, parentPath) => [
+      {
+        path: parentPath ?? [],
+        parser: inner,
+        state: adaptState == null ? state : adaptState(state),
+      },
+    ]) satisfies EffectfulSchedulingNodesFn,
     configurable: true,
     enumerable: false,
   });
@@ -2407,9 +2433,9 @@ export interface EffectfulSourceCompletion {
  */
 export type EffectfulSourceCompletionResult =
   | {
-    readonly success: true;
-    readonly completed: readonly EffectfulSourceCompletion[];
-  }
+      readonly success: true;
+      readonly completed: readonly EffectfulSourceCompletion[];
+    }
   | { readonly success: false; readonly error: Message };
 
 /**
@@ -2438,7 +2464,8 @@ export function collectDemandedDependencyIds(
   for (const node of nodes) {
     const derived = node.parser.dependencyMetadata?.derived;
     if (derived == null) continue;
-    const hasRawInput = trace?.get(node.path)?.rawInput != null ||
+    const hasRawInput =
+      trace?.get(node.path)?.rawInput != null ||
       extractRawInputFromState(node.state) != null;
     if (!hasRawInput) continue;
     for (const id of derived.dependencyIds) demanded.add(id);
@@ -2457,9 +2484,10 @@ function collectDeferredDemand(
   visited.add(state);
 
   if (isDeferredParseState(state)) {
-    const ids = state.dependencyIds != null && state.dependencyIds.length > 0
-      ? state.dependencyIds
-      : [state.dependencyId];
+    const ids =
+      state.dependencyIds != null && state.dependencyIds.length > 0
+        ? state.dependencyIds
+        : [state.dependencyId];
     for (const id of ids) demanded.add(id);
     return;
   }
@@ -2567,7 +2595,8 @@ function propagateDemand(
     for (const node of universe) {
       const metadata = node.parser.dependencyMetadata;
       if (
-        metadata?.source != null && metadata.derived != null &&
+        metadata?.source != null &&
+        metadata.derived != null &&
         session.demanded.has(metadata.source.sourceId)
       ) {
         for (const dependencySourceId of metadata.derived.dependencyIds) {
@@ -2577,7 +2606,8 @@ function propagateDemand(
         }
       }
       if (
-        metadata?.source != null && metadata.completion != null &&
+        metadata?.source != null &&
+        metadata.completion != null &&
         session.demanded.has(metadata.source.sourceId) &&
         !hasInactiveCompletion(node)
       ) {
@@ -2660,9 +2690,11 @@ export function replaceCachedBarrierFailure(
  * later resolution can still demand them into their dependency slot.
  */
 function isGatedUnresolvedBarrier(node: RuntimeNode): boolean {
-  return node.resolveBarrier != null &&
+  return (
+    node.resolveBarrier != null &&
     node.barrierDemandActivation === "after-resolution" &&
-    node.barrierResolutionState == null;
+    node.barrierResolutionState == null
+  );
 }
 
 /**
@@ -2796,9 +2828,10 @@ export async function completeEffectfulSourcesAsync(
     }
   }
 
-  const schedulable = nodes.filter((node) =>
-    node.parser.dependencyMetadata?.source?.completeSource != null ||
-    node.prepare != null
+  const schedulable = nodes.filter(
+    (node) =>
+      node.parser.dependencyMetadata?.source?.completeSource != null ||
+      node.prepare != null,
   );
   if (schedulable.length === 0 && options?.includeStructural !== true) {
     return empty;
@@ -2818,7 +2851,7 @@ export async function completeEffectfulSourcesAsync(
         isReusable: () => false,
         isCollected: () => true,
         includeStructural: true,
-      }).then((result) => result.success ? undefined : result),
+      }).then((result) => (result.success ? undefined : result)),
   };
   // Incremental scheduling: a barrier resolves its concrete dependencies
   // as soon as its control dependencies are satisfied—advisory ordering
@@ -2890,17 +2923,18 @@ export async function completeEffectfulSourcesAsync(
       session?.results.set(Symbol(barrierFailureDescription), resolution);
       return resolution;
     }
-    const replacement: RuntimeNode = resolution == null
-      ? { ...candidate, barrierResolutionState: "unresolvable" }
-      : {
-        ...candidate,
-        barrierResolutionState: "resolved",
-        providesSourceIds: resolution.activeProvidesSourceIds,
-        barrierCompletionDependencies: {
-          orderingDependencyIds: resolution.orderingDependencyIds,
-          demandEdges: resolution.demandEdges,
-        },
-      };
+    const replacement: RuntimeNode =
+      resolution == null
+        ? { ...candidate, barrierResolutionState: "unresolvable" }
+        : {
+            ...candidate,
+            barrierResolutionState: "resolved",
+            providesSourceIds: resolution.activeProvidesSourceIds,
+            barrierCompletionDependencies: {
+              orderingDependencyIds: resolution.orderingDependencyIds,
+              demandEdges: resolution.demandEdges,
+            },
+          };
     pending[index] = replacement;
     const originalIndex = declarationIndex.get(candidate);
     if (originalIndex != null) declarationIndex.set(replacement, originalIndex);
@@ -2919,8 +2953,8 @@ export async function completeEffectfulSourcesAsync(
     // While a gated barrier is unresolved, a demand-only pass must not
     // let a not-yet-demanded node pass its execution slot: the
     // barrier's resolution may still demand it.
-    const parkingActive = demandSession != null &&
-      pending.some(isGatedUnresolvedBarrier);
+    const parkingActive =
+      demandSession != null && pending.some(isGatedUnresolvedBarrier);
     for (let i = 0; i < pending.length; i++) {
       const candidate = pending[i];
       if (
@@ -2944,14 +2978,15 @@ export async function completeEffectfulSourcesAsync(
       // an effect-free discriminator ahead of the confirmation
       // boundary.
       if (
-        parkingActive && demandSession != null &&
+        parkingActive &&
+        demandSession != null &&
         !demandSession.demanded.has(requires)
       ) {
         continue;
       }
       if (
-        pending.some((other) =>
-          other !== candidate && providesId(other, requires)
+        pending.some(
+          (other) => other !== candidate && providesId(other, requires),
         )
       ) {
         continue;
@@ -2964,8 +2999,8 @@ export async function completeEffectfulSourcesAsync(
     // The early-resolution scan may have resolved the last gated
     // barrier, so recompute before selecting: once none is unresolved,
     // parking lifts within the same iteration.
-    const parkingStillActive = demandSession != null &&
-      pending.some(isGatedUnresolvedBarrier);
+    const parkingStillActive =
+      demandSession != null && pending.some(isGatedUnresolvedBarrier);
     if (parkingStillActive && demandSession != null) {
       const parked = collectParkedNodes(pending, demandSession);
       const isSkippedBarrier = (candidate: RuntimeNode): boolean =>
@@ -2973,8 +3008,8 @@ export async function completeEffectfulSourcesAsync(
         candidate.barrierResolutionState == null &&
         candidate.requiresSourceId != null &&
         !demandSession.demanded.has(candidate.requiresSourceId);
-      const selectable = ordered.find((candidate) =>
-        !parked.has(candidate) && !isSkippedBarrier(candidate)
+      const selectable = ordered.find(
+        (candidate) => !parked.has(candidate) && !isSkippedBarrier(candidate),
       );
       if (selectable != null) {
         node = selectable;
@@ -2984,9 +3019,10 @@ export async function completeEffectfulSourcesAsync(
         // (it may become unresolvable) so the pass keeps making
         // progress; once no gated unresolved barrier remains, parking
         // lifts and the drain continues as usual.
-        const stalled = ordered.find((candidate) =>
-          candidate.resolveBarrier != null &&
-          candidate.barrierResolutionState == null
+        const stalled = ordered.find(
+          (candidate) =>
+            candidate.resolveBarrier != null &&
+            candidate.barrierResolutionState == null,
         );
         if (stalled != null) {
           const failure = await resolveBarrierAt(pending.indexOf(stalled));
@@ -3030,7 +3066,7 @@ export async function completeEffectfulSourcesAsync(
               publishedDuringPrepare.add(sourceId);
               recordPublication(barrierIndex, sourceId, value);
             },
-          }).then((result) => result.success ? undefined : result),
+          }).then((result) => (result.success ? undefined : result)),
       };
       const barrierFailure = await node.prepare(nodeBarrierContext);
       if (barrierFailure != null) return barrierFailure;
@@ -3098,8 +3134,8 @@ export async function completeEffectfulSourcesAsync(
       // that order.  Only nodes that participated in the construct's
       // source collection re-register; other expanded descendants were
       // never part of it.
-      const collected = options?.isCollected?.(node) ??
-        options?.isReusable?.(node) ?? true;
+      const collected =
+        options?.isCollected?.(node) ?? options?.isReusable?.(node) ?? true;
       if (source.extractSourceValue == null || collected === false) {
         continue;
       }
@@ -3190,7 +3226,8 @@ export async function completeEffectfulSourcesAsync(
     const priorResult = session?.completedByPath.get(pathKey);
     if (priorResult != null) {
       if (
-        source.preservesSourceValue && (options?.isReusable?.(node) ?? true)
+        source.preservesSourceValue &&
+        (options?.isReusable?.(node) ?? true)
       ) {
         completed.push({
           key: node.path[node.path.length - 1],
@@ -3206,7 +3243,8 @@ export async function completeEffectfulSourcesAsync(
       // as it did when the completion first ran.
       if (
         exec.republishCachedCompletions === true &&
-        priorResult.success && priorResult.value !== undefined
+        priorResult.success &&
+        priorResult.value !== undefined
       ) {
         publishFromNode(node, source.sourceId, priorResult.value);
       }
@@ -3231,8 +3269,8 @@ export async function completeEffectfulSourcesAsync(
     // consistently with the prompted field.  (Missing-source *defaults*
     // still never override explicit failures; see
     // fillMissingSourceDefaults.)
-    const reusable = source.preservesSourceValue &&
-      (options?.isReusable?.(node) ?? true);
+    const reusable =
+      source.preservesSourceValue && (options?.isReusable?.(node) ?? true);
     // A completion that cannot be cached by the owning construct would
     // run again during the construct's final completion phase unless it
     // is deduplicated through the run-scoped session.
@@ -3282,9 +3320,7 @@ export async function completeEffectfulSourcesAsync(
  * @internal
  * @since 1.3.0
  */
-export function serializeSchedulingPath(
-  path: readonly PropertyKey[],
-): string {
+export function serializeSchedulingPath(path: readonly PropertyKey[]): string {
   return path.map(serializePathSegment).join("");
 }
 
@@ -3316,8 +3352,8 @@ function resolveSingleDeferred(
 ): ValueParserResult<unknown> {
   // deriveFrom() sets dependencyIds (always an array).
   // derive() only sets dependencyId (single value).
-  const isMultiDep = deferred.dependencyIds != null &&
-    deferred.dependencyIds.length > 0;
+  const isMultiDep =
+    deferred.dependencyIds != null && deferred.dependencyIds.length > 0;
   const depIds = isMultiDep ? deferred.dependencyIds! : [deferred.dependencyId];
   const resolution = runtime.resolveDependencies({
     dependencyIds: depIds,
@@ -3350,8 +3386,8 @@ function resolveSingleDeferredAsync(
   deferred: DeferredParseState<unknown>,
   runtime: DependencyRuntimeContext,
 ): Promise<unknown> {
-  const isMultiDep = deferred.dependencyIds != null &&
-    deferred.dependencyIds.length > 0;
+  const isMultiDep =
+    deferred.dependencyIds != null && deferred.dependencyIds.length > 0;
   const depIds = isMultiDep ? deferred.dependencyIds! : [deferred.dependencyId];
   const resolution = runtime.resolveDependencies({
     dependencyIds: depIds,
@@ -3495,7 +3531,7 @@ function resolveDeferredInState(
 
   if (Array.isArray(state)) {
     const resolved = state.map((item) =>
-      resolveDeferredInState(item, runtime, visited, deferredCache)
+      resolveDeferredInState(item, runtime, visited, deferredCache),
     );
     return resolved.every((item, index) => item === state[index])
       ? state
@@ -3504,18 +3540,20 @@ function resolveDeferredInState(
 
   if (isPlainObject(state)) {
     const keys = Reflect.ownKeys(state);
-    const resolvedEntries = keys.map((key) =>
-      [
-        key,
-        resolveDeferredInState(state[key], runtime, visited, deferredCache),
-      ] as const
+    const resolvedEntries = keys.map(
+      (key) =>
+        [
+          key,
+          resolveDeferredInState(state[key], runtime, visited, deferredCache),
+        ] as const,
     );
     if (resolvedEntries.every(([key, value]) => value === state[key])) {
       return state;
     }
-    const resolved = Object.create(
-      Object.getPrototypeOf(state),
-    ) as Record<string | symbol, unknown>;
+    const resolved = Object.create(Object.getPrototypeOf(state)) as Record<
+      string | symbol,
+      unknown
+    >;
     for (const [key, value] of resolvedEntries) {
       resolved[key] = value;
     }
@@ -3549,8 +3587,10 @@ async function resolveDeferredInStateAsync(
   state: unknown,
   runtime: DependencyRuntimeContext,
   visited: WeakSet<object> = new WeakSet<object>(),
-  deferredCache: WeakMap<DeferredParseState<unknown>, Promise<unknown>> =
-    new WeakMap(),
+  deferredCache: WeakMap<
+    DeferredParseState<unknown>,
+    Promise<unknown>
+  > = new WeakMap(),
 ): Promise<unknown> {
   if (state == null) return state;
 
@@ -3572,7 +3612,7 @@ async function resolveDeferredInStateAsync(
   if (Array.isArray(state)) {
     const resolved = await Promise.all(
       state.map((item) =>
-        resolveDeferredInStateAsync(item, runtime, visited, deferredCache)
+        resolveDeferredInStateAsync(item, runtime, visited, deferredCache),
       ),
     );
     return resolved.every((item, index) => item === state[index])
@@ -3598,9 +3638,10 @@ async function resolveDeferredInStateAsync(
     if (resolvedEntries.every(([key, value]) => value === state[key])) {
       return state;
     }
-    const resolved = Object.create(
-      Object.getPrototypeOf(state),
-    ) as Record<string | symbol, unknown>;
+    const resolved = Object.create(Object.getPrototypeOf(state)) as Record<
+      string | symbol,
+      unknown
+    >;
     for (const [key, value] of resolvedEntries) {
       resolved[key] = value;
     }
@@ -3630,9 +3671,10 @@ export function isMatchedState(
   },
 ): boolean {
   if (fieldState === undefined) return false;
-  const innerState = Array.isArray(fieldState) && fieldState.length === 1
-    ? fieldState[0]
-    : fieldState;
+  const innerState =
+    Array.isArray(fieldState) && fieldState.length === 1
+      ? fieldState[0]
+      : fieldState;
   // PendingDependencySourceState means the option was not provided.
   if (isPendingDependencySourceState(innerState)) return false;
   if (
@@ -3712,12 +3754,10 @@ export function buildRuntimeNodesFromPairs(
  * @since 1.0.0
  */
 export function buildRuntimeNodesFromArray(
-  parsers: ReadonlyArray<
-    {
-      readonly dependencyMetadata?: ParserDependencyMetadata;
-      readonly initialState?: unknown;
-    }
-  >,
+  parsers: ReadonlyArray<{
+    readonly dependencyMetadata?: ParserDependencyMetadata;
+    readonly initialState?: unknown;
+  }>,
   stateArray: readonly unknown[],
   parentPath?: readonly PropertyKey[],
 ): readonly RuntimeNode[] {
@@ -3778,10 +3818,7 @@ function getDefaultDependencySnapshotInner(
 
   if (Array.isArray(state)) {
     for (let index = state.length - 1; index >= 0; index--) {
-      const snapshot = getDefaultDependencySnapshotInner(
-        state[index],
-        visited,
-      );
+      const snapshot = getDefaultDependencySnapshotInner(state[index], visited);
       if (snapshot != null) return snapshot;
     }
     return undefined;

@@ -8,7 +8,8 @@
 import { runProgram, type RunProgramOptions } from "@optique/discover";
 import type { CapturedOutput } from "./index.ts";
 
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
+  ? Omit<T, K>
   : never;
 
 /**
@@ -20,13 +21,14 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
  * @template R The resource made available by program-level lifecycle hooks.
  * @since 1.3.0
  */
-export type CaptureProgramRunOptions<R = unknown> =
-  & DistributiveOmit<RunProgramOptions<R>, "stdout" | "stderr" | "onExit">
-  & {
-    readonly stdout?: never;
-    readonly stderr?: never;
-    readonly onExit?: never;
-  };
+export type CaptureProgramRunOptions<R = unknown> = DistributiveOmit<
+  RunProgramOptions<R>,
+  "stdout" | "stderr" | "onExit"
+> & {
+  readonly stdout?: never;
+  readonly stderr?: never;
+  readonly onExit?: never;
+};
 
 /**
  * Captured output and exit code from a command program execution.

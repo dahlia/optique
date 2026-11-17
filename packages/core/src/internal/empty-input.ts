@@ -72,13 +72,13 @@ export interface EmptyInputFacts {
 export type EmptyStepState =
   | { readonly unchanged: true }
   | {
-    /**
-     * Builds an exemplar of the resulting state from the state the step
-     * started from, so that parts the step left untouched keep their
-     * identity, as they do at runtime.
-     */
-    readonly state: (initialState: unknown) => unknown;
-  };
+      /**
+       * Builds an exemplar of the resulting state from the state the step
+       * started from, so that parts the step left untouched keep their
+       * identity, as they do at runtime.
+       */
+      readonly state: (initialState: unknown) => unknown;
+    };
 
 /**
  * The state of an empty step that leaves its input state unchanged.
@@ -185,14 +185,14 @@ export function defineEmptyInputFacts(
  * @returns The facts known for the parser.
  * @internal
  */
-export function getEmptyInputFacts(
-  parser: FactsTarget,
-): EmptyInputFacts {
+export function getEmptyInputFacts(parser: FactsTarget): EmptyInputFacts {
   if (!Object.hasOwn(parser, emptyInputFactsKey)) return UNKNOWN;
   const stored = (parser as ParserWithFacts)[emptyInputFactsKey];
   if (
-    stored == null || stored.parse !== parser.parse ||
-    stored.complete !== parser.complete || stored.mode !== parser.mode ||
+    stored == null ||
+    stored.parse !== parser.parse ||
+    stored.complete !== parser.complete ||
+    stored.mode !== parser.mode ||
     !sameInitialState(stored.initialState, initialStateBinding(parser))
   ) {
     return UNKNOWN;
@@ -212,21 +212,28 @@ export function inheritEmptyInputFacts(
   inner: FactsTarget,
 ): void {
   const facts = getEmptyInputFacts(inner);
-  const identical = wrapper.parse === inner.parse &&
+  const identical =
+    wrapper.parse === inner.parse &&
     wrapper.complete === inner.complete &&
     sameInitialState(initialStateBinding(wrapper), initialStateBinding(inner));
   defineEmptyInputFacts(
     wrapper,
-    identical ? facts : {
-      ...(Object.keys(facts).length < 1 ? {} : {
-        probe: facts.step === undefined ? {} : { step: facts.step },
-      }),
-      ...(facts.step === undefined ? {} : { step: facts.step }),
-      ...(facts.afterStep === undefined ? {} : { afterStep: facts.afterStep }),
-      ...(facts.fromInitial === undefined
-        ? {}
-        : { fromInitial: facts.fromInitial }),
-    },
+    identical
+      ? facts
+      : {
+          ...(Object.keys(facts).length < 1
+            ? {}
+            : {
+                probe: facts.step === undefined ? {} : { step: facts.step },
+              }),
+          ...(facts.step === undefined ? {} : { step: facts.step }),
+          ...(facts.afterStep === undefined
+            ? {}
+            : { afterStep: facts.afterStep }),
+          ...(facts.fromInitial === undefined
+            ? {}
+            : { fromInitial: facts.fromInitial }),
+        },
   );
 }
 
@@ -237,9 +244,7 @@ export function inheritEmptyInputFacts(
  * @returns `true` or `false` when known, `undefined` otherwise.
  * @internal
  */
-export function acceptsEmptyInput(
-  facts: EmptyInputFacts,
-): boolean | undefined {
+export function acceptsEmptyInput(facts: EmptyInputFacts): boolean | undefined {
   if (facts.step === "failure") return false;
   if (facts.step == null) return undefined;
   return facts.afterStep;
@@ -303,13 +308,13 @@ export function optionalLikeFacts(
   const facts = computeOptionalLikeFacts(child, childInitialState, fromInitial);
   return child.probe !== undefined
     ? {
-      ...facts,
-      probe: computeOptionalLikeFacts(
-        probeFacts(child),
-        childInitialState,
-        fromInitial,
-      ),
-    }
+        ...facts,
+        probe: computeOptionalLikeFacts(
+          probeFacts(child),
+          childInitialState,
+          fromInitial,
+        ),
+      }
     : facts;
 }
 
@@ -329,9 +334,11 @@ function computeOptionalLikeFacts(
   if (child.step == null) return { fromInitial };
   return {
     step: child.step,
-    ...(child.next == null ? {} : {
-      next: wrapInFreshArray(child.next, childInitialState),
-    }),
+    ...(child.next == null
+      ? {}
+      : {
+          next: wrapInFreshArray(child.next, childInitialState),
+        }),
     afterStep: child.afterStep,
     fromInitial,
   };
@@ -361,14 +368,14 @@ export function multipleFacts(
   );
   return child.probe !== undefined
     ? {
-      ...facts,
-      probe: computeMultipleFacts(
-        probeFacts(child),
-        retainsItem,
-        childInitialState,
-        min,
-      ),
-    }
+        ...facts,
+        probe: computeMultipleFacts(
+          probeFacts(child),
+          retainsItem,
+          childInitialState,
+          min,
+        ),
+      }
     : facts;
 }
 
@@ -382,11 +389,11 @@ function computeMultipleFacts(
   if (child.step === "failure") {
     return min < 1
       ? {
-        step: "success",
-        next: UNCHANGED,
-        afterStep: true,
-        fromInitial,
-      }
+          step: "success",
+          next: UNCHANGED,
+          afterStep: true,
+          fromInitial,
+        }
       : { step: "failure", fromInitial };
   }
   if (child.step == null || retainsItem == null) return { fromInitial };
@@ -400,11 +407,13 @@ function computeMultipleFacts(
   }
   return {
     step: child.step,
-    ...(child.next == null ? {} : {
-      next: wrapInFreshArray(child.next, childInitialState),
-    }),
-    afterStep: child.afterStep == null ? undefined : min <= 1 &&
-      child.afterStep,
+    ...(child.next == null
+      ? {}
+      : {
+          next: wrapInFreshArray(child.next, childInitialState),
+        }),
+    afterStep:
+      child.afterStep == null ? undefined : min <= 1 && child.afterStep,
     fromInitial,
   };
 }
@@ -464,23 +473,19 @@ function exclusiveNextState(index: number): EmptyStepState {
  * @returns The facts of the combinator.
  * @internal
  */
-export function orFacts(
-  branches: readonly ExclusiveBranch[],
-): EmptyInputFacts {
+export function orFacts(branches: readonly ExclusiveBranch[]): EmptyInputFacts {
   const facts = computeOrFacts(branches);
   return branches.some((c) => c.facts.probe !== undefined)
     ? {
-      ...facts,
-      probe: computeOrFacts(
-        branches.map((b) => ({ ...b, facts: probeFacts(b.facts) })),
-      ),
-    }
+        ...facts,
+        probe: computeOrFacts(
+          branches.map((b) => ({ ...b, facts: probeFacts(b.facts) })),
+        ),
+      }
     : facts;
 }
 
-function computeOrFacts(
-  branches: readonly ExclusiveBranch[],
-): EmptyInputFacts {
+function computeOrFacts(branches: readonly ExclusiveBranch[]): EmptyInputFacts {
   const candidate = selectZeroInputCandidate(branches);
   if (candidate === undefined) return {};
   const fromInitial = exclusiveFromInitial(branches);
@@ -507,11 +512,11 @@ export function longestMatchFacts(
   const facts = computeLongestMatchFacts(branches);
   return branches.some((c) => c.facts.probe !== undefined)
     ? {
-      ...facts,
-      probe: computeLongestMatchFacts(
-        branches.map((b) => ({ ...b, facts: probeFacts(b.facts) })),
-      ),
-    }
+        ...facts,
+        probe: computeLongestMatchFacts(
+          branches.map((b) => ({ ...b, facts: probeFacts(b.facts) })),
+        ),
+      }
     : facts;
 }
 
@@ -576,11 +581,11 @@ export function tupleFacts(
   const facts = computeTupleFacts(children);
   return children.some((c) => c.facts.probe !== undefined)
     ? {
-      ...facts,
-      probe: computeTupleFacts(
-        children.map((c) => ({ ...c, facts: probeFacts(c.facts) })),
-      ),
-    }
+        ...facts,
+        probe: computeTupleFacts(
+          children.map((c) => ({ ...c, facts: probeFacts(c.facts) })),
+        ),
+      }
     : facts;
 }
 
@@ -603,13 +608,13 @@ function computeTupleFacts(
     // tuple() passes each child its slot of the tuple state and copies the
     // slots into a fresh array.
     const steps = children.map((c) =>
-      c.facts.step === "failure" ? undefined : c.facts.next
+      c.facts.step === "failure" ? undefined : c.facts.next,
     );
     next = {
       state: (initialState) => {
         const slots = Array.isArray(initialState) ? initialState : [];
         return steps.map((step, i) =>
-          step == null ? slots[i] : resolveEmptyStepState(step, slots[i])
+          step == null ? slots[i] : resolveEmptyStepState(step, slots[i]),
         );
       },
     };

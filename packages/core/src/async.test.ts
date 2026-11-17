@@ -91,9 +91,7 @@ function asyncInteger(): ValueParser<"async", number> {
 /**
  * Creates an async value parser with suggestions.
  */
-function asyncChoice(
-  choices: readonly string[],
-): ValueParser<"async", string> {
+function asyncChoice(choices: readonly string[]): ValueParser<"async", string> {
   return {
     mode: "async",
     metavar: "ASYNC_CHOICE",
@@ -759,24 +757,18 @@ describe("Async edge cases", () => {
 describe("Additional async construct tests", () => {
   describe("conditional()", () => {
     it("should propagate async mode from discriminator", () => {
-      const parser = conditional(
-        option("--type", asyncChoice(["a", "b"])),
-        {
-          a: object({ name: option("--name", string()) }),
-          b: object({ count: option("--count", integer()) }),
-        },
-      );
+      const parser = conditional(option("--type", asyncChoice(["a", "b"])), {
+        a: object({ name: option("--name", string()) }),
+        b: object({ count: option("--count", integer()) }),
+      });
       assert.equal(parser.mode, "async");
     });
 
     it("should propagate async mode from branch parsers", () => {
-      const parser = conditional(
-        option("--type", choice(["a", "b"])),
-        {
-          a: object({ name: option("--name", asyncString()) }),
-          b: object({ count: option("--count", integer()) }),
-        },
-      );
+      const parser = conditional(option("--type", choice(["a", "b"])), {
+        a: object({ name: option("--name", asyncString()) }),
+        b: object({ count: option("--count", integer()) }),
+      });
       assert.equal(parser.mode, "async");
     });
 
@@ -1088,10 +1080,7 @@ describe("Async complete() error handling", () => {
   });
 
   it("should propagate complete() errors in async tuple", async () => {
-    const parser = tuple([
-      argument(asyncInteger()),
-      argument(string()),
-    ]);
+    const parser = tuple([argument(asyncInteger()), argument(string())]);
     const result = await parseAsync(parser, ["not-a-number", "hello"]);
     assert.ok(!result.success);
   });
@@ -1145,18 +1134,18 @@ describe("Concurrent async behavior", () => {
 
     // Each should have appropriate suggestions
     const jSuggestions = results[0]
-      .filter((s): s is { kind: "literal"; text: string } =>
-        s.kind === "literal"
+      .filter(
+        (s): s is { kind: "literal"; text: string } => s.kind === "literal",
       )
       .map((s) => s.text);
     const ySuggestions = results[1]
-      .filter((s): s is { kind: "literal"; text: string } =>
-        s.kind === "literal"
+      .filter(
+        (s): s is { kind: "literal"; text: string } => s.kind === "literal",
       )
       .map((s) => s.text);
     const xSuggestions = results[2]
-      .filter((s): s is { kind: "literal"; text: string } =>
-        s.kind === "literal"
+      .filter(
+        (s): s is { kind: "literal"; text: string } => s.kind === "literal",
       )
       .map((s) => s.text);
 
@@ -1317,12 +1306,7 @@ describe("State persistence across multiple parse calls", () => {
       });
 
       // First parse: 2 items
-      const result1 = await parseAsync(parser, [
-        "--item",
-        "a",
-        "--item",
-        "b",
-      ]);
+      const result1 = await parseAsync(parser, ["--item", "a", "--item", "b"]);
       assert.ok(result1.success);
       if (result1.success) {
         assert.deepEqual(result1.value.items, ["A", "B"]);
@@ -1467,8 +1451,8 @@ describe("State persistence across multiple parse calls", () => {
       // Get suggestions for 'j'
       const suggestions1 = await suggestAsync(parser, ["--format", "j"]);
       const literals1 = suggestions1
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
       assert.ok(literals1.includes("json"));
@@ -1476,8 +1460,8 @@ describe("State persistence across multiple parse calls", () => {
       // Get suggestions for 'y' - should not be affected by previous
       const suggestions2 = await suggestAsync(parser, ["--format", "y"]);
       const literals2 = suggestions2
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
       assert.ok(literals2.includes("yaml"));
@@ -1485,8 +1469,8 @@ describe("State persistence across multiple parse calls", () => {
       // Get suggestions for 'j' again - should be same as first
       const suggestions3 = await suggestAsync(parser, ["--format", "j"]);
       const literals3 = suggestions3
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
       assert.ok(literals3.includes("json"));
@@ -1774,12 +1758,7 @@ describe("Multi-level modifier chains with async", () => {
       }
 
       // With tags
-      const result2 = await parseAsync(parser, [
-        "--tag",
-        "a",
-        "--tag",
-        "b",
-      ]);
+      const result2 = await parseAsync(parser, ["--tag", "a", "--tag", "b"]);
       assert.ok(result2.success);
       if (result2.success) {
         assert.deepEqual(result2.value.tags, ["A", "B"]);
@@ -2042,14 +2021,10 @@ describe("Complex suggest scenarios with async", () => {
       );
 
       // Get suggestions for --type inside create command
-      const suggestions = await suggestAsync(parser, [
-        "create",
-        "--type",
-        "a",
-      ]);
+      const suggestions = await suggestAsync(parser, ["create", "--type", "a"]);
       const literals = suggestions
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
       assert.ok(literals.includes("admin"));
@@ -2071,8 +2046,8 @@ describe("Complex suggest scenarios with async", () => {
       // Should suggest options from both branches when at option position
       const suggestions = await suggestAsync(parser, ["--"]);
       const literals = suggestions
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
       assert.ok(literals.includes("--format"));
@@ -2092,8 +2067,8 @@ describe("Complex suggest scenarios with async", () => {
       // Suggestions for format
       const formatSuggestions = await suggestAsync(parser, ["--format", "j"]);
       const formatLiterals = formatSuggestions
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
       assert.ok(formatLiterals.includes("json"));
@@ -2101,8 +2076,8 @@ describe("Complex suggest scenarios with async", () => {
       // Suggestions for level
       const levelSuggestions = await suggestAsync(parser, ["--level", "d"]);
       const levelLiterals = levelSuggestions
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
       assert.ok(levelLiterals.includes("debug"));
@@ -2124,8 +2099,8 @@ describe("Complex suggest scenarios with async", () => {
       // Both branches should contribute suggestions
       const suggestions = await suggestAsync(parser, ["--"]);
       const literals = suggestions
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
       assert.ok(literals.includes("--mode"));
@@ -2147,8 +2122,8 @@ describe("Complex suggest scenarios with async", () => {
         "--",
       ]);
       const literals = suggestions
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
       assert.ok(literals.includes("--output"));
@@ -2169,8 +2144,8 @@ describe("Complex suggest scenarios with async", () => {
         "u",
       ]);
       const literals = suggestions
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
       assert.ok(literals.includes("urgent"));
@@ -2192,10 +2167,7 @@ describe("Error propagation in complex async structures", () => {
           object({ count: argument(asyncInteger()) }), // Will fail on invalid input
         ),
       ),
-      command(
-        "help",
-        object({ topic: constant("help" as const) }),
-      ),
+      command("help", object({ topic: constant("help" as const) })),
     );
 
     const result = await parseAsync(parser, ["process", "-v", "not-a-number"]);
@@ -2322,11 +2294,7 @@ describe("passThrough() with async combinations", () => {
 
     assert.equal(parser.mode, "async");
 
-    const result = await parseAsync(parser, [
-      "--count",
-      "42",
-      "--foo=bar",
-    ]);
+    const result = await parseAsync(parser, ["--count", "42", "--foo=bar"]);
     assert.ok(
       result.success,
       `Expected success but got: ${JSON.stringify(result)}`,
@@ -2345,12 +2313,7 @@ describe("passThrough() with async combinations", () => {
 
     assert.equal(parser.mode, "async");
 
-    const result = await parseAsync(parser, [
-      "--count",
-      "42",
-      "extra",
-      "args",
-    ]);
+    const result = await parseAsync(parser, ["--count", "42", "extra", "args"]);
     assert.ok(
       result.success,
       `Expected success but got: ${JSON.stringify(result)}`,
@@ -2368,13 +2331,10 @@ describe("passThrough() with async combinations", () => {
 
 describe("conditional() actual parsing with async", () => {
   it("should propagate async mode from discriminator", () => {
-    const parser = conditional(
-      option("--type", asyncChoice(["json", "xml"])),
-      {
-        json: object({ indent: withDefault(option("--indent", integer()), 2) }),
-        xml: object({ pretty: withDefault(flag("--pretty"), false) }),
-      },
-    );
+    const parser = conditional(option("--type", asyncChoice(["json", "xml"])), {
+      json: object({ indent: withDefault(option("--indent", integer()), 2) }),
+      xml: object({ pretty: withDefault(flag("--pretty"), false) }),
+    });
 
     assert.equal(parser.mode, "async");
   });
@@ -2389,26 +2349,20 @@ describe("conditional() actual parsing with async", () => {
   });
 
   it("should propagate async mode from both discriminator and branches", () => {
-    const parser = conditional(
-      option("--type", asyncChoice(["x", "y"])),
-      {
-        x: object({ val: option("--val", asyncString()) }),
-        y: object({ num: option("--num", asyncInteger()) }),
-      },
-    );
+    const parser = conditional(option("--type", asyncChoice(["x", "y"])), {
+      x: object({ val: option("--val", asyncString()) }),
+      y: object({ num: option("--num", asyncInteger()) }),
+    });
 
     assert.equal(parser.mode, "async");
   });
 
   // Actual parsing tests - these test that async actually works
   it("should parse with async discriminator", async () => {
-    const parser = conditional(
-      option("--type", asyncChoice(["json", "xml"])),
-      {
-        json: object({ indent: withDefault(option("--indent", integer()), 2) }),
-        xml: object({ pretty: withDefault(flag("--pretty"), false) }),
-      },
-    );
+    const parser = conditional(option("--type", asyncChoice(["json", "xml"])), {
+      json: object({ indent: withDefault(option("--indent", integer()), 2) }),
+      xml: object({ pretty: withDefault(flag("--pretty"), false) }),
+    });
 
     const result = await parseAsync(parser, [
       "--type",
@@ -2447,13 +2401,10 @@ describe("conditional() actual parsing with async", () => {
   });
 
   it("should parse with async discriminator and async branches", async () => {
-    const parser = conditional(
-      option("--type", asyncChoice(["x", "y"])),
-      {
-        x: object({ val: option("--val", asyncString()) }),
-        y: object({ num: option("--num", asyncInteger()) }),
-      },
-    );
+    const parser = conditional(option("--type", asyncChoice(["x", "y"])), {
+      x: object({ val: option("--val", asyncString()) }),
+      y: object({ num: option("--num", asyncInteger()) }),
+    });
 
     const result = await parseAsync(parser, ["--type", "x", "--val", "test"]);
     assert.ok(
@@ -2756,10 +2707,7 @@ describe("Nested commands with async", () => {
     const cmdA = command(
       "cmd-a",
       object({
-        subA: command(
-          "sub-a",
-          object({ val: option("--val", asyncString()) }),
-        ),
+        subA: command("sub-a", object({ val: option("--val", asyncString()) })),
       }),
     );
 
@@ -2854,9 +2802,8 @@ describe("map() after other modifiers with async", () => {
 
   it("should handle map(multiple(...)) with async", async () => {
     const parser = object({
-      total: map(
-        multiple(option("--num", asyncInteger())),
-        (nums) => nums.reduce((a, b) => a + b, 0),
+      total: map(multiple(option("--num", asyncInteger())), (nums) =>
+        nums.reduce((a, b) => a + b, 0),
       ),
     });
 
@@ -2906,10 +2853,7 @@ describe("map() after other modifiers with async", () => {
     const parser = object({
       result: map(
         map(
-          withDefault(
-            optional(option("--value", asyncString())),
-            "DEFAULT",
-          ),
+          withDefault(optional(option("--value", asyncString())), "DEFAULT"),
           (s) => s?.toLowerCase() ?? "none",
         ),
         (s) => `processed: ${s}`,
@@ -3363,10 +3307,7 @@ describe("Complex nested modifier chains with async", () => {
   it("should handle optional(multiple(map(...))) chain", async () => {
     const parser = object({
       tags: optional(
-        map(
-          multiple(option("--tag", asyncString())),
-          (tags) => tags.join(","),
-        ),
+        map(multiple(option("--tag", asyncString())), (tags) => tags.join(",")),
       ),
     });
 
@@ -3643,19 +3584,16 @@ describe("Nested combinators with async", () => {
     });
 
     it("should handle conditional with async or() branches", async () => {
-      const parser = conditional(
-        option("--type", choice(["a", "b"])),
-        {
-          a: or(
-            object({ x: option("-x", asyncString()) }),
-            object({ y: option("-y", asyncInteger()) }),
-          ),
-          b: or(
-            object({ p: option("-p", asyncString()) }),
-            object({ q: option("-q", asyncInteger()) }),
-          ),
-        },
-      );
+      const parser = conditional(option("--type", choice(["a", "b"])), {
+        a: or(
+          object({ x: option("-x", asyncString()) }),
+          object({ y: option("-y", asyncInteger()) }),
+        ),
+        b: or(
+          object({ p: option("-p", asyncString()) }),
+          object({ q: option("-q", asyncInteger()) }),
+        ),
+      });
 
       const result = await parseAsync(parser, ["--type", "a", "-x", "hello"]);
       assert.ok(result.success, `Expected success: ${JSON.stringify(result)}`);
@@ -3669,15 +3607,12 @@ describe("Nested combinators with async", () => {
   describe("conditional() inside or()", () => {
     it("should handle or() with conditional branches", async () => {
       const parser = or(
-        conditional(
-          option("--format", asyncChoice(["json", "xml"])),
-          {
-            json: object({
-              indent: withDefault(option("--indent", integer()), 2),
-            }),
-            xml: object({ pretty: withDefault(flag("--pretty"), false) }),
-          },
-        ),
+        conditional(option("--format", asyncChoice(["json", "xml"])), {
+          json: object({
+            indent: withDefault(option("--indent", integer()), 2),
+          }),
+          xml: object({ pretty: withDefault(flag("--pretty"), false) }),
+        }),
         object({
           raw: flag("--raw"),
         }),
@@ -3704,21 +3639,15 @@ describe("Nested combinators with async", () => {
     });
 
     it("should handle multiple conditionals in or()", async () => {
-      const conditionalA = conditional(
-        option("-a", asyncChoice(["x", "y"])),
-        {
-          x: object({ xVal: option("--x-val", asyncString()) }),
-          y: object({ yVal: option("--y-val", asyncInteger()) }),
-        },
-      );
+      const conditionalA = conditional(option("-a", asyncChoice(["x", "y"])), {
+        x: object({ xVal: option("--x-val", asyncString()) }),
+        y: object({ yVal: option("--y-val", asyncInteger()) }),
+      });
 
-      const conditionalB = conditional(
-        option("-b", asyncChoice(["p", "q"])),
-        {
-          p: object({ pVal: option("--p-val", asyncString()) }),
-          q: object({ qVal: option("--q-val", asyncInteger()) }),
-        },
-      );
+      const conditionalB = conditional(option("-b", asyncChoice(["p", "q"])), {
+        p: object({ pVal: option("--p-val", asyncString()) }),
+        q: object({ qVal: option("--q-val", asyncInteger()) }),
+      });
 
       const parser = or(conditionalA, conditionalB);
 
@@ -3800,13 +3729,10 @@ describe("Nested combinators with async", () => {
     // We need to use object() with conditional() wrapped to test this pattern.
     it("should handle conditional result extracted via map", async () => {
       const condParser = map(
-        conditional(
-          option("--type", asyncChoice(["a", "b"])),
-          {
-            a: object({ aOpt: withDefault(option("--a-opt", integer()), 0) }),
-            b: object({ bOpt: withDefault(option("--b-opt", integer()), 0) }),
-          },
-        ),
+        conditional(option("--type", asyncChoice(["a", "b"])), {
+          a: object({ aOpt: withDefault(option("--a-opt", integer()), 0) }),
+          b: object({ bOpt: withDefault(option("--b-opt", integer()), 0) }),
+        }),
         ([type, data]) => ({ type, data }),
       );
 
@@ -3832,24 +3758,18 @@ describe("Nested combinators with async", () => {
 
     it("should handle multiple conditionals in tuple", async () => {
       const condX = map(
-        conditional(
-          option("-x", asyncChoice(["1", "2"])),
-          {
-            "1": object({ x1: withDefault(flag("--x1"), false) }),
-            "2": object({ x2: withDefault(flag("--x2"), false) }),
-          },
-        ),
+        conditional(option("-x", asyncChoice(["1", "2"])), {
+          "1": object({ x1: withDefault(flag("--x1"), false) }),
+          "2": object({ x2: withDefault(flag("--x2"), false) }),
+        }),
         ([key, val]) => ({ xKey: key, ...val }),
       );
 
       const condY = map(
-        conditional(
-          option("-y", asyncChoice(["a", "b"])),
-          {
-            a: object({ ya: withDefault(flag("--ya"), false) }),
-            b: object({ yb: withDefault(flag("--yb"), false) }),
-          },
-        ),
+        conditional(option("-y", asyncChoice(["a", "b"])), {
+          a: object({ ya: withDefault(flag("--ya"), false) }),
+          b: object({ yb: withDefault(flag("--yb"), false) }),
+        }),
         ([key, val]) => ({ yKey: key, ...val }),
       );
 
@@ -3875,24 +3795,18 @@ describe("Nested combinators with async", () => {
 
   describe("longestMatch() with conditional()", () => {
     it("should handle conditional inside longestMatch", async () => {
-      const condA = conditional(
-        option("-t", asyncChoice(["x", "y"])),
-        {
-          x: object({ xo: option("--xo", asyncString()) }),
-          y: object({ yo: option("--yo", asyncString()) }),
-        },
-      );
+      const condA = conditional(option("-t", asyncChoice(["x", "y"])), {
+        x: object({ xo: option("--xo", asyncString()) }),
+        y: object({ yo: option("--yo", asyncString()) }),
+      });
 
-      const condB = conditional(
-        option("-t", asyncChoice(["x", "y"])),
-        {
-          x: object({
-            xo: option("--xo", asyncString()),
-            extra: option("--extra", asyncInteger()),
-          }),
-          y: object({ yo: option("--yo", asyncString()) }),
-        },
-      );
+      const condB = conditional(option("-t", asyncChoice(["x", "y"])), {
+        x: object({
+          xo: option("--xo", asyncString()),
+          extra: option("--extra", asyncInteger()),
+        }),
+        y: object({ yo: option("--yo", asyncString()) }),
+      });
 
       const parser = longestMatch(condA, condB);
 
@@ -3980,7 +3894,7 @@ describe("group() actual parsing with async", () => {
     const parser = group("Output", inner);
 
     const suggestions = await suggestAsync(parser, ["--format", ""]);
-    const texts = suggestions.map((s) => s.kind === "literal" ? s.text : "");
+    const texts = suggestions.map((s) => (s.kind === "literal" ? s.text : ""));
 
     assert.ok(texts.includes("json"));
     assert.ok(texts.includes("xml"));
@@ -3996,15 +3910,12 @@ describe("passThrough() with conditional() and async", () => {
   it("should handle passThrough alongside conditional in object", async () => {
     // Use map() to convert conditional result for use in object
     const condResult = map(
-      conditional(
-        option("--mode", asyncChoice(["run", "build"])),
-        {
-          run: object({ port: withDefault(option("--port", integer()), 8080) }),
-          build: object({
-            output: withDefault(option("--output", string()), "dist"),
-          }),
-        },
-      ),
+      conditional(option("--mode", asyncChoice(["run", "build"])), {
+        run: object({ port: withDefault(option("--port", integer()), 8080) }),
+        build: object({
+          output: withDefault(option("--output", string()), "dist"),
+        }),
+      }),
       ([mode, data]) => ({ mode, ...data }),
     );
 
@@ -4085,10 +3996,7 @@ describe("Additional async parsing edge cases", () => {
 
   it("should handle async parsers in both branches of withDefault", async () => {
     const parser = object({
-      value: withDefault(
-        option("--val", asyncString()),
-        "DEFAULT",
-      ),
+      value: withDefault(option("--val", asyncString()), "DEFAULT"),
     });
 
     // Without option - uses default
@@ -4364,35 +4272,26 @@ describe("Edge cases in nested async structures", () => {
     // Three levels of conditional nesting using object() instead of merge()
     // since conditional returns tuple, not object
     const level3 = map(
-      conditional(
-        option("--c", asyncChoice(["1", "2"])),
-        {
-          "1": object({ val: constant("c1" as const) }),
-          "2": object({ val: constant("c2" as const) }),
-        },
-      ),
+      conditional(option("--c", asyncChoice(["1", "2"])), {
+        "1": object({ val: constant("c1" as const) }),
+        "2": object({ val: constant("c2" as const) }),
+      }),
       ([key, val]) => ({ cKey: key, ...val }),
     );
 
     const level2 = map(
-      conditional(
-        option("--b", asyncChoice(["x", "y"])),
-        {
-          x: object({ bVal: constant("bx" as const), level3 }),
-          y: object({ bVal: constant("by" as const) }),
-        },
-      ),
+      conditional(option("--b", asyncChoice(["x", "y"])), {
+        x: object({ bVal: constant("bx" as const), level3 }),
+        y: object({ bVal: constant("by" as const) }),
+      }),
       ([key, val]) => ({ bKey: key, ...val }),
     );
 
     const level1 = map(
-      conditional(
-        option("--a", asyncChoice(["p", "q"])),
-        {
-          p: object({ aVal: constant("ap" as const), level2 }),
-          q: object({ aVal: constant("aq" as const) }),
-        },
-      ),
+      conditional(option("--a", asyncChoice(["p", "q"])), {
+        p: object({ aVal: constant("ap" as const), level2 }),
+        q: object({ aVal: constant("aq" as const) }),
+      }),
       ([key, val]) => ({ aKey: key, ...val }),
     );
 
@@ -4493,14 +4392,11 @@ describe("Edge cases in nested async structures", () => {
 
     // Use object() with map() to wrap conditional since conditional returns tuple
     const condParser = map(
-      conditional(
-        option("--mode", choice(["test"])),
-        {
-          test: object({
-            inner: option("--inner", failingParser),
-          }),
-        },
-      ),
+      conditional(option("--mode", choice(["test"])), {
+        test: object({
+          inner: option("--inner", failingParser),
+        }),
+      }),
       ([mode, data]) => ({ mode, ...data }),
     );
 
@@ -4934,11 +4830,14 @@ describe("Realistic async I/O scenarios", () => {
 
   describe("simulated database connection string validation", () => {
     // Simulates validating a database connection string by attempting connection
-    function asyncDbConnectionValidator(): ValueParser<"async", {
-      host: string;
-      port: number;
-      database: string;
-    }> {
+    function asyncDbConnectionValidator(): ValueParser<
+      "async",
+      {
+        host: string;
+        port: number;
+        database: string;
+      }
+    > {
       return {
         mode: "async",
         metavar: "DB_URL",
@@ -4953,8 +4852,7 @@ describe("Realistic async I/O scenarios", () => {
           if (!match) {
             return {
               success: false,
-              error:
-                message`Invalid connection string format. Expected: host:port/database`,
+              error: message`Invalid connection string format. Expected: host:port/database`,
             };
           }
 
@@ -4978,9 +4876,11 @@ describe("Realistic async I/O scenarios", () => {
             value: { host, port, database },
           };
         },
-        format(
-          value: { host: string; port: number; database: string },
-        ): string {
+        format(value: {
+          host: string;
+          port: number;
+          database: string;
+        }): string {
           return `${value.host}:${value.port}/${value.database}`;
         },
       };
@@ -4991,10 +4891,7 @@ describe("Realistic async I/O scenarios", () => {
         db: option("--db", asyncDbConnectionValidator()),
       });
 
-      const result = await parseAsync(parser, [
-        "--db",
-        "localhost:5432/myapp",
-      ]);
+      const result = await parseAsync(parser, ["--db", "localhost:5432/myapp"]);
       assert.ok(result.success);
       if (result.success) {
         assert.deepEqual(result.value.db, {
@@ -5010,10 +4907,7 @@ describe("Realistic async I/O scenarios", () => {
         db: option("--db", asyncDbConnectionValidator()),
       });
 
-      const result = await parseAsync(parser, [
-        "--db",
-        "localhost:9999/myapp",
-      ]);
+      const result = await parseAsync(parser, ["--db", "localhost:9999/myapp"]);
       assert.ok(!result.success);
     });
 
@@ -5047,9 +4941,9 @@ describe("Realistic async I/O scenarios", () => {
           }
           return {
             success: false,
-            error: message`Invalid environment: ${input}. Valid options: ${
-              availableOptions.join(", ")
-            }`,
+            error: message`Invalid environment: ${input}. Valid options: ${availableOptions.join(
+              ", ",
+            )}`,
           };
         },
         async *suggest(prefix: string): AsyncIterable<Suggestion> {
@@ -5088,8 +4982,8 @@ describe("Realistic async I/O scenarios", () => {
 
       const suggestions = await suggestAsync(parser, ["--env", "dev"]);
       const literals = suggestions
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
       assert.ok(literals.includes("development"));
@@ -5169,17 +5063,16 @@ describe("Realistic async I/O scenarios", () => {
           if (input.length < 3) {
             return {
               success: false,
-              error: message`Value must be at least 3 characters, got ${
-                String(input.length)
-              }`,
+              error: message`Value must be at least 3 characters, got ${String(
+                input.length,
+              )}`,
             };
           }
 
           if (!/^[a-z]+$/.test(input)) {
             return {
               success: false,
-              error:
-                message`Value must contain only lowercase letters: ${input}`,
+              error: message`Value must contain only lowercase letters: ${input}`,
             };
           }
 
@@ -5425,10 +5318,7 @@ describe("map() modifier with async parsers", () => {
   describe("sync map function with async parser", () => {
     it("should apply sync map to async parser result", async () => {
       const parser = object({
-        value: map(
-          option("--value", asyncString()),
-          (s) => s.toLowerCase(),
-        ),
+        value: map(option("--value", asyncString()), (s) => s.toLowerCase()),
       });
 
       const result = await parseAsync(parser, ["--value", "HELLO"]);
@@ -5441,10 +5331,7 @@ describe("map() modifier with async parsers", () => {
 
     it("should apply sync map to async argument", async () => {
       const parser = object({
-        num: map(
-          argument(asyncInteger()),
-          (n) => n * 2,
-        ),
+        num: map(argument(asyncInteger()), (n) => n * 2),
       });
 
       const result = await parseAsync(parser, ["21"]);
@@ -5457,10 +5344,7 @@ describe("map() modifier with async parsers", () => {
     it("should chain multiple sync maps on async parser", async () => {
       const parser = object({
         value: map(
-          map(
-            option("--value", asyncString()),
-            (s) => s.toLowerCase(),
-          ),
+          map(option("--value", asyncString()), (s) => s.toLowerCase()),
           (s) => s.split("").reverse().join(""),
         ),
       });
@@ -5789,8 +5673,8 @@ describe("longestMatch() with async parsers", () => {
 
       const suggestions = await suggestAsync(parser, ["--"]);
       const literals = suggestions
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
 
@@ -5811,9 +5695,7 @@ describe("concat() with async parsers", () => {
         option("--name", asyncString()),
         option("--age", asyncInteger()),
       ]);
-      const tupleB = tuple([
-        option("--city", asyncString()),
-      ]);
+      const tupleB = tuple([option("--city", asyncString())]);
 
       const parser = concat(tupleA, tupleB);
 
@@ -5919,13 +5801,8 @@ describe("concat() with async parsers", () => {
     });
 
     it("should handle multiple arguments in each tuple", async () => {
-      const tupleA = tuple([
-        argument(asyncString()),
-        argument(asyncString()),
-      ]);
-      const tupleB = tuple([
-        argument(asyncInteger()),
-      ]);
+      const tupleA = tuple([argument(asyncString()), argument(asyncString())]);
+      const tupleB = tuple([argument(asyncInteger())]);
 
       const parser = concat(tupleA, tupleB);
 
@@ -6054,8 +5931,8 @@ describe("concat() with async parsers", () => {
 
       const suggestions = await suggestAsync(parser, ["--"]);
       const literals = suggestions
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
 
@@ -6072,8 +5949,8 @@ describe("concat() with async parsers", () => {
 
       const suggestions = await suggestAsync(parser, ["--choice", ""]);
       const literals = suggestions
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
 
@@ -6191,10 +6068,7 @@ describe("group() with async parsers", () => {
     it("should handle grouped tuple with async elements", async () => {
       const parser = group(
         "inputs",
-        tuple([
-          argument(asyncString()),
-          argument(asyncInteger()),
-        ]),
+        tuple([argument(asyncString()), argument(asyncInteger())]),
       );
 
       const result = await parseAsync(parser, ["value", "123"]);
@@ -6260,8 +6134,8 @@ describe("group() with async parsers", () => {
 
       const suggestions = await suggestAsync(parser, ["--choice", ""]);
       const literals = suggestions
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
 
@@ -6281,8 +6155,8 @@ describe("group() with async parsers", () => {
 
       const suggestions = await suggestAsync(parser, ["--"]);
       const literals = suggestions
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
 
@@ -6301,10 +6175,7 @@ describe("group() with async parsers", () => {
       );
       const outerGroup = group(
         "outer",
-        merge(
-          innerGroup,
-          object({ extra: option("--extra", asyncInteger()) }),
-        ),
+        merge(innerGroup, object({ extra: option("--extra", asyncInteger()) })),
       );
 
       const result = await parseAsync(outerGroup, [
@@ -6455,9 +6326,9 @@ describe("shell completion with async parsers in runParser", () => {
         stderr() {},
       });
 
-      const suggestions = completionOutput.split("\n").filter((s) =>
-        s.startsWith("--")
-      );
+      const suggestions = completionOutput
+        .split("\n")
+        .filter((s) => s.startsWith("--"));
       assert.ok(suggestions.includes("--alpha"));
       assert.ok(suggestions.includes("--beta"));
     });
@@ -6803,12 +6674,7 @@ describe("multiple async parser failures (error reporting)", () => {
         b: option("--b", asyncIntegerWithMessage()),
       });
 
-      const result = await parseAsync(parser, [
-        "--a",
-        "not-int",
-        "--b",
-        "123",
-      ]);
+      const result = await parseAsync(parser, ["--a", "not-int", "--b", "123"]);
 
       assert.ok(!result.success);
     });
@@ -6888,20 +6754,14 @@ describe("multiple async parser failures (error reporting)", () => {
 
   describe("async failures in tuple", () => {
     it("should report error when any tuple element fails", async () => {
-      const parser = tuple([
-        argument(asyncString()),
-        argument(asyncInteger()),
-      ]);
+      const parser = tuple([argument(asyncString()), argument(asyncInteger())]);
 
       const result = await parseAsync(parser, ["valid", "invalid"]);
       assert.ok(!result.success);
     });
 
     it("should succeed when all tuple elements are valid", async () => {
-      const parser = tuple([
-        argument(asyncString()),
-        argument(asyncInteger()),
-      ]);
+      const parser = tuple([argument(asyncString()), argument(asyncInteger())]);
 
       const result = await parseAsync(parser, ["hello", "42"]);
       assert.ok(result.success);
@@ -6933,12 +6793,7 @@ describe("multiple async parser failures (error reporting)", () => {
         object({ b: option("--b", asyncInteger()) }),
       );
 
-      const result = await parseAsync(parser, [
-        "--a",
-        "hello",
-        "--b",
-        "42",
-      ]);
+      const result = await parseAsync(parser, ["--a", "hello", "--b", "42"]);
       assert.ok(result.success);
       if (result.success) {
         assert.equal(result.value.a, "HELLO");
@@ -6969,13 +6824,10 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
     }
 
     it("should propagate exception from async discriminator", async () => {
-      const parser = conditional(
-        option("--type", throwingAsyncChoice()),
-        {
-          a: object({ val: option("--val", string()) }),
-          b: object({ num: option("--num", integer()) }),
-        },
-      );
+      const parser = conditional(option("--type", throwingAsyncChoice()), {
+        a: object({ val: option("--val", string()) }),
+        b: object({ num: option("--num", integer()) }),
+      });
 
       await assert.rejects(
         async () => await parseAsync(parser, ["--type", "a", "--val", "test"]),
@@ -6998,13 +6850,10 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
         };
       }
 
-      const parser = conditional(
-        option("--type", choice(["a", "b"])),
-        {
-          a: object({ val: option("--val", throwingAsyncString()) }),
-          b: object({ num: option("--num", integer()) }),
-        },
-      );
+      const parser = conditional(option("--type", choice(["a", "b"])), {
+        a: object({ val: option("--val", throwingAsyncString()) }),
+        b: object({ num: option("--num", integer()) }),
+      });
 
       await assert.rejects(
         async () => await parseAsync(parser, ["--type", "a", "--val", "test"]),
@@ -7027,13 +6876,10 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
         };
       }
 
-      const parser = conditional(
-        option("--type", choice(["a", "b"])),
-        {
-          a: object({ val: option("--val", throwingAsyncString()) }),
-          b: object({ num: option("--num", asyncInteger()) }),
-        },
-      );
+      const parser = conditional(option("--type", choice(["a", "b"])), {
+        a: object({ val: option("--val", throwingAsyncString()) }),
+        b: object({ num: option("--num", asyncInteger()) }),
+      });
 
       // Using branch b which doesn't throw
       const result = await parseAsync(parser, ["--type", "b", "--num", "42"]);
@@ -7059,8 +6905,8 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
 
       const suggestions = await suggestAsync(parser, ["--type", ""]);
       const literals = suggestions
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
 
@@ -7070,18 +6916,15 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
     });
 
     it("should suggest branch options after discriminator is set", async () => {
-      const parser = conditional(
-        option("--format", asyncChoice(["a", "b"])),
-        {
-          a: object({ alpha: option("--alpha", asyncString()) }),
-          b: object({ beta: option("--beta", asyncInteger()) }),
-        },
-      );
+      const parser = conditional(option("--format", asyncChoice(["a", "b"])), {
+        a: object({ alpha: option("--alpha", asyncString()) }),
+        b: object({ beta: option("--beta", asyncInteger()) }),
+      });
 
       const suggestions = await suggestAsync(parser, ["--format", "a", "--"]);
       const literals = suggestions
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
 
@@ -7089,17 +6932,14 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
     });
 
     it("should suggest async branch option values", async () => {
-      const parser = conditional(
-        option("--mode", choice(["dev", "prod"])),
-        {
-          dev: object({
-            level: option("--level", asyncChoice(["debug", "info", "warn"])),
-          }),
-          prod: object({
-            level: option("--level", asyncChoice(["warn", "error"])),
-          }),
-        },
-      );
+      const parser = conditional(option("--mode", choice(["dev", "prod"])), {
+        dev: object({
+          level: option("--level", asyncChoice(["debug", "info", "warn"])),
+        }),
+        prod: object({
+          level: option("--level", asyncChoice(["warn", "error"])),
+        }),
+      });
 
       const suggestions = await suggestAsync(parser, [
         "--mode",
@@ -7108,8 +6948,8 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
         "",
       ]);
       const literals = suggestions
-        .filter((s): s is { kind: "literal"; text: string } =>
-          s.kind === "literal"
+        .filter(
+          (s): s is { kind: "literal"; text: string } => s.kind === "literal",
         )
         .map((s) => s.text);
 
@@ -7121,13 +6961,10 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
 
   describe("error reporting in conditional with async", () => {
     it("should report error when async discriminator fails", async () => {
-      const parser = conditional(
-        option("--type", asyncChoice(["a", "b"])),
-        {
-          a: object({ val: option("--val", string()) }),
-          b: object({ num: option("--num", integer()) }),
-        },
-      );
+      const parser = conditional(option("--type", asyncChoice(["a", "b"])), {
+        a: object({ val: option("--val", string()) }),
+        b: object({ num: option("--num", integer()) }),
+      });
 
       // Invalid discriminator value
       const result = await parseAsync(parser, ["--type", "invalid"]);
@@ -7135,13 +6972,10 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
     });
 
     it("should report error when async branch fails", async () => {
-      const parser = conditional(
-        option("--type", choice(["a", "b"])),
-        {
-          a: object({ val: option("--val", asyncInteger()) }),
-          b: object({ num: option("--num", asyncInteger()) }),
-        },
-      );
+      const parser = conditional(option("--type", choice(["a", "b"])), {
+        a: object({ val: option("--val", asyncInteger()) }),
+        b: object({ num: option("--num", asyncInteger()) }),
+      });
 
       const result = await parseAsync(parser, [
         "--type",
@@ -7204,13 +7038,10 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
 
   describe("conditional with mixed sync/async", () => {
     it("should work with sync discriminator and async branches", async () => {
-      const parser = conditional(
-        option("--type", choice(["sync", "async"])),
-        {
-          sync: object({ sval: option("--sval", string()) }),
-          async: object({ aval: option("--aval", asyncString()) }),
-        },
-      );
+      const parser = conditional(option("--type", choice(["sync", "async"])), {
+        sync: object({ sval: option("--sval", string()) }),
+        async: object({ aval: option("--aval", asyncString()) }),
+      });
 
       // Test sync branch
       const result1 = await parseAsync(parser, [
@@ -7263,17 +7094,14 @@ describe("conditional() with async discriminator and branches (comprehensive)", 
     it("should handle conditional inside command with async", async () => {
       const parser = command(
         "run",
-        conditional(
-          option("--mode", asyncChoice(["fast", "slow"])),
-          {
-            fast: object({
-              threads: withDefault(option("--threads", asyncInteger()), 4),
-            }),
-            slow: object({
-              delay: withDefault(option("--delay", asyncInteger()), 100),
-            }),
-          },
-        ),
+        conditional(option("--mode", asyncChoice(["fast", "slow"])), {
+          fast: object({
+            threads: withDefault(option("--threads", asyncInteger()), 4),
+          }),
+          slow: object({
+            delay: withDefault(option("--delay", asyncInteger()), 100),
+          }),
+        }),
       );
 
       const result = await parseAsync(parser, [
@@ -7622,11 +7450,14 @@ describe("runParserAsync", () => {
       count: option("-c", "--count", integer()),
     });
 
-    const result = await runParserAsync(
-      parser,
-      "test",
-      ["-s", "sync-val", "-a", "async-val", "-c", "42"],
-    );
+    const result = await runParserAsync(parser, "test", [
+      "-s",
+      "sync-val",
+      "-a",
+      "async-val",
+      "-c",
+      "42",
+    ]);
     assert.deepEqual(result, {
       syncName: "sync-val",
       asyncName: "ASYNC-VAL",

@@ -29,13 +29,13 @@ try {
     description: message`${parts.join(" ")}`,
     ...(render
       ? {
-        stdout(text) {
-          captured += `${text}\n`;
-        },
-        onExit(code) {
-          throw Object.assign(new Error("Render exit."), { code });
-        },
-      }
+          stdout(text) {
+            captured += `${text}\n`;
+          },
+          onExit(code) {
+            throw Object.assign(new Error("Render exit."), { code });
+          },
+        }
       : {}),
   });
 } catch (error) {

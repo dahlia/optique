@@ -22,7 +22,9 @@ function inner(
   };
   const asynchronous = option("--verbose", valueParser);
   return async
-    ? required ? asynchronous : withDefault(asynchronous, false)
+    ? required
+      ? asynchronous
+      : withDefault(asynchronous, false)
     : option("--verbose");
 }
 
@@ -36,12 +38,12 @@ describe("command-level showUsage", () => {
           command("test", inner(async), { showUsage: false }),
         ),
       });
-      for (
-        const args of [["--help"], ["build", "--help"], ["help", "build"], [
-          "test",
-          "--help",
-        ]]
-      ) {
+      for (const args of [
+        ["--help"],
+        ["build", "--help"],
+        ["help", "build"],
+        ["test", "--help"],
+      ]) {
         let output = "";
         await runParser(parser, "tool", args, {
           help: {
@@ -119,10 +121,12 @@ describe("command-level showUsage", () => {
     });
 
     it(`${mode}: isolates repeated siblings and aliases`, async () => {
-      const parser = multiple(or(
-        command("a", inner(async), { showUsage: true }),
-        command("b", inner(async), { aliases: ["bee"] }),
-      ));
+      const parser = multiple(
+        or(
+          command("a", inner(async), { showUsage: true }),
+          command("b", inner(async), { aliases: ["bee"] }),
+        ),
+      );
       assert.equal(
         (await getDocPage(parser, ["a", "bee"]))?.showUsage,
         undefined,
@@ -165,12 +169,10 @@ describe("command-level showUsage", () => {
     it(`${mode}: retains selected command policy across the options terminator`, async () => {
       for (const showUsage of [false, true]) {
         const configured = command("build", constant("CMD"), { showUsage });
-        for (
-          const parser of [
-            or(inner(async, true), configured),
-            longestMatch(inner(async, true), configured),
-          ]
-        ) {
+        for (const parser of [
+          or(inner(async, true), configured),
+          longestMatch(inner(async, true), configured),
+        ]) {
           const args = ["build", "--"];
           const result = await parse(parser, args);
           assert.ok(result.success);
@@ -261,7 +263,7 @@ describe("command-level showUsage", () => {
     );
     assert.doesNotThrow(() =>
       // @ts-expect-error Nullish runtime settings follow neighboring command options.
-      command("build", constant(false), { showUsage: null })
+      command("build", constant(false), { showUsage: null }),
     );
   });
 });

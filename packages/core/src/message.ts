@@ -19,148 +19,148 @@ export type MessageTerm =
    * A plain text term in the message.
    */
   | {
-    /**
-     * The type of the term, which is always `"text"` for plain text.
-     */
-    readonly type: "text";
-    /**
-     * The text content of the term.
-     */
-    readonly text: string;
-  }
+      /**
+       * The type of the term, which is always `"text"` for plain text.
+       */
+      readonly type: "text";
+      /**
+       * The text content of the term.
+       */
+      readonly text: string;
+    }
   /**
    * An option name term in the message, which can be a single
    * option name.  Although it is named option name, it can also
    * represent a subcommand.
    */
   | {
-    /**
-     * The type of the term, which is `"optionName"` for a single option name.
-     */
-    readonly type: "optionName";
-    /**
-     * The name of the option, which can be a short or long option name.
-     * For example, `"-f"` or `"--foo"`.
-     */
-    readonly optionName: string;
-  }
+      /**
+       * The type of the term, which is `"optionName"` for a single option name.
+       */
+      readonly type: "optionName";
+      /**
+       * The name of the option, which can be a short or long option name.
+       * For example, `"-f"` or `"--foo"`.
+       */
+      readonly optionName: string;
+    }
   /**
    * A list of option names term in the message, which can be a
    * list of option names.
    */
   | {
-    /**
-     * The type of the term, which is `"optionNames"` for a list of option
-     * names.
-     */
-    readonly type: "optionNames";
-    /**
-     * The list of option names, which can include both short and long
-     * option names.  For example, `["--foo", "--bar"]`.
-     */
-    readonly optionNames: readonly string[];
-  }
+      /**
+       * The type of the term, which is `"optionNames"` for a list of option
+       * names.
+       */
+      readonly type: "optionNames";
+      /**
+       * The list of option names, which can include both short and long
+       * option names.  For example, `["--foo", "--bar"]`.
+       */
+      readonly optionNames: readonly string[];
+    }
   /**
    * A metavariable term in the message, which can be a single
    * metavariable.
    */
   | {
-    /**
-     * The type of the term, which is `"metavar"` for a metavariable.
-     */
-    readonly type: "metavar";
-    /**
-     * The metavariable name, which is a string that represents
-     * a variable in the message.  For example, `"VALUE"` or `"ARG"`.
-     */
-    readonly metavar: NonEmptyString;
-  }
+      /**
+       * The type of the term, which is `"metavar"` for a metavariable.
+       */
+      readonly type: "metavar";
+      /**
+       * The metavariable name, which is a string that represents
+       * a variable in the message.  For example, `"VALUE"` or `"ARG"`.
+       */
+      readonly metavar: NonEmptyString;
+    }
   /**
    * A value term in the message, which can be a single value.
    */
   | {
-    /**
-     * The type of the term, which is `"value"` for a single value.
-     */
-    readonly type: "value";
-    /**
-     * The value, which can be any string representation of a value.
-     * For example, `"42"` or `"hello"`.
-     */
-    readonly value: string;
-  }
+      /**
+       * The type of the term, which is `"value"` for a single value.
+       */
+      readonly type: "value";
+      /**
+       * The value, which can be any string representation of a value.
+       * For example, `"42"` or `"hello"`.
+       */
+      readonly value: string;
+    }
   /**
    * A list of values term in the message, which can be a
    * list of values.
    */
   | {
-    /**
-     * The type of the term, which is `"values"` for a list of consecutive
-     * values.
-     */
-    readonly type: "values";
-    /**
-     * The list of values, which can include multiple string
-     * representations of consecutive values.  For example, `["42", "hello"]`.
-     */
-    readonly values: readonly string[];
-  }
+      /**
+       * The type of the term, which is `"values"` for a list of consecutive
+       * values.
+       */
+      readonly type: "values";
+      /**
+       * The list of values, which can include multiple string
+       * representations of consecutive values.  For example, `["42", "hello"]`.
+       */
+      readonly values: readonly string[];
+    }
   /**
    * An environment variable term in the message, which represents
    * an environment variable name.
    * @since 0.5.0
    */
   | {
-    /**
-     * The type of the term, which is `"envVar"` for an environment variable.
-     */
-    readonly type: "envVar";
-    /**
-     * The environment variable name, which is a string that represents
-     * an environment variable. For example, `"PATH"` or `"API_URL"`.
-     */
-    readonly envVar: string;
-  }
+      /**
+       * The type of the term, which is `"envVar"` for an environment variable.
+       */
+      readonly type: "envVar";
+      /**
+       * The environment variable name, which is a string that represents
+       * an environment variable. For example, `"PATH"` or `"API_URL"`.
+       */
+      readonly envVar: string;
+    }
   /**
    * A command-line term in the message, which represents
    * a command-line example or snippet.
    * @since 0.6.0
    */
   | {
-    /**
-     * The type of the term, which is `"commandLine"` for a command-line example.
-     */
-    readonly type: "commandLine";
-    /**
-     * The command-line string, which can be a complete command with arguments.
-     * For example, `"myapp completion bash > myapp-completion.bash"`.
-     */
-    readonly commandLine: string;
-  }
+      /**
+       * The type of the term, which is `"commandLine"` for a command-line example.
+       */
+      readonly type: "commandLine";
+      /**
+       * The command-line string, which can be a complete command with arguments.
+       * For example, `"myapp completion bash > myapp-completion.bash"`.
+       */
+      readonly commandLine: string;
+    }
   /**
    * An explicit single-line break term in the message.
    * @since 0.10.0
    */
   | {
-    /**
-     * The type of the term, which is `"lineBreak"` for an explicit line break.
-     */
-    readonly type: "lineBreak";
-  }
+      /**
+       * The type of the term, which is `"lineBreak"` for an explicit line break.
+       */
+      readonly type: "lineBreak";
+    }
   /**
    * A URL term in the message, which represents a clickable hyperlink.
    * @since 0.10.0
    */
   | {
-    /**
-     * The type of the term, which is `"url"` for a URL.
-     */
-    readonly type: "url";
-    /**
-     * The URL object representing the hyperlink.
-     */
-    readonly url: URL;
-  };
+      /**
+       * The type of the term, which is `"url"` for a URL.
+       */
+      readonly type: "url";
+      /**
+       * The URL object representing the hyperlink.
+       */
+      readonly url: URL;
+    };
 
 /**
  * Type representing a message that can include styled/colored values.
@@ -238,9 +238,7 @@ export function message(
     } else if (typeof value === "object" && value != null && "type" in value) {
       messageTerms.push(cloneMessageTerm(value));
     } else {
-      throw new TypeError(
-        `Invalid value type in message: ${typeof value}.`,
-      );
+      throw new TypeError(`Invalid value type in message: ${typeof value}.`);
     }
   }
   return messageTerms;
@@ -496,9 +494,10 @@ export function valueSet(
         " a fallback field.",
     );
   }
-  const options: ValueSetOptions = typeof fallbackOrOptions === "string"
-    ? { fallback: fallbackOrOptions }
-    : fallbackOrOptions;
+  const options: ValueSetOptions =
+    typeof fallbackOrOptions === "string"
+      ? { fallback: fallbackOrOptions }
+      : fallbackOrOptions;
   if (values.length === 0) {
     return options.fallback === ""
       ? []
@@ -549,13 +548,15 @@ export interface MessageFormatOptions {
    *
    * @default `false`
    */
-  readonly colors?: boolean | {
-    /**
-     * String to append after each ANSI reset sequence to maintain
-     * parent styling context (e.g., `"\x1b[2m"` for dim text).
-     */
-    readonly resetSuffix?: string;
-  };
+  readonly colors?:
+    | boolean
+    | {
+        /**
+         * String to append after each ANSI reset sequence to maintain
+         * parent styling context (e.g., `"\x1b[2m"` for dim text).
+         */
+        readonly resetSuffix?: string;
+      };
 
   /**
    * Whether to use quotes around values in the formatted message.
@@ -599,8 +600,10 @@ export function formatMessage(
  * Options passed to an injected message formatter.
  * @since 1.3.0
  */
-export interface MessageFormatterOptions
-  extends Omit<MessageFormatOptions, "colors"> {
+export interface MessageFormatterOptions extends Omit<
+  MessageFormatOptions,
+  "colors"
+> {
   /** Whether to emit terminal colors and hyperlinks. */
   readonly colors?: boolean;
 }
@@ -626,9 +629,8 @@ export function createMessageFormatter(theme: TerminalTheme): MessageFormatter {
   const snapshot = { ...theme };
   const formatter: MessageFormatter = (msg, options = {}) =>
     renderMessage(msg, options, snapshot);
-  messageRenderers.set(
-    formatter,
-    (msg, options, ambient) => renderMessage(msg, options, snapshot, ambient),
+  messageRenderers.set(formatter, (msg, options, ambient) =>
+    renderMessage(msg, options, snapshot, ambient),
   );
   return formatter;
 }
@@ -648,9 +650,8 @@ function renderMessage(
   }
   const colorConfig = options.colors ?? false;
   const useColors = typeof colorConfig === "boolean" ? colorConfig : true;
-  const resetSuffix = typeof colorConfig === "object"
-    ? colorConfig.resetSuffix ?? ""
-    : "";
+  const resetSuffix =
+    typeof colorConfig === "object" ? (colorConfig.resetSuffix ?? "") : "";
   const useQuotes = options.quotes ?? true;
 
   function* stream(): Generator<TerminalToken> {
@@ -692,9 +693,8 @@ function renderMessage(
               // When preceded by lineBreak() (isAfterLineBreak && first break),
               // that term already emitted one \n, so emit only one more to total
               // two (\n\n).  Otherwise emit \n\n directly.
-              const breakText = isAfterLineBreak && paragraphIndex === 1
-                ? "\n"
-                : "\n\n";
+              const breakText =
+                isAfterLineBreak && paragraphIndex === 1 ? "\n" : "\n\n";
               yield { text: breakText, width: -1, scopes: [] };
             }
 
@@ -768,8 +768,11 @@ function renderMessage(
     }
 
     // Handle automatic word wrapping
-    const wraps = pendingWrap || options.maxWidth != null &&
-        totalWidth > 0 && totalWidth + token.width > options.maxWidth;
+    const wraps =
+      pendingWrap ||
+      (options.maxWidth != null &&
+        totalWidth > 0 &&
+        totalWidth + token.width > options.maxWidth);
     if ((wraps || atWrappedLineStart) && token.trimOnWrap) {
       // Drop the whitespace that separated this token from the previous
       // line so that the new line starts at its first column.
@@ -777,7 +780,8 @@ function renderMessage(
       token = {
         ...token,
         text,
-        width: token.width -
+        width:
+          token.width -
           getDisplayWidth(token.text.slice(0, token.text.length - text.length)),
       };
       if (text === "") {
@@ -811,7 +815,6 @@ function renderMessage(
   );
 }
 
-messageRenderers.set(
-  formatMessage,
-  (msg, options, ambient) => renderMessage(msg, options, {}, ambient),
+messageRenderers.set(formatMessage, (msg, options, ambient) =>
+  renderMessage(msg, options, {}, ambient),
 );

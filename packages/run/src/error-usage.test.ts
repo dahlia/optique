@@ -23,23 +23,26 @@ describe("errorUsage forwarding", () => {
         for (const errorUsage of [undefined, "root", "command"] as const) {
           const exit = new Error("Captured exit.");
           let output = "";
-          await assert.rejects(async () => {
-            await runner(parser, {
-              args: ["config", "--port", "bad"],
-              programName: "tool",
-              colors: false,
-              maxWidth: 80,
-              errorUsage,
-              contexts: withContext ? [context] : [],
-              stderr: (chunk) => {
-                output += chunk;
-              },
-              onExit(code): never {
-                assert.equal(code, 1);
-                throw exit;
-              },
-            });
-          }, (error: unknown) => error === exit);
+          await assert.rejects(
+            async () => {
+              await runner(parser, {
+                args: ["config", "--port", "bad"],
+                programName: "tool",
+                colors: false,
+                maxWidth: 80,
+                errorUsage,
+                contexts: withContext ? [context] : [],
+                stderr: (chunk) => {
+                  output += chunk;
+                },
+                onExit(code): never {
+                  assert.equal(code, 1);
+                  throw exit;
+                },
+              });
+            },
+            (error: unknown) => error === exit,
+          );
           results.push(output);
         }
         assert.equal(results[0], results[1]);

@@ -55,16 +55,16 @@ let capturedStdout = "";
 let capturedStderr = "";
 const hooks = render
   ? {
-    stdout(text) {
-      capturedStdout += `${text}\n`;
-    },
-    stderr(text) {
-      capturedStderr += `${text}\n`;
-    },
-    onExit(code) {
-      throw new RenderExit(code);
-    },
-  }
+      stdout(text) {
+        capturedStdout += `${text}\n`;
+      },
+      stderr(text) {
+        capturedStderr += `${text}\n`;
+      },
+      onExit(code) {
+        throw new RenderExit(code);
+      },
+    }
   : {};
 
 const bigShell = {
@@ -164,11 +164,13 @@ const cases = {
       aboveError: "help",
       errorExitCode: 3,
       description,
-      contexts: [{
-        id: Symbol("fixture"),
-        phase: "single-pass",
-        getAnnotations: () => ({}),
-      }],
+      contexts: [
+        {
+          id: Symbol("fixture"),
+          phase: "single-pass",
+          getAnnotations: () => ({}),
+        },
+      ],
     }),
   "custom-on-exit": () =>
     run(syncParser, {

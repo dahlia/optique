@@ -18,16 +18,14 @@ import { countLines } from "./commands/lines.ts";
 import { createInputScope } from "./input.ts";
 
 it("counts LF boundaries and a final unterminated segment across byte chunks", async () => {
-  for (
-    const [chunks, expected] of [
-      [[], 0],
-      [[""], 0],
-      [["one"], 1],
-      [["one\n"], 1],
-      [["\n", "\n"], 2],
-      [["one\r", "\ntwo\r", "\nthree"], 3],
-    ] as const
-  ) {
+  for (const [chunks, expected] of [
+    [[], 0],
+    [[""], 0],
+    [["one"], 1],
+    [["one\n"], 1],
+    [["\n", "\n"], 2],
+    [["one\r", "\ntwo\r", "\nthree"], 3],
+  ] as const) {
     const bytes = async function* () {
       for (const chunk of chunks) yield Buffer.from(chunk);
     };
@@ -135,38 +133,42 @@ it("leaves inherited stdin open after early iterator return and cleanup", async 
   }
 });
 
-it("rejects a non-regular acquired handle and releases it once", {
-  skip: process.platform !== "linux",
-}, async () => {
-  if (process.platform !== "linux") return;
-  const directory = await mkdtemp(join(tmpdir(), "file-inspect-swapped-"));
-  const path = join(directory, "sample.txt");
-  const fifo = join(directory, "input.fifo");
-  await writeFile(path, "sample");
-  execFileSync("mkfifo", [fifo]);
-  let releases = 0;
-  const scope = createInputScope({
-    async openFile() {
-      // Simulate the file being replaced after the path check, without a race.
-      const handle = await open(
-        fifo,
-        constants.O_RDONLY | constants.O_NONBLOCK,
-      );
-      const close = handle.close.bind(handle);
-      handle.close = async () => {
-        await close();
-        releases++;
-      };
-      return handle;
-    },
-  });
-  try {
-    await assert.rejects(scope.open(path), /regular file/);
-    await scope.close();
-    await scope.close();
-    assert.equal(releases, 1);
-  } finally {
-    await scope.close();
-    await rm(directory, { recursive: true, force: true });
-  }
-});
+it(
+  "rejects a non-regular acquired handle and releases it once",
+  {
+    skip: process.platform !== "linux",
+  },
+  async () => {
+    if (process.platform !== "linux") return;
+    const directory = await mkdtemp(join(tmpdir(), "file-inspect-swapped-"));
+    const path = join(directory, "sample.txt");
+    const fifo = join(directory, "input.fifo");
+    await writeFile(path, "sample");
+    execFileSync("mkfifo", [fifo]);
+    let releases = 0;
+    const scope = createInputScope({
+      async openFile() {
+        // Simulate the file being replaced after the path check, without a race.
+        const handle = await open(
+          fifo,
+          constants.O_RDONLY | constants.O_NONBLOCK,
+        );
+        const close = handle.close.bind(handle);
+        handle.close = async () => {
+          await close();
+          releases++;
+        };
+        return handle;
+      },
+    });
+    try {
+      await assert.rejects(scope.open(path), /regular file/);
+      await scope.close();
+      await scope.close();
+      assert.equal(releases, 1);
+    } finally {
+      await scope.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);

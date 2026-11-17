@@ -15,10 +15,12 @@ import { describe, it } from "node:test";
 // Exercise custom ambiguous usage trees while retaining 1.1's validation of
 // duplicate names on ordinary, indexed command parsers.
 function or(...parsers: readonly Parser<Mode, unknown, unknown>[]) {
-  return validatedOr(...parsers.map((parser) => ({
-    ...parser,
-    leadingNames: new Set<string>(),
-  })));
+  return validatedOr(
+    ...parsers.map((parser) => ({
+      ...parser,
+      leadingNames: new Set<string>(),
+    })),
+  );
 }
 
 function values(mode: Mode, parsed: string[]): ValueParser<Mode, string> {
@@ -41,7 +43,8 @@ function findLiteral(
   for (const term of usage) {
     if (term.type === "literal") return term;
     if (
-      term.type === "optional" || term.type === "multiple" ||
+      term.type === "optional" ||
+      term.type === "multiple" ||
       term.type === "sequence"
     ) {
       const found = findLiteral(term.terms);
@@ -58,15 +61,13 @@ function findLiteral(
 
 describe("wrapped command usageLine", () => {
   for (const mode of ["sync", "async"] as const) {
-    for (
-      const wrapper of [
-        "optional",
-        "multiple",
-        "nested",
-        "exclusive",
-        "sequence",
-      ] as const
-    ) {
+    for (const wrapper of [
+      "optional",
+      "multiple",
+      "nested",
+      "exclusive",
+      "sequence",
+    ] as const) {
       for (const kind of ["static", "callback"] as const) {
         it(`${mode}: applies the ${kind} override inside ${wrapper}`, async () => {
           const parsed: string[] = [];
@@ -76,29 +77,38 @@ describe("wrapped command usageLine", () => {
           let wrongCalls = 0;
           const selected = command("alpha", option("--inside", value), {
             hidden: "usage",
-            usageLine: kind === "static" ? override : (tail) => {
-              calls++;
-              assert.equal(formatUsage("tail", tail), "tail --inside VALUE");
-              assert.ok(tail[0]);
-              // The callback may mutate its input without changing parser usage.
-              Reflect.set(tail[0], "metavar", "MUTATED");
-              return override;
-            },
+            usageLine:
+              kind === "static"
+                ? override
+                : (tail) => {
+                    calls++;
+                    assert.equal(
+                      formatUsage("tail", tail),
+                      "tail --inside VALUE",
+                    );
+                    assert.ok(tail[0]);
+                    // The callback may mutate its input without changing parser usage.
+                    Reflect.set(tail[0], "metavar", "MUTATED");
+                    return override;
+                  },
           });
-          const wrapped = wrapper === "optional"
-            ? optional(selected)
-            : wrapper === "multiple"
-            ? multiple(selected, { min: 1, max: 1 })
-            : wrapper === "nested"
-            ? optional(multiple(optional(selected), { min: 1, max: 1 }))
-            : wrapper === "sequence"
-            ? optional(seq(optional(argument(choice(["profile"]))), selected))
-            : optional(
-              or(
-                selected,
-                command("other", constant("other"), { hidden: true }),
-              ),
-            );
+          const wrapped =
+            wrapper === "optional"
+              ? optional(selected)
+              : wrapper === "multiple"
+                ? multiple(selected, { min: 1, max: 1 })
+                : wrapper === "nested"
+                  ? optional(multiple(optional(selected), { min: 1, max: 1 }))
+                  : wrapper === "sequence"
+                    ? optional(
+                        seq(optional(argument(choice(["profile"]))), selected),
+                      )
+                    : optional(
+                        or(
+                          selected,
+                          command("other", constant("other"), { hidden: true }),
+                        ),
+                      );
           const parser = or(
             tuple([wrapped, optional(option("--global"))]),
             command("alpha", option("--wrong", value), {
@@ -118,8 +128,8 @@ describe("wrapped command usageLine", () => {
                 wrapper === "multiple" || wrapper === "nested"
                   ? ["selected"]
                   : wrapper === "sequence"
-                  ? [undefined, "selected"]
-                  : "selected",
+                    ? [undefined, "selected"]
+                    : "selected",
                 true,
               ],
             },
@@ -179,13 +189,15 @@ describe("wrapped command usageLine", () => {
       const parser = or(
         command(
           "alpha",
-          optional(command("alpha", option("--inside", value), {
-            hidden: "usage",
-            usageLine() {
-              childCalls++;
-              return [{ type: "literal", value: "CHILD" }];
-            },
-          })),
+          optional(
+            command("alpha", option("--inside", value), {
+              hidden: "usage",
+              usageLine() {
+                childCalls++;
+                return [{ type: "literal", value: "CHILD" }];
+              },
+            }),
+          ),
           {
             hidden: "usage",
             usageLine() {

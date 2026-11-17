@@ -73,33 +73,29 @@ test("unknown owned private aliases fail closed instead of using dist mappings",
   }
 });
 test("dist/dependencies/tmp/isolated consumers never acquire source mappings", () => {
-  for (
-    const parent of [
-      url("packages/core/dist/index.js"),
-      url("packages/core/node_modules/dep/index.js"),
-      url("node_modules/dep/index.js"),
-      url("tmp/consumer/index.ts"),
-      pathToFileURL("/tmp/opencode/consumer/index.ts").href,
-    ]
-  ) {
+  for (const parent of [
+    url("packages/core/dist/index.js"),
+    url("packages/core/node_modules/dep/index.js"),
+    url("node_modules/dep/index.js"),
+    url("tmp/consumer/index.ts"),
+    pathToFileURL("/tmp/opencode/consumer/index.ts").href,
+  ]) {
     assert.equal(resolve("@optique/core/parser", parent), undefined);
     assert.equal(resolve("#src/index.ts", parent), undefined);
   }
 });
 test("artifact probe fixtures retain ordinary npm resolution", () => {
-  for (
-    const parent of [
-      url("packages/man/test/fixtures/markdown-reference/trace-imports.mjs"),
-      url("packages/core/src/test-fixtures/consumer.mjs"),
-    ]
-  ) {
+  for (const parent of [
+    url("packages/man/test/fixtures/markdown-reference/trace-imports.mjs"),
+    url("packages/core/src/test-fixtures/consumer.mjs"),
+  ]) {
     assert.equal(resolve("@optique/core", parent), undefined);
     assert.equal(resolve("#src/index.ts", parent), undefined);
   }
 });
 test("source-shaped traversal cannot escape an owner's private source", () => {
   assert.throws(() =>
-    resolve("#src/../../core/dist/index.js", from("derived-defaults"))
+    resolve("#src/../../core/dist/index.js", from("derived-defaults")),
   );
 });
 test("root tests can resolve workspace exports but have no private owner", () => {

@@ -12,9 +12,8 @@ import { run } from "@optique/run";
 
 // Docker-style environment variables
 const dockerParser = object({
-  env: map(
-    multiple(option("-e", "--env", keyValue())),
-    (pairs) => Object.fromEntries(pairs),
+  env: map(multiple(option("-e", "--env", keyValue())), (pairs) =>
+    Object.fromEntries(pairs),
   ),
   labels: map(
     multiple(option("-l", "--label", keyValue({ separator: ":" }))),
@@ -24,9 +23,8 @@ const dockerParser = object({
 
 // Kubernetes-style configuration
 const k8sParser = object({
-  set: map(
-    multiple(option("--set", keyValue())),
-    (pairs) => Object.fromEntries(pairs),
+  set: map(multiple(option("--set", keyValue())), (pairs) =>
+    Object.fromEntries(pairs),
   ),
   values: map(
     multiple(option("--values", keyValue({ separator: ":" }))),

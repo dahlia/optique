@@ -271,8 +271,8 @@ export function extractDependencyMetadata<M extends Mode, T>(
     // deriveFrom() sets [dependencyIds]; derive() only sets [dependencyId].
     // This distinction matters for parseWithDependency: derive() expects
     // a scalar value, deriveFrom() expects a tuple (even with one element).
-    const isMultiSource = dependencyIds in valueParser &&
-      valueParser[dependencyIds] != null;
+    const isMultiSource =
+      dependencyIds in valueParser && valueParser[dependencyIds] != null;
 
     // Collect all dependency IDs
     const allIds: readonly symbol[] = isMultiSource
@@ -305,18 +305,20 @@ export function extractDependencyMetadata<M extends Mode, T>(
     };
 
     // Build replaySuggest from suggestWithDependency if available
-    const suggestFn = suggestWithDependency in parser
-      ? parser[suggestWithDependency]
-      : undefined;
-    const replaySuggest = suggestFn != null
-      ? (
-        prefix: string,
-        depValues: readonly unknown[],
-      ): Iterable<Suggestion> | AsyncIterable<Suggestion> => {
-        const depArg = isMultiSource ? depValues : depValues[0];
-        return suggestFn(prefix, depArg);
-      }
-      : undefined;
+    const suggestFn =
+      suggestWithDependency in parser
+        ? parser[suggestWithDependency]
+        : undefined;
+    const replaySuggest =
+      suggestFn != null
+        ? (
+            prefix: string,
+            depValues: readonly unknown[],
+          ): Iterable<Suggestion> | AsyncIterable<Suggestion> => {
+            const depArg = isMultiSource ? depValues : depValues[0];
+            return suggestFn(prefix, depArg);
+          }
+        : undefined;
 
     derived = {
       kind: "derived",
@@ -352,12 +354,10 @@ function extractFromBareState(
     typeof state === "object" &&
     Object.hasOwn(state, "success") &&
     typeof (state as { success?: unknown }).success === "boolean" &&
-    (
-      ((state as { success: boolean }).success &&
-        Object.hasOwn(state, "value")) ||
+    (((state as { success: boolean }).success &&
+      Object.hasOwn(state, "value")) ||
       (!(state as { success: boolean }).success &&
-        Object.hasOwn(state, "error"))
-    )
+        Object.hasOwn(state, "error")))
   ) {
     return state as ValueParserResult<unknown>;
   }
@@ -450,9 +450,7 @@ export function composeDependencyMetadata(
 
   switch (wrapperKind) {
     case "optional": {
-      if (
-        inner.source != null && inner.source.extractSourceValue != null
-      ) {
+      if (inner.source != null && inner.source.extractSourceValue != null) {
         return {
           ...inner,
           source: {
@@ -480,9 +478,10 @@ export function composeDependencyMetadata(
     }
 
     case "withDefault": {
-      const wrappedExtract = inner.source?.extractSourceValue != null
-        ? unwrapArrayThenExtract(inner.source.extractSourceValue)
-        : undefined;
+      const wrappedExtract =
+        inner.source?.extractSourceValue != null
+          ? unwrapArrayThenExtract(inner.source.extractSourceValue)
+          : undefined;
       const preservesSourceValue = inner.source?.preservesSourceValue !== false;
       if (inner.source != null) {
         return {
@@ -497,9 +496,10 @@ export function composeDependencyMetadata(
                 inner.source.completeSource,
               ),
             }),
-            ...(preservesSourceValue && options?.defaultValue != null && {
-              getMissingSourceValue: options.defaultValue,
-            }),
+            ...(preservesSourceValue &&
+              options?.defaultValue != null && {
+                getMissingSourceValue: options.defaultValue,
+              }),
           },
         };
       }

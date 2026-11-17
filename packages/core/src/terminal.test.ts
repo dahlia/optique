@@ -108,9 +108,8 @@ describe("theme integration", () => {
     errorLabel: () => ({ type: "text", text: "Failure:" }),
     label: (term) => ({
       type: "text",
-      text: term.kind === "usageSummary"
-        ? "Invocation:"
-        : `LABEL(${term.label})`,
+      text:
+        term.kind === "usageSummary" ? "Invocation:" : `LABEL(${term.label})`,
     }),
     syntaxPunctuation: (term, context) =>
       term.kind === "optionalOpen"
@@ -126,10 +125,13 @@ describe("theme integration", () => {
       "PROGRAM\nOPTION(-x)",
     );
     assert.equal(
-      formatUsageTerm({
-        type: "optional",
-        terms: [{ type: "argument", metavar: "X" }],
-      }, { theme }),
+      formatUsageTerm(
+        {
+          type: "optional",
+          terms: [{ type: "argument", metavar: "X" }],
+        },
+        { theme },
+      ),
       "OPTIONAL(X]",
     );
   });
@@ -151,23 +153,31 @@ describe("theme integration", () => {
   it("should pass the original description and occupied width to a custom formatter", () => {
     const description = message`description`;
     const calls: { message: unknown; options?: MessageFormatterOptions }[] = [];
-    const rendered = formatDocPage("app", {
-      sections: [{
-        title: "Flags",
-        entries: [{
-          term: { type: "option", names: ["--long-option"] },
-          description,
-        }],
-      }],
-    }, {
-      theme,
-      termWidth: 4,
-      maxWidth: 40,
-      messageFormatter: (message, options) => {
-        calls.push({ message, options });
-        return "CUSTOM";
+    const rendered = formatDocPage(
+      "app",
+      {
+        sections: [
+          {
+            title: "Flags",
+            entries: [
+              {
+                term: { type: "option", names: ["--long-option"] },
+                description,
+              },
+            ],
+          },
+        ],
       },
-    });
+      {
+        theme,
+        termWidth: 4,
+        maxWidth: 40,
+        messageFormatter: (message, options) => {
+          calls.push({ message, options });
+          return "CUSTOM";
+        },
+      },
+    );
     assert.equal(calls.length, 1);
     assert.equal(calls[0].message, description);
     assert.equal(calls[0].options?.initialWidth, 17);
@@ -176,24 +186,32 @@ describe("theme integration", () => {
   });
   it("should theme defaults and choices while preserving formatter precedence", () => {
     const seen: MessageFormatterOptions[] = [];
-    const output = formatDocPage("app", {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-x"] },
-          default: message`${"d"}`,
-          choices: message`${"c"}`,
-        }],
-      }],
-    }, {
-      theme,
-      colors: true,
-      showDefault: true,
-      showChoices: true,
-      messageFormatter: (_message, options) => {
-        seen.push(options ?? {});
-        return "CUSTOM";
+    const output = formatDocPage(
+      "app",
+      {
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "option", names: ["-x"] },
+                default: message`${"d"}`,
+                choices: message`${"c"}`,
+              },
+            ],
+          },
+        ],
       },
-    });
+      {
+        theme,
+        colors: true,
+        showDefault: true,
+        showChoices: true,
+        messageFormatter: (_message, options) => {
+          seen.push(options ?? {});
+          return "CUSTOM";
+        },
+      },
+    );
     assert.equal(seen.length, 2);
     assert.ok(seen.every((o) => o.colors === true));
     assert.ok(output.includes("CUSTOM"));
@@ -204,12 +222,14 @@ describe("theme integration", () => {
       const parser = option("--name", string(), {
         description: message`Name description.`,
       });
-      for (
-        const args of [["--help"], [], ["help", "unknown"], ["--completion"], [
-          "--completion",
-          "unknown",
-        ], ["--completion", "--help"]]
-      ) {
+      for (const args of [
+        ["--help"],
+        [],
+        ["help", "unknown"],
+        ["--completion"],
+        ["--completion", "unknown"],
+        ["--completion", "--help"],
+      ]) {
         const output: string[] = [];
         const errors: unknown[] = [];
         const seen = new Map<unknown, MessageFormatterOptions | undefined>();
@@ -369,10 +389,13 @@ describe("structured fragment boundaries", () => {
     const format = createMessageFormatter({
       value: () => ({
         type: "concat",
-        children: [{ type: "text", text: "한글" }, {
-          type: "text",
-          text: "👩‍💻",
-        }],
+        children: [
+          { type: "text", text: "한글" },
+          {
+            type: "text",
+            text: "👩‍💻",
+          },
+        ],
       }),
     });
     assert.equal(format(message`${"x"}`, { maxWidth: 4 }), "한글\n👩‍💻");
@@ -402,124 +425,168 @@ describe("ambient terminal composition", () => {
     );
   });
   it("should restore annotation styling after themed prefixes and labels", () => {
-    const output = formatDocPage("app", {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-x"] },
-          default: message`default`,
-          choices: message`choice`,
-        }],
-      }],
-    }, {
-      colors: true,
-      showDefault: true,
-      showChoices: true,
-      theme: {
-        syntaxPunctuation: (term, ctx) =>
-          term.kind === "defaultPrefix"
-            ? {
-              type: "style",
-              style: { foreground: "red" },
-              children: [{ type: "text", text: ctx.text }],
-            }
-            : defaultTerminalTheme.syntaxPunctuation(term, ctx),
-        label: (term, ctx) =>
-          term.kind === "choices"
-            ? {
-              type: "style",
-              style: { bold: true },
-              children: [{ type: "text", text: ctx.text }],
-            }
-            : defaultTerminalTheme.label(term, ctx),
+    const output = formatDocPage(
+      "app",
+      {
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "option", names: ["-x"] },
+                default: message`default`,
+                choices: message`choice`,
+              },
+            ],
+          },
+        ],
       },
-    });
+      {
+        colors: true,
+        showDefault: true,
+        showChoices: true,
+        theme: {
+          syntaxPunctuation: (term, ctx) =>
+            term.kind === "defaultPrefix"
+              ? {
+                  type: "style",
+                  style: { foreground: "red" },
+                  children: [{ type: "text", text: ctx.text }],
+                }
+              : defaultTerminalTheme.syntaxPunctuation(term, ctx),
+          label: (term, ctx) =>
+            term.kind === "choices"
+              ? {
+                  type: "style",
+                  style: { bold: true },
+                  children: [{ type: "text", text: ctx.text }],
+                }
+              : defaultTerminalTheme.label(term, ctx),
+        },
+      },
+    );
     assert.ok(output.includes("\x1b[31m [\x1b[0m\x1b[2mdefault]"));
     assert.ok(output.includes("\x1b[1mchoices: \x1b[0m\x1b[2mchoice)"));
   });
   it("should keep the legacy ambient reset suffix after annotation URLs", () => {
-    const output = formatDocPage("app", {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-x"] },
-          default: [{ type: "url", url: new URL("https://example.com/") }],
-        }],
-      }],
-    }, { colors: true, showDefault: true });
+    const output = formatDocPage(
+      "app",
+      {
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "option", names: ["-x"] },
+                default: [
+                  { type: "url", url: new URL("https://example.com/") },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      { colors: true, showDefault: true },
+    );
     assert.ok(output.includes("\x1b]8;;\x1b\\\x1b[2m]\x1b[0m"));
   });
   it("should restore annotation styling outside opaque formatter output", () => {
-    const output = formatDocPage("app", {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-x"] },
-          default: message`default`,
-        }],
-      }],
-    }, {
-      colors: true,
-      showDefault: true,
-      messageFormatter: () => "CUSTOM\x1b[0m",
-    });
+    const output = formatDocPage(
+      "app",
+      {
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "option", names: ["-x"] },
+                default: message`default`,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        colors: true,
+        showDefault: true,
+        messageFormatter: () => "CUSTOM\x1b[0m",
+      },
+    );
     assert.ok(output.includes("CUSTOM\x1b[0m\x1b[2m]\x1b[0m"));
   });
 });
 
 it("keeps a canceled ambient attribute disabled after a link", () => {
-  const output = formatDocPage("app", {
-    sections: [{
-      entries: [{
-        term: { type: "option", names: ["-x"] },
-        default: message`${"x"}`,
-      }],
-    }],
-  }, {
-    colors: true,
-    showDefault: true,
-    theme: {
-      value: () => ({
-        type: "style",
-        style: { dim: false },
-        children: [
-          {
-            type: "link",
-            href: "https://example.com/",
-            children: [{ type: "text", text: "b" }],
-          },
-          { type: "text", text: "c" },
-        ],
-      }),
+  const output = formatDocPage(
+    "app",
+    {
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["-x"] },
+              default: message`${"x"}`,
+            },
+          ],
+        },
+      ],
     },
-  });
+    {
+      colors: true,
+      showDefault: true,
+      theme: {
+        value: () => ({
+          type: "style",
+          style: { dim: false },
+          children: [
+            {
+              type: "link",
+              href: "https://example.com/",
+              children: [{ type: "text", text: "b" }],
+            },
+            { type: "text", text: "c" },
+          ],
+        }),
+      },
+    },
+  );
   assert.ok(output.includes("b\x1b]8;;\x1b\\c"));
 });
 
 it("preserves enclosing foreground and background overrides after a link", () => {
-  const output = formatDocPage("app", {
-    sections: [{
-      entries: [{
-        term: { type: "option", names: ["-x"] },
-        default: message`${"x"}`,
-      }],
-    }],
-  }, {
-    colors: true,
-    showDefault: true,
-    theme: {
-      annotationStyles: { default: { foreground: "red", background: "blue" } },
-      value: () => ({
-        type: "style",
-        style: { foreground: "green", background: "white" },
-        children: [
-          {
-            type: "link",
-            href: "https://example.com/",
-            children: [{ type: "text", text: "b" }],
-          },
-          { type: "text", text: "c" },
-        ],
-      }),
+  const output = formatDocPage(
+    "app",
+    {
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["-x"] },
+              default: message`${"x"}`,
+            },
+          ],
+        },
+      ],
     },
-  });
+    {
+      colors: true,
+      showDefault: true,
+      theme: {
+        annotationStyles: {
+          default: { foreground: "red", background: "blue" },
+        },
+        value: () => ({
+          type: "style",
+          style: { foreground: "green", background: "white" },
+          children: [
+            {
+              type: "link",
+              href: "https://example.com/",
+              children: [{ type: "text", text: "b" }],
+            },
+            { type: "text", text: "c" },
+          ],
+        }),
+      },
+    },
+  );
   assert.ok(output.includes("b\x1b]8;;\x1b\\\x1b[32;47mc"));
 });
 
@@ -530,10 +597,13 @@ it("wraps themed program leaves and uses the final line's remaining width", () =
       theme: {
         programName: () => ({
           type: "concat",
-          children: [{ type: "text", text: "abc" }, {
-            type: "text",
-            text: "def",
-          }],
+          children: [
+            { type: "text", text: "abc" },
+            {
+              type: "text",
+              text: "def",
+            },
+          ],
         }),
       },
     }),
@@ -545,10 +615,13 @@ it("wraps themed program leaves and uses the final line's remaining width", () =
       theme: {
         programName: () => ({
           type: "concat",
-          children: [{ type: "text", text: "abcdef" }, {
-            type: "text",
-            text: "b",
-          }],
+          children: [
+            { type: "text", text: "abcdef" },
+            {
+              type: "text",
+              text: "b",
+            },
+          ],
         }),
       },
     }),
@@ -562,10 +635,13 @@ it("wraps themed program leaves and uses the final line's remaining width", () =
         programName: () => ({
           type: "style",
           style: { foreground: "blue" },
-          children: [{ type: "text", text: "abc" }, {
-            type: "text",
-            text: "def",
-          }],
+          children: [
+            { type: "text", text: "abc" },
+            {
+              type: "text",
+              text: "def",
+            },
+          ],
         }),
       },
     }),
@@ -575,18 +651,25 @@ it("wraps themed program leaves and uses the final line's remaining width", () =
 
 it("allows help widths that fit the individual themed program leaves", () => {
   assert.equal(
-    formatDocPage("app", { usage: [], sections: [] }, {
-      maxWidth: 10,
-      theme: {
-        programName: () => ({
-          type: "concat",
-          children: [{ type: "text", text: "abc" }, {
-            type: "text",
-            text: "def",
-          }],
-        }),
+    formatDocPage(
+      "app",
+      { usage: [], sections: [] },
+      {
+        maxWidth: 10,
+        theme: {
+          programName: () => ({
+            type: "concat",
+            children: [
+              { type: "text", text: "abc" },
+              {
+                type: "text",
+                text: "def",
+              },
+            ],
+          }),
+        },
       },
-    }),
+    ),
     "Usage: abc\n       def\n",
   );
 });
@@ -621,13 +704,17 @@ it("measures only the final line of a multiline usage label", () => {
     "Header\nUse: app\n",
   );
   assert.equal(
-    formatDocPage("app", {
-      usage: [{ type: "literal", value: "x" }],
-      sections: [],
-    }, {
-      theme,
-      maxWidth: 8,
-    }),
+    formatDocPage(
+      "app",
+      {
+        usage: [{ type: "literal", value: "x" }],
+        sections: [],
+      },
+      {
+        theme,
+        maxWidth: 8,
+      },
+    ),
     "Header\nUse: app\n     x\n",
   );
 });
@@ -675,10 +762,10 @@ for (const kind of ["examples", "author", "bugs"] as const) {
         label: (term, context) =>
           term.kind === kind
             ? {
-              type: "style",
-              style: { foreground: "red" },
-              children: [{ type: "text", text: label }],
-            }
+                type: "style",
+                style: { foreground: "red" },
+                children: [{ type: "text", text: label }],
+              }
             : defaultTerminalTheme.label(term, context),
       };
       const page = { sections: [], [kind]: message`x` };
@@ -714,11 +801,13 @@ it("keeps styles and links around embedded blank and trailing lines", () => {
     optionName: () => ({
       type: "style",
       style: { bold: true },
-      children: [{
-        type: "link",
-        href: "https://example.com/",
-        children: [{ type: "text", text: "\nAA\n\nB\n" }],
-      }],
+      children: [
+        {
+          type: "link",
+          href: "https://example.com/",
+          children: [{ type: "text", text: "\nAA\n\nB\n" }],
+        },
+      ],
     }),
   });
   assert.equal(
@@ -764,14 +853,12 @@ it("validates preceding usage label lines without inflating indentation", () => 
 });
 
 it("measures choices prefixes and labels as combined physical lines", () => {
-  for (
-    const [prefix, label, last] of [
-      [" (", "Head\nC:", "C:"],
-      [" (", "12345\nC:", "C:"],
-      [" (\nP", "C:", "PC:"],
-      [" (\nP", "Head\nC:", "C:"],
-    ]
-  ) {
+  for (const [prefix, label, last] of [
+    [" (", "Head\nC:", "C:"],
+    [" (", "12345\nC:", "C:"],
+    [" (\nP", "C:", "PC:"],
+    [" (\nP", "Head\nC:", "C:"],
+  ]) {
     const theme: TerminalTheme = {
       label: (term, context) =>
         term.kind === "choices"
@@ -783,12 +870,16 @@ it("measures choices prefixes and labels as combined physical lines", () => {
           : defaultTerminalTheme.syntaxPunctuation(term, context),
     };
     const page = {
-      sections: [{
-        entries: [{
-          term: { type: "literal" as const, value: "x" },
-          choices: message`x`,
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "literal" as const, value: "x" },
+              choices: message`x`,
+            },
+          ],
+        },
+      ],
     };
     const output = formatDocPage("app", page, {
       theme,
@@ -821,28 +912,36 @@ it("measures choices prefixes and labels as combined physical lines", () => {
 
 it("resets occupied width after multiline default prefixes", () => {
   const widths: (number | undefined)[] = [];
-  const output = formatDocPage("app", {
-    sections: [{
-      entries: [{
-        term: { type: "literal", value: "x" },
-        default: message`x`,
-      }],
-    }],
-  }, {
-    maxWidth: 12,
-    termWidth: 1,
-    showDefault: true,
-    theme: {
-      syntaxPunctuation: (term, context) =>
-        term.kind === "defaultPrefix"
-          ? { type: "text", text: "Head\nD:" }
-          : defaultTerminalTheme.syntaxPunctuation(term, context),
+  const output = formatDocPage(
+    "app",
+    {
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "literal", value: "x" },
+              default: message`x`,
+            },
+          ],
+        },
+      ],
     },
-    messageFormatter: (_message, options) => {
-      widths.push(options?.initialWidth);
-      return "x";
+    {
+      maxWidth: 12,
+      termWidth: 1,
+      showDefault: true,
+      theme: {
+        syntaxPunctuation: (term, context) =>
+          term.kind === "defaultPrefix"
+            ? { type: "text", text: "Head\nD:" }
+            : defaultTerminalTheme.syntaxPunctuation(term, context),
+      },
+      messageFormatter: (_message, options) => {
+        widths.push(options?.initialWidth);
+        return "x";
+      },
     },
-  });
+  );
   assert.deepEqual(widths, [2]);
   assert.ok(output.includes("\n     D:x]"), output);
 });
@@ -853,25 +952,35 @@ describe("physical-line annotation layout", () => {
       syntaxPunctuation: (term, context) =>
         term.kind === "defaultPrefix"
           ? {
-            type: "style",
-            style: { foreground: "red" },
-            children: [{
-              type: "link",
-              href: "https://example.com/",
-              children: [{ type: "text", text: "    [" }],
-            }],
-          }
+              type: "style",
+              style: { foreground: "red" },
+              children: [
+                {
+                  type: "link",
+                  href: "https://example.com/",
+                  children: [{ type: "text", text: "    [" }],
+                },
+              ],
+            }
           : defaultTerminalTheme.syntaxPunctuation(term, context),
     };
     for (const colors of [false, true]) {
-      const result = formatDocPage("app", {
-        sections: [{
-          entries: [{
-            term: { type: "option", names: ["-c"] },
-            default: message`x`,
-          }],
-        }],
-      }, { theme, colors, maxWidth: 10, showDefault: true });
+      const result = formatDocPage(
+        "app",
+        {
+          sections: [
+            {
+              entries: [
+                {
+                  term: { type: "option", names: ["-c"] },
+                  default: message`x`,
+                },
+              ],
+            },
+          ],
+        },
+        { theme, colors, maxWidth: 10, showDefault: true },
+      );
       assert.equal(stripAnsi(result), "\n  -c   [x]\n");
       if (colors) {
         assert.ok(result.includes("\x1b[31m"));
@@ -882,62 +991,85 @@ describe("physical-line annotation layout", () => {
 
   for (const kind of ["default", "choices"] as const) {
     it(`should reserve only the first line of a ${kind} suffix`, () => {
-      const result = formatDocPage("app", {
-        sections: [{
-          entries: [{
-            term: { type: "literal", value: "x" },
-            [kind]: message`abc`,
-          }],
-        }],
-      }, {
-        maxWidth: 12,
-        termWidth: 1,
-        showDefault: { prefix: "[" },
-        showChoices: { prefix: "[", label: "" },
-        theme: {
-          syntaxPunctuation: (term, context) =>
-            term.kind === `${kind}Suffix`
-              ? { type: "text", text: "]\n123456" }
-              : defaultTerminalTheme.syntaxPunctuation(term, context),
+      const result = formatDocPage(
+        "app",
+        {
+          sections: [
+            {
+              entries: [
+                {
+                  term: { type: "literal", value: "x" },
+                  [kind]: message`abc`,
+                },
+              ],
+            },
+          ],
         },
-      });
+        {
+          maxWidth: 12,
+          termWidth: 1,
+          showDefault: { prefix: "[" },
+          showChoices: { prefix: "[", label: "" },
+          theme: {
+            syntaxPunctuation: (term, context) =>
+              term.kind === `${kind}Suffix`
+                ? { type: "text", text: "]\n123456" }
+                : defaultTerminalTheme.syntaxPunctuation(term, context),
+          },
+        },
+      );
       assert.ok(result.includes("[abc]\n     123456"), result);
       for (const line of result.split("\n")) {
         assert.ok(getDisplayWidth(line) <= 12, JSON.stringify(line));
       }
     });
     it(`should reject a ${kind} suffix that cannot fit the column`, () => {
-      assert.throws(() =>
-        formatDocPage("app", {
-          sections: [{
-            entries: [{
-              term: { type: "literal", value: "x" },
-              [kind]: message`x`,
-            }],
-          }],
-        }, {
-          maxWidth: 12,
-          termWidth: 1,
-          showDefault: true,
-          showChoices: { label: "" },
-          theme: {
-            syntaxPunctuation: (term, context) =>
-              term.kind === `${kind}Suffix`
-                ? { type: "text", text: "\n12345678" }
-                : defaultTerminalTheme.syntaxPunctuation(term, context),
-          },
-        }), RangeError);
+      assert.throws(
+        () =>
+          formatDocPage(
+            "app",
+            {
+              sections: [
+                {
+                  entries: [
+                    {
+                      term: { type: "literal", value: "x" },
+                      [kind]: message`x`,
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              maxWidth: 12,
+              termWidth: 1,
+              showDefault: true,
+              showChoices: { label: "" },
+              theme: {
+                syntaxPunctuation: (term, context) =>
+                  term.kind === `${kind}Suffix`
+                    ? { type: "text", text: "\n12345678" }
+                    : defaultTerminalTheme.syntaxPunctuation(term, context),
+              },
+            },
+          ),
+        RangeError,
+      );
     });
   }
   it("should keep long section titles usable in narrow terminals", () => {
     const page = {
       usage: [{ type: "literal" as const, value: "app" }],
-      sections: [{
-        title: "Configuration file options",
-        entries: [{
-          term: { type: "option" as const, names: ["--config"] as const },
-        }],
-      }],
+      sections: [
+        {
+          title: "Configuration file options",
+          entries: [
+            {
+              term: { type: "option" as const, names: ["--config"] as const },
+            },
+          ],
+        },
+      ],
     };
     assert.ok(
       formatDocPage("app", page, { maxWidth: 26 }).includes(
@@ -951,64 +1083,87 @@ describe("physical-line annotation layout", () => {
           label: (term, context) =>
             term.kind === "section"
               ? {
-                type: "text",
-                text: "A heading wider than the terminal\nOptions:",
-              }
+                  type: "text",
+                  text: "A heading wider than the terminal\nOptions:",
+                }
               : defaultTerminalTheme.label(term, context),
         },
       }).includes("A heading wider than the terminal\nOptions:"),
     );
   });
   it("should reserve room for content below a short fixed label", () => {
-    assert.throws(() =>
-      formatDocPage("app", {
-        sections: [],
-        examples: message`x`,
-      }, {
-        maxWidth: 2,
-        theme: { label: () => ({ type: "text", text: "E" }) },
-      }), RangeError);
+    assert.throws(
+      () =>
+        formatDocPage(
+          "app",
+          {
+            sections: [],
+            examples: message`x`,
+          },
+          {
+            maxWidth: 2,
+            theme: { label: () => ({ type: "text", text: "E" }) },
+          },
+        ),
+      RangeError,
+    );
   });
 });
 
 it("continues choices from the last line of a default suffix", () => {
   const starts: (number | undefined)[] = [];
-  const result = formatDocPage("app", {
-    sections: [{
-      entries: [{
-        term: { type: "literal", value: "x" },
-        default: message`default`,
-        choices: message`choice`,
-      }],
-    }],
-  }, {
-    maxWidth: 20,
-    termWidth: 1,
-    showDefault: { prefix: "[", suffix: "]\nS" },
-    showChoices: { prefix: " (", label: "C:" },
-    messageFormatter: (_message, options) => {
-      starts.push(options?.initialWidth);
-      return "x";
+  const result = formatDocPage(
+    "app",
+    {
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "literal", value: "x" },
+              default: message`default`,
+              choices: message`choice`,
+            },
+          ],
+        },
+      ],
     },
-  });
+    {
+      maxWidth: 20,
+      termWidth: 1,
+      showDefault: { prefix: "[", suffix: "]\nS" },
+      showChoices: { prefix: " (", label: "C:" },
+      messageFormatter: (_message, options) => {
+        starts.push(options?.initialWidth);
+        return "x";
+      },
+    },
+  );
   assert.deepEqual(starts, [1, 5]);
   assert.ok(result.includes("[x]\n     S (C:x)"), result);
 });
 
 it("places suffixes after empty formatter output without reflowing it", () => {
-  const result = formatDocPage("app", {
-    sections: [{
-      entries: [{
-        term: { type: "literal", value: "x" },
-        default: message`ignored`,
-      }],
-    }],
-  }, {
-    maxWidth: 12,
-    termWidth: 1,
-    showDefault: { prefix: "123456", suffix: "]]\nS" },
-    messageFormatter: () => "",
-  });
+  const result = formatDocPage(
+    "app",
+    {
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "literal", value: "x" },
+              default: message`ignored`,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      maxWidth: 12,
+      termWidth: 1,
+      showDefault: { prefix: "123456", suffix: "]]\nS" },
+      messageFormatter: () => "",
+    },
+  );
   assert.ok(result.includes("123456\n     ]]\n     S"), result);
 });
 
@@ -1028,35 +1183,43 @@ describe("annotation composition properties", () => {
     fc.assert(
       fc.property(headingPrefix, affix, affix, (prefix, label, suffix) => {
         const page = {
-          sections: [{
-            entries: [{
-              term: { type: "literal" as const, value: "x" },
-              description: message`d`,
-              default: message`a b`,
-              choices: message`x y`,
-            }],
-          }],
+          sections: [
+            {
+              entries: [
+                {
+                  term: { type: "literal" as const, value: "x" },
+                  description: message`d`,
+                  default: message`a b`,
+                  choices: message`x y`,
+                },
+              ],
+            },
+          ],
         };
         const theme: TerminalTheme = {
           syntaxPunctuation: (term, context) => ({
             type: "style",
             style: { foreground: "red" },
-            children: [{
-              type: "text",
-              text: term.kind.endsWith("Prefix")
-                ? prefix
-                : term.kind.endsWith("Suffix")
-                ? suffix
-                : context.text,
-            }],
+            children: [
+              {
+                type: "text",
+                text: term.kind.endsWith("Prefix")
+                  ? prefix
+                  : term.kind.endsWith("Suffix")
+                    ? suffix
+                    : context.text,
+              },
+            ],
           }),
           label: (term, context) => ({
             type: "link",
             href: "https://example.com/",
-            children: [{
-              type: "text",
-              text: term.kind === "choices" ? label : context.text,
-            }],
+            children: [
+              {
+                type: "text",
+                text: term.kind === "choices" ? label : context.text,
+              },
+            ],
           }),
         };
         const options = {
@@ -1086,18 +1249,26 @@ describe("annotation composition properties", () => {
 
 it("does not add breaks for empty suffix lines after an overflowing atom", () => {
   for (const suffix of ["", "\nS"]) {
-    const result = formatDocPage("app", {
-      sections: [{
-        entries: [{
-          term: { type: "literal", value: "x" },
-          default: message`abcdefghijk`,
-        }],
-      }],
-    }, {
-      maxWidth: 12,
-      termWidth: 1,
-      showDefault: { prefix: "", suffix },
-    });
+    const result = formatDocPage(
+      "app",
+      {
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "literal", value: "x" },
+                default: message`abcdefghijk`,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        maxWidth: 12,
+        termWidth: 1,
+        showDefault: { prefix: "", suffix },
+      },
+    );
     assert.equal(
       result,
       `\n  x  abcdefghijk${suffix.replaceAll("\n", "\n     ")}\n`,
@@ -1116,24 +1287,31 @@ describe("multiline themed entry indentation", () => {
             return {
               type: "style",
               style: { foreground: "red" },
-              children: [{
-                type: "link",
-                href: "https://example.com/",
-                children: [
-                  { type: "text", text: "AA\nB" },
-                ],
-              }],
+              children: [
+                {
+                  type: "link",
+                  href: "https://example.com/",
+                  children: [{ type: "text", text: "AA\nB" }],
+                },
+              ],
             };
           },
         };
         for (const maxWidth of [undefined, 14]) {
           calls = 0;
-          const term = role === "optionName"
-            ? { type: "option" as const, names: ["-x"] as const }
-            : { type: "argument" as const, metavar: "X" as const };
-          const output = formatDocPage("app", {
-            sections: [{ entries: [{ term, description: message`one two` }] }],
-          }, { theme, colors, termWidth: 3, termIndent: 2, maxWidth });
+          const term =
+            role === "optionName"
+              ? { type: "option" as const, names: ["-x"] as const }
+              : { type: "argument" as const, metavar: "X" as const };
+          const output = formatDocPage(
+            "app",
+            {
+              sections: [
+                { entries: [{ term, description: message`one two` }] },
+              ],
+            },
+            { theme, colors, termWidth: 3, termIndent: 2, maxWidth },
+          );
           assert.equal(stripAnsi(output), "\n  AA\n  B    one two\n");
           assert.equal(calls, 1);
         }
@@ -1141,26 +1319,34 @@ describe("multiline themed entry indentation", () => {
     }
   }
   it("indents wrapped lines within an explicitly multiline replacement", () => {
-    const output = formatDocPage("app", {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["-x"] },
-          description: message`one two three`,
-        }],
-      }],
-    }, {
-      maxWidth: 12,
-      termWidth: 3,
-      theme: {
-        optionName: () => ({
-          type: "concat",
-          children: [
-            { type: "text", text: "AA\nBBBBBB" },
-            { type: "text", text: "CCCCCC" },
-          ],
-        }),
+    const output = formatDocPage(
+      "app",
+      {
+        sections: [
+          {
+            entries: [
+              {
+                term: { type: "option", names: ["-x"] },
+                description: message`one two three`,
+              },
+            ],
+          },
+        ],
       },
-    });
+      {
+        maxWidth: 12,
+        termWidth: 3,
+        theme: {
+          optionName: () => ({
+            type: "concat",
+            children: [
+              { type: "text", text: "AA\nBBBBBB" },
+              { type: "text", text: "CCCCCC" },
+            ],
+          }),
+        },
+      },
+    );
     assert.ok(output.includes("\n  AA\n  BBBBBB\n  CCCCCC"), output);
     for (const line of output.split("\n")) {
       assert.ok(getDisplayWidth(line) <= 12, JSON.stringify(line));
@@ -1170,41 +1356,45 @@ describe("multiline themed entry indentation", () => {
 
 describe("usage boundary hard breaks", () => {
   it("should not append a space before a leading themed line break", () => {
-    const output = formatDocPage("app", {
-      usage: [{ type: "option", names: ["-x"] }],
-      sections: [],
-    }, {
-      maxWidth: 10,
-      theme: { optionName: () => ({ type: "text", text: "\nX" }) },
-    });
+    const output = formatDocPage(
+      "app",
+      {
+        usage: [{ type: "option", names: ["-x"] }],
+        sections: [],
+      },
+      {
+        maxWidth: 10,
+        theme: { optionName: () => ({ type: "text", text: "\nX" }) },
+      },
+    );
     assert.equal(output, "Usage: app\n       X\n");
   });
   for (const colors of [false, true]) {
     it(`should preserve boundary breaks with colors=${colors}`, () => {
-      for (
-        const [program, option, maxWidth, expected] of [
-          ["app", "\nX", 3, "app\nX"],
-          ["app\n", "X", 3, "app\nX"],
-          ["app\n", "XXXX", 3, "app\nXXXX"],
-          ["app\n", "\nX", 3, "app\n\nX"],
-          ["app\n\n", "\n\nX", undefined, "app\n\n\n\nX"],
-          ["app", "X", 3, "app\nX"],
-          ["app", "X", 4, "app\nX"],
-          ["app", "X", undefined, "app X"],
-        ] as const
-      ) {
+      for (const [program, option, maxWidth, expected] of [
+        ["app", "\nX", 3, "app\nX"],
+        ["app\n", "X", 3, "app\nX"],
+        ["app\n", "XXXX", 3, "app\nXXXX"],
+        ["app\n", "\nX", 3, "app\n\nX"],
+        ["app\n\n", "\n\nX", undefined, "app\n\n\n\nX"],
+        ["app", "X", 3, "app\nX"],
+        ["app", "X", 4, "app\nX"],
+        ["app", "X", undefined, "app X"],
+      ] as const) {
         const decorate = (text: string): TerminalFragment => ({
           type: "style",
           style: { foreground: "red" },
-          children: [{
-            type: "link",
-            href: "https://example.com/",
-            children: [
-              { type: "text", text: "" },
-              { type: "text", text },
-              { type: "text", text: "" },
-            ],
-          }],
+          children: [
+            {
+              type: "link",
+              href: "https://example.com/",
+              children: [
+                { type: "text", text: "" },
+                { type: "text", text },
+                { type: "text", text: "" },
+              ],
+            },
+          ],
         });
         const output = formatUsage("app", [{ type: "option", names: ["-x"] }], {
           colors,
@@ -1236,43 +1426,63 @@ describe("usage spacing around themed breaks", () => {
         metavar: () => ({ type: "text", text: "\nX" }),
       };
       assert.equal(
-        stripAnsi(formatUsage("p", [
-          { type: "option", names: ["-a"] },
-          { type: "option", names: ["-b"] },
-        ], { theme, colors, maxWidth: 2 })),
+        stripAnsi(
+          formatUsage(
+            "p",
+            [
+              { type: "option", names: ["-a"] },
+              { type: "option", names: ["-b"] },
+            ],
+            { theme, colors, maxWidth: 2 },
+          ),
+        ),
         "p\nA\n-b",
       );
       assert.equal(
-        stripAnsi(formatUsageTerm({
-          type: "option",
-          names: ["-a"],
-          metavar: "X",
-        }, { theme, colors })),
+        stripAnsi(
+          formatUsageTerm(
+            {
+              type: "option",
+              names: ["-a"],
+              metavar: "X",
+            },
+            { theme, colors },
+          ),
+        ),
         "A\n\nX",
       );
       assert.equal(
-        stripAnsi(formatUsageTerm({
-          type: "multiple",
-          min: 2,
-          terms: [{ type: "option", names: ["-a"] }],
-        }, { theme, colors })),
+        stripAnsi(
+          formatUsageTerm(
+            {
+              type: "multiple",
+              min: 2,
+              terms: [{ type: "option", names: ["-a"] }],
+            },
+            { theme, colors },
+          ),
+        ),
         "A\nA\n...",
       );
     }
   });
   it("should keep a theme's own spaces beside its hard breaks", () => {
     assert.equal(
-      formatUsage("p", [
-        { type: "option", names: ["-a"] },
-        { type: "option", names: ["-b"] },
-      ], {
-        theme: {
-          optionName: (term) => ({
-            type: "text",
-            text: term.optionName === "-a" ? "A \n" : " B",
-          }),
+      formatUsage(
+        "p",
+        [
+          { type: "option", names: ["-a"] },
+          { type: "option", names: ["-b"] },
+        ],
+        {
+          theme: {
+            optionName: (term) => ({
+              type: "text",
+              text: term.optionName === "-a" ? "A \n" : " B",
+            }),
+          },
         },
-      }),
+      ),
       "p A \n B",
     );
   });
@@ -1282,17 +1492,21 @@ describe("empty usage label spacing", () => {
   for (const label of ["", "\n", "L\n"]) {
     it(`should avoid a separator on an empty final label line: ${JSON.stringify(label)}`, () => {
       for (const colors of [false, true]) {
-        const output = formatDocPage("app", { usage: [], sections: [] }, {
-          maxWidth: 3,
-          colors,
-          theme: {
-            label: () => ({
-              type: "style",
-              style: { bold: true },
-              children: [{ type: "text", text: label }],
-            }),
+        const output = formatDocPage(
+          "app",
+          { usage: [], sections: [] },
+          {
+            maxWidth: 3,
+            colors,
+            theme: {
+              label: () => ({
+                type: "style",
+                style: { bold: true },
+                children: [{ type: "text", text: label }],
+              }),
+            },
           },
-        });
+        );
         assert.equal(stripAnsi(output), `${label}app\n`);
       }
     });
@@ -1329,34 +1543,38 @@ it("separates only nonempty themed usage output", () => {
       ];
       for (const program of ["app", ""]) {
         assert.equal(
-          stripAnsi(formatUsage(
-            "app",
-            names.map((name) => ({
-              type: "option" as const,
-              names: [name],
-            })),
-            {
-              colors,
-              theme: {
-                programName: () => ({ type: "text", text: program }),
-                optionName: (term) => ({
-                  type: "style",
-                  style: { bold: true },
-                  children: [{
-                    type: "text",
-                    text: hidden.includes(names.findIndex((name) =>
-                        name === term.optionName
-                      ))
-                      ? ""
-                      : term.optionName,
-                  }],
-                }),
+          stripAnsi(
+            formatUsage(
+              "app",
+              names.map((name) => ({
+                type: "option" as const,
+                names: [name],
+              })),
+              {
+                colors,
+                theme: {
+                  programName: () => ({ type: "text", text: program }),
+                  optionName: (term) => ({
+                    type: "style",
+                    style: { bold: true },
+                    children: [
+                      {
+                        type: "text",
+                        text: hidden.includes(
+                          names.findIndex((name) => name === term.optionName),
+                        )
+                          ? ""
+                          : term.optionName,
+                      },
+                    ],
+                  }),
+                },
               },
-            },
-          )),
-          [program, ...names.filter((_, i) => !hidden.includes(i))].filter(
-            Boolean,
-          ).join(" "),
+            ),
+          ),
+          [program, ...names.filter((_, i) => !hidden.includes(i))]
+            .filter(Boolean)
+            .join(" "),
         );
       }
     }
@@ -1366,12 +1584,12 @@ it("separates only nonempty themed usage output", () => {
 it("spaces error labels consistently across runner failure paths", async () => {
   for (const async of [false, true]) {
     for (const label of ["", "Error\n", "Error:"]) {
-      for (
-        const args of [[], ["--bad"], ["--completion"], [
-          "--completion",
-          "unknown",
-        ]]
-      ) {
+      for (const args of [
+        [],
+        ["--bad"],
+        ["--completion"],
+        ["--completion", "unknown"],
+      ]) {
         const output: string[] = [];
         const widths = new Map<Message, number | undefined>();
         const options = {
@@ -1396,9 +1614,10 @@ it("spaces error labels consistently across runner failure paths", async () => {
         if (async) await runParserAsync(parser, "app", args, options);
         else runParserSync(parser, "app", args, options);
         assert.ok(
-          output.some((line) =>
-            line === `${label}${label === "Error:" ? " " : ""}CUSTOM` ||
-            line === `${label}${label === "Error:" ? " " : ""}CUSTOM\n`
+          output.some(
+            (line) =>
+              line === `${label}${label === "Error:" ? " " : ""}CUSTOM` ||
+              line === `${label}${label === "Error:" ? " " : ""}CUSTOM\n`,
           ),
           JSON.stringify({ args, async, label, output }),
         );
@@ -1409,42 +1628,57 @@ it("spaces error labels consistently across runner failure paths", async () => {
 
 it("preserves custom usage whitespace through automatic wrapping", () => {
   for (const colors of [false, true]) {
-    for (const chunks of [["A ", "B"], ["A", " ", "B"], ["A", " ", "", "B"]]) {
+    for (const chunks of [
+      ["A ", "B"],
+      ["A", " ", "B"],
+      ["A", " ", "", "B"],
+    ]) {
       const theme: TerminalTheme = {
         optionName: () => ({
           type: "style",
           style: { bold: true },
-          children: [{
-            type: "link",
-            href: "https://example.com/",
-            children: chunks.map((text) => ({ type: "text", text })),
-          }],
+          children: [
+            {
+              type: "link",
+              href: "https://example.com/",
+              children: chunks.map((text) => ({ type: "text", text })),
+            },
+          ],
         }),
       };
-      const output = formatUsageTerm({ type: "option", names: ["-x"] }, {
-        theme,
-        colors,
-        maxWidth: 1,
-      });
+      const output = formatUsageTerm(
+        { type: "option", names: ["-x"] },
+        {
+          theme,
+          colors,
+          maxWidth: 1,
+        },
+      );
       assert.equal(stripAnsi(output).replaceAll("\n", ""), chunks.join(""));
     }
     assert.equal(
-      stripAnsi(formatUsage("p", [
-        { type: "option", names: ["-a"] },
-        { type: "option", names: ["-b"] },
-      ], {
-        colors,
-        maxWidth: 3,
-        theme: {
-          optionName: (term) => ({
-            type: "concat",
-            children: [
-              { type: "text", text: "" },
-              { type: "text", text: term.optionName === "-a" ? "A" : "BB" },
-            ],
-          }),
-        },
-      })),
+      stripAnsi(
+        formatUsage(
+          "p",
+          [
+            { type: "option", names: ["-a"] },
+            { type: "option", names: ["-b"] },
+          ],
+          {
+            colors,
+            maxWidth: 3,
+            theme: {
+              optionName: (term) => ({
+                type: "concat",
+                children: [
+                  { type: "text", text: "" },
+                  { type: "text", text: term.optionName === "-a" ? "A" : "BB" },
+                ],
+              }),
+            },
+          },
+        ),
+      ),
       "p A\nBB",
     );
   }
@@ -1458,11 +1692,16 @@ it("uses the same usage boundaries for program and command fragments", () => {
           const decorate = (text: string): TerminalFragment => ({
             type: "style",
             style: { bold: true },
-            children: [{
-              type: "link",
-              href: "https://example.com/",
-              children: [{ type: "text", text: "" }, { type: "text", text }],
-            }],
+            children: [
+              {
+                type: "link",
+                href: "https://example.com/",
+                children: [
+                  { type: "text", text: "" },
+                  { type: "text", text },
+                ],
+              },
+            ],
           });
           const theme: TerminalTheme = {
             programName: () => decorate(program),
@@ -1474,13 +1713,18 @@ it("uses the same usage boundaries for program and command fragments", () => {
             stripAnsi(
               formatUsage("app", [{ type: "option", names: ["-x"] }], options),
             ),
-            stripAnsi(formatUsageTerm({
-              type: "sequence",
-              terms: [
-                { type: "command", name: "cmd" },
-                { type: "option", names: ["-x"] },
-              ],
-            }, options)),
+            stripAnsi(
+              formatUsageTerm(
+                {
+                  type: "sequence",
+                  terms: [
+                    { type: "command", name: "cmd" },
+                    { type: "option", names: ["-x"] },
+                  ],
+                },
+                options,
+              ),
+            ),
             JSON.stringify({ program, term, colors, maxWidth }),
           );
         }

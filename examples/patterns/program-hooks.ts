@@ -112,9 +112,9 @@ await runProgram<Scope>({
       const scope = context.resource;
       if (scope == null) return;
       print(
-        message`✔ ${text(scope.label)} finished in ${
-          text(`${Date.now() - scope.startedAt}ms`)
-        }.`,
+        message`✔ ${text(scope.label)} finished in ${text(
+          `${Date.now() - scope.startedAt}ms`,
+        )}.`,
       );
     },
     onError(context, error) {

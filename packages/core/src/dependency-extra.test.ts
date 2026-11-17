@@ -98,9 +98,10 @@ describe("Nested objects with dependencies", () => {
       mode: "sync",
       factory: (dbType: "postgres" | "mysql" | "sqlite") => {
         const patterns = {
-          postgres: choice(
-            ["postgresql://localhost:5432", "postgresql://db:5432"] as const,
-          ),
+          postgres: choice([
+            "postgresql://localhost:5432",
+            "postgresql://db:5432",
+          ] as const),
           mysql: choice(["mysql://localhost:3306", "mysql://db:3306"] as const),
           sqlite: choice(["file:./data.db", "file::memory:"] as const),
         };
@@ -152,9 +153,9 @@ describe("Nested objects with dependencies", () => {
           cacheType === "redis"
             ? (["redis://localhost:6379", "redis://cache:6379"] as const)
             : ([
-              "memcached://localhost:11211",
-              "memcached://cache:11211",
-            ] as const),
+                "memcached://localhost:11211",
+                "memcached://cache:11211",
+              ] as const),
         ),
       defaultValue: () => "redis" as const,
     });
@@ -463,11 +464,11 @@ describe("Help and usage generation with dependencies", () => {
 
     // Find entries for our options
     const entries = docPage.sections.flatMap((s) => s.entries);
-    const envEntry = entries.find((e) =>
-      e.term.type === "option" && e.term.names.includes("--env")
+    const envEntry = entries.find(
+      (e) => e.term.type === "option" && e.term.names.includes("--env"),
     );
-    const regionEntry = entries.find((e) =>
-      e.term.type === "option" && e.term.names.includes("--region")
+    const regionEntry = entries.find(
+      (e) => e.term.type === "option" && e.term.names.includes("--region"),
     );
 
     assert.ok(envEntry, "Should have --env entry");
@@ -531,7 +532,7 @@ describe("Shell completion with dependencies", () => {
     // Get completions for --mode value
     const modeCompletions = await suggestAsync(parser, ["--mode", ""]);
     const modeValues = modeCompletions.map((c) =>
-      c.kind === "literal" ? c.text : ""
+      c.kind === "literal" ? c.text : "",
     );
     assert.ok(modeValues.includes("dev"));
     assert.ok(modeValues.includes("staging"));
@@ -560,7 +561,7 @@ describe("Shell completion with dependencies", () => {
     // Get completions for --log-level value (should use default "dev")
     const logCompletions = await suggestAsync(parser, ["--log-level", ""]);
     const logValues = logCompletions.map((c) =>
-      c.kind === "literal" ? c.text : ""
+      c.kind === "literal" ? c.text : "",
     );
     // Default is "dev", so should suggest debug/trace
     assert.ok(
@@ -990,8 +991,8 @@ describe("group() with dependencies", () => {
 
     const docPage = getDocPage(parser);
     assert.ok(docPage);
-    const section = docPage.sections.find((s) =>
-      s.title === "Environment Settings"
+    const section = docPage.sections.find(
+      (s) => s.title === "Environment Settings",
     );
     assert.ok(section, "Should have Environment Settings section");
     assert.ok(section.entries.length >= 2, "Should have at least 2 entries");
@@ -1016,13 +1017,8 @@ describe("concat() with dependencies", () => {
     });
 
     const parser = concat(
-      tuple([
-        option("--mode", modeParser),
-        option("--level", levelParser),
-      ]),
-      tuple([
-        option("--verbose"),
-      ]),
+      tuple([option("--mode", modeParser), option("--level", levelParser)]),
+      tuple([option("--verbose")]),
     );
 
     const result = await parseAsync(parser, [
@@ -1250,9 +1246,8 @@ describe("deriveFrom with more than 2 dependencies", () => {
 describe("Dependencies with map() modifier", () => {
   test("map() applied to option with dependency source", async () => {
     const rawModeParser = dependency(choice(["dev", "prod"] as const));
-    const mappedModeParser = map(
-      option("--mode", rawModeParser),
-      (mode) => mode.toUpperCase(),
+    const mappedModeParser = map(option("--mode", rawModeParser), (mode) =>
+      mode.toUpperCase(),
     );
 
     const logLevelParser = rawModeParser.derive({
@@ -1585,9 +1580,8 @@ describe("map() transformed dependency source", () => {
     // map() on the derived parser's option
     const parser = object({
       mode: option("--mode", modeParser),
-      logLevel: map(
-        option("--log-level", logLevelParser),
-        (level) => level.toUpperCase(),
+      logLevel: map(option("--log-level", logLevelParser), (level) =>
+        level.toUpperCase(),
       ),
     });
 
@@ -2047,11 +2041,9 @@ describe("merge() nested source default thunk exactly-once evaluation", () => {
 
     // Same dep-source parser reused in two different fields via merge.
     // Each field must get its own Phase 1 result, not a conflated one.
-    const parser = merge(
-      object({ a: shared }),
-      object({ b: shared }),
-      { allowDuplicates: true },
-    );
+    const parser = merge(object({ a: shared }), object({ b: shared }), {
+      allowDuplicates: true,
+    });
 
     const result = parseSync(parser, []);
     assert.ok(result.success);
@@ -2613,9 +2605,8 @@ describe("Deep modifier chains with dependencies", () => {
     // Deep chain on dependency source: withDefault(map(optional(...)))
     const parser = object({
       mode: withDefault(
-        map(
-          optional(option("--mode", modeParser)),
-          (m) => m ? m.toUpperCase() : null,
+        map(optional(option("--mode", modeParser)), (m) =>
+          m ? m.toUpperCase() : null,
         ),
         "PROD",
       ),
@@ -2671,12 +2662,7 @@ describe("Deep modifier chains with dependencies", () => {
       ),
     });
 
-    const result = await parseAsync(parser, [
-      "--mode",
-      "y",
-      "--value",
-      "ya",
-    ]);
+    const result = await parseAsync(parser, ["--mode", "y", "--value", "ya"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.mode, "y");
@@ -3345,13 +3331,10 @@ describe("conditional() with dependencies", () => {
       defaultValue: () => "json" as const,
     });
 
-    const parser = conditional(
-      option("--mode", modeParser),
-      {
-        json: object({ format: option("--format", formatParser) }),
-        xml: object({ format: option("--format", formatParser) }),
-      },
-    );
+    const parser = conditional(option("--mode", modeParser), {
+      json: object({ format: option("--format", formatParser) }),
+      xml: object({ format: option("--format", formatParser) }),
+    });
 
     // Test json mode with json-specific format
     const result1 = await parseAsync(parser, [
@@ -3596,18 +3579,15 @@ describe("conditional() with dependencies", () => {
 
     // Nested conditional: outer discriminator determines branch,
     // inner branch has its own dependency chain
-    const parser = conditional(
-      option("--type", choice(["a", "b"] as const)),
-      {
-        a: object({
-          mode: option("--mode", modeParser),
-          level: option("--level", levelParser),
-        }),
-        b: object({
-          name: option("--name", string()),
-        }),
-      },
-    );
+    const parser = conditional(option("--type", choice(["a", "b"] as const)), {
+      a: object({
+        mode: option("--mode", modeParser),
+        level: option("--level", levelParser),
+      }),
+      b: object({
+        name: option("--name", string()),
+      }),
+    });
 
     // Test type 'a' with safe mode
     const result1 = await parseAsync(parser, [
@@ -3803,10 +3783,7 @@ describe("deriveFrom() with partially provided dependencies", () => {
 
     // format uses withDefault "yaml", compression is not provided (uses deriveFrom default "none"),
     // encoding uses withDefault "utf16"
-    const result = await parseAsync(parser, [
-      "--output",
-      "output-utf16.yaml",
-    ]);
+    const result = await parseAsync(parser, ["--output", "output-utf16.yaml"]);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value.format, "yaml");
@@ -4022,12 +3999,10 @@ describe("suggestAsync() with derived parsers and provided dependencies", () => 
         if (env === "dev") {
           return choice([`localhost-${region}`] as const);
         }
-        return choice(
-          [
-            `${env}-${region}-1.example.com`,
-            `${env}-${region}-2.example.com`,
-          ] as const,
-        );
+        return choice([
+          `${env}-${region}-1.example.com`,
+          `${env}-${region}-2.example.com`,
+        ] as const);
       },
       defaultValues: () => ["dev", "us"] as const,
     });
@@ -4599,7 +4574,9 @@ describe("Error handling paths", () => {
         "--value",
         "",
       ]);
-      const values = completions.map((c) => c.kind === "literal" ? c.text : "");
+      const values = completions.map((c) =>
+        c.kind === "literal" ? c.text : "",
+      );
 
       // Should get options from "safe" mode's parser
       assert.ok(
@@ -4639,14 +4616,16 @@ describe("Error handling paths", () => {
         "--value",
         "",
       ]);
-      const values = completions.map((c) => c.kind === "literal" ? c.text : "");
+      const values = completions.map((c) =>
+        c.kind === "literal" ? c.text : "",
+      );
 
       // Should fall back to default values ["a", "1"]
       assert.ok(
         values.includes("a-1-x") || values.includes("a-1-y"),
-        `Expected fallback suggestions from defaults, got: ${
-          values.join(", ")
-        }`,
+        `Expected fallback suggestions from defaults, got: ${values.join(
+          ", ",
+        )}`,
       );
     });
   });
@@ -4667,9 +4646,10 @@ describe("Git-like CLI with subcommands and shared global dependency", () => {
       mode: "sync",
       factory: (dir: string) => {
         // In real code, this would validate against actual branches in dir
-        const branches = dir === "/repo1"
-          ? (["main", "feature-1"] as const)
-          : (["master", "develop"] as const);
+        const branches =
+          dir === "/repo1"
+            ? (["main", "feature-1"] as const)
+            : (["master", "develop"] as const);
         return choice(branches);
       },
       defaultValue: () => ".",
@@ -4746,9 +4726,10 @@ describe("Git-like CLI with subcommands and shared global dependency", () => {
       metavar: "RESOURCE",
       mode: "sync",
       factory: (region: "us-east" | "eu-west") => {
-        const resources = region === "us-east"
-          ? (["server-1", "server-2"] as const)
-          : (["instance-a", "instance-b"] as const);
+        const resources =
+          region === "us-east"
+            ? (["server-1", "server-2"] as const)
+            : (["instance-a", "instance-b"] as const);
         return choice(resources);
       },
       defaultValue: () => "us-east" as const,
@@ -4825,9 +4806,10 @@ describe("Git-like CLI with subcommands and shared global dependency", () => {
       metavar: "SERVICE",
       mode: "sync",
       factory: (env: "dev" | "prod") => {
-        const services = env === "dev"
-          ? (["api-dev", "web-dev", "worker-dev"] as const)
-          : (["api-prod", "web-prod"] as const);
+        const services =
+          env === "dev"
+            ? (["api-dev", "web-dev", "worker-dev"] as const)
+            : (["api-prod", "web-prod"] as const);
         return choice(services);
       },
       defaultValue: () => "dev" as const,
@@ -5064,8 +5046,7 @@ describe("Multi-level dependencies using deriveFrom()", () => {
             placeholder: "",
             parse: () => ({
               success: false,
-              error:
-                message`Invalid region "${region}" for environment "${env}"`,
+              error: message`Invalid region "${region}" for environment "${env}"`,
             }),
             format: (v: string) => v,
           };
@@ -5136,9 +5117,7 @@ describe("Multi-level dependencies using deriveFrom()", () => {
 
   test("suggestions with deriveFrom use both dependency values", async () => {
     const tierParser = dependency(choice(["free", "pro"] as const));
-    const categoryParser = dependency(
-      choice(["basic", "advanced"] as const),
-    );
+    const categoryParser = dependency(choice(["basic", "advanced"] as const));
 
     // Features depend on both tier and category
     const featureParser = deriveFrom({
@@ -5203,11 +5182,7 @@ describe("Multi-level dependencies using deriveFrom()", () => {
       metavar: "RESOURCE",
       mode: "sync",
       dependencies: [cloud, region, tier] as const,
-      factory: (
-        c: "aws" | "gcp",
-        r: "us" | "eu",
-        t: "dev" | "prod",
-      ) => {
+      factory: (c: "aws" | "gcp", r: "us" | "eu", t: "dev" | "prod") => {
         // Resource naming follows pattern: {cloud}-{region}-{tier}-{id}
         const prefix = `${c}-${r}-${t}`;
         return choice([`${prefix}-1`, `${prefix}-2`] as const);
@@ -5348,12 +5323,7 @@ describe("Edge case dependency values", () => {
     });
 
     // Space as delimiter
-    const r1 = await parseAsync(parser, [
-      "--delim",
-      " ",
-      "--items",
-      "a b c",
-    ]);
+    const r1 = await parseAsync(parser, ["--delim", " ", "--items", "a b c"]);
     assert.ok(r1.success);
     if (r1.success) {
       assert.equal(r1.value.items, "a,b,c");
@@ -5482,12 +5452,7 @@ describe("Edge case dependency values", () => {
     });
 
     // count = "0" (falsy when parsed as number)
-    const r1 = await parseAsync(parser, [
-      "--count",
-      "0",
-      "--item",
-      "item-0",
-    ]);
+    const r1 = await parseAsync(parser, ["--count", "0", "--item", "item-0"]);
     assert.ok(r1.success);
   });
 });
@@ -5551,16 +5516,13 @@ describe("Real-world scenario: Database CLI", () => {
       object({
         table: option("--table", tableParser),
         limit: withDefault(
-          option(
-            "--limit",
-            {
-              mode: "sync" as const,
-              metavar: "N" as const,
-              placeholder: 0,
-              parse: (s: string) => ({ success: true, value: parseInt(s, 10) }),
-              format: (n: number) => String(n),
-            },
-          ),
+          option("--limit", {
+            mode: "sync" as const,
+            metavar: "N" as const,
+            placeholder: 0,
+            parse: (s: string) => ({ success: true, value: parseInt(s, 10) }),
+            format: (n: number) => String(n),
+          }),
           100,
         ),
       }),
@@ -6549,19 +6511,15 @@ describe("Diamond dependency pattern", () => {
       defaultValues: () => ["http", "80"] as const,
       factory: (protocol: "http" | "https", port: "80" | "443" | "8080") => {
         if (protocol === "https") {
-          return choice(
-            [
-              `https://secure.example.com:${port}`,
-              `https://api.example.com:${port}`,
-            ] as const,
-          );
+          return choice([
+            `https://secure.example.com:${port}`,
+            `https://api.example.com:${port}`,
+          ] as const);
         }
-        return choice(
-          [
-            `http://example.com:${port}`,
-            `http://test.example.com:${port}`,
-          ] as const,
-        );
+        return choice([
+          `http://example.com:${port}`,
+          `http://test.example.com:${port}`,
+        ] as const);
       },
     });
 
@@ -6819,7 +6777,8 @@ describe("Hidden option with dependencies", () => {
     // Verify usage term has hidden: true
     const hiddenTerm = parser.usage.find(
       (t) =>
-        t.type === "optional" && t.terms.some(
+        t.type === "optional" &&
+        t.terms.some(
           (inner) =>
             inner.type === "option" && inner.names.includes("--internal-mode"),
         ),
@@ -6927,13 +6886,11 @@ describe("parseSync() comprehensive tests", () => {
       defaultValue: () => "json" as const,
       factory: (format: "json" | "xml" | "csv") =>
         // Derive output file extension from format
-        choice(
-          [
-            `output.${format}`,
-            `data.${format}`,
-            `result.${format}`,
-          ] as const,
-        ),
+        choice([
+          `output.${format}`,
+          `data.${format}`,
+          `result.${format}`,
+        ] as const),
     });
 
     const parser = object({
@@ -7028,12 +6985,7 @@ describe("parseSync() comprehensive tests", () => {
         host: "localhost" | "example.com",
         port: "80" | "443" | "8080",
       ) =>
-        choice(
-          [
-            `http://${host}:${port}`,
-            `https://${host}:${port}`,
-          ] as const,
-        ),
+        choice([`http://${host}:${port}`, `https://${host}:${port}`] as const),
     });
 
     const parser = object({
@@ -7544,13 +7496,14 @@ describe("map() with dependencies", () => {
       // map() transforms the derived value
       logLevel: map(option("--log-level", logLevelParser), (level) => ({
         name: level,
-        priority: level === "debug"
-          ? 0
-          : level === "trace"
-          ? 1
-          : level === "warn"
-          ? 2
-          : 3,
+        priority:
+          level === "debug"
+            ? 0
+            : level === "trace"
+              ? 1
+              : level === "warn"
+                ? 2
+                : 3,
       })),
     });
 
@@ -7605,64 +7558,61 @@ describe("map() with dependencies", () => {
     }
   });
 
-  test(
-    "map() with withDefault and dependencies transforms parsed values and visible defaults",
-    async () => {
-      const modeParser = dependency(choice(["fast", "safe"] as const));
-      const configParser = modeParser.derive({
-        metavar: "CONFIG",
-        mode: "sync",
-        defaultValue: () => "fast" as const,
-        factory: (mode: "fast" | "safe") =>
-          choice(
-            mode === "fast"
-              ? (["turbo", "quick"] as const)
-              : (["verified", "checked"] as const),
-          ),
-      });
-
-      const parser = object({
-        mode: map(
-          withDefault(option("--mode", modeParser), "fast" as const),
-          (m) => ({ type: m, enabled: true }),
+  test("map() with withDefault and dependencies transforms parsed values and visible defaults", async () => {
+    const modeParser = dependency(choice(["fast", "safe"] as const));
+    const configParser = modeParser.derive({
+      metavar: "CONFIG",
+      mode: "sync",
+      defaultValue: () => "fast" as const,
+      factory: (mode: "fast" | "safe") =>
+        choice(
+          mode === "fast"
+            ? (["turbo", "quick"] as const)
+            : (["verified", "checked"] as const),
         ),
-        config: map(
-          withDefault(option("--config", configParser), "turbo" as const),
-          (c) => `config-${c}`,
-        ),
-      });
+    });
 
-      const result0 = await parseAsync(parser, []);
-      assert.ok(result0.success);
-      if (result0.success) {
-        assert.deepEqual(result0.value.mode, { type: "fast", enabled: true });
-        assert.equal(result0.value.config, "config-turbo");
-      }
+    const parser = object({
+      mode: map(
+        withDefault(option("--mode", modeParser), "fast" as const),
+        (m) => ({ type: m, enabled: true }),
+      ),
+      config: map(
+        withDefault(option("--config", configParser), "turbo" as const),
+        (c) => `config-${c}`,
+      ),
+    });
 
-      // Test with specified values - map() transformation IS applied
-      const result1 = await parseAsync(parser, [
-        "--mode",
-        "safe",
-        "--config",
-        "verified",
-      ]);
-      assert.ok(result1.success);
-      if (result1.success) {
-        assert.deepEqual(result1.value.mode, { type: "safe", enabled: true });
-        assert.equal(result1.value.config, "config-verified");
-      }
+    const result0 = await parseAsync(parser, []);
+    assert.ok(result0.success);
+    if (result0.success) {
+      assert.deepEqual(result0.value.mode, { type: "fast", enabled: true });
+      assert.equal(result0.value.config, "config-turbo");
+    }
 
-      // Test with partial - mode specified, config defaults
-      const result2 = await parseAsync(parser, ["--mode", "fast"]);
-      assert.ok(result2.success);
-      if (result2.success) {
-        // mode was parsed, so map() is applied
-        assert.deepEqual(result2.value.mode, { type: "fast", enabled: true });
-        // config used default, map() still transforms
-        assert.equal(result2.value.config, "config-turbo");
-      }
-    },
-  );
+    // Test with specified values - map() transformation IS applied
+    const result1 = await parseAsync(parser, [
+      "--mode",
+      "safe",
+      "--config",
+      "verified",
+    ]);
+    assert.ok(result1.success);
+    if (result1.success) {
+      assert.deepEqual(result1.value.mode, { type: "safe", enabled: true });
+      assert.equal(result1.value.config, "config-verified");
+    }
+
+    // Test with partial - mode specified, config defaults
+    const result2 = await parseAsync(parser, ["--mode", "fast"]);
+    assert.ok(result2.success);
+    if (result2.success) {
+      // mode was parsed, so map() is applied
+      assert.deepEqual(result2.value.mode, { type: "fast", enabled: true });
+      // config used default, map() still transforms
+      assert.equal(result2.value.config, "config-turbo");
+    }
+  });
 
   test("mapped defaults do not become dependency source values", async () => {
     const modeParser = dependency(choice(["fast", "safe"] as const));
@@ -7763,9 +7713,8 @@ describe("map() with dependencies", () => {
     const parser = object({
       type: option("--type", typeParser),
       // multiple values with map transformation
-      values: map(
-        multiple(option("--value", valueParser)),
-        (vals) => vals.map((v) => v.toUpperCase()),
+      values: map(multiple(option("--value", valueParser)), (vals) =>
+        vals.map((v) => v.toUpperCase()),
       ),
     });
 
@@ -7800,9 +7749,8 @@ describe("map() with dependencies", () => {
 
     const parser = object({
       env: option("--env", envParser),
-      config: map(
-        optional(option("--config", configParser)),
-        (c) => c ? { value: c, isSet: true } : { value: null, isSet: false },
+      config: map(optional(option("--config", configParser)), (c) =>
+        c ? { value: c, isSet: true } : { value: null, isSet: false },
       ),
     });
 
@@ -8052,10 +8000,7 @@ describe("Error customization with dependencies", () => {
       metavar: "URL",
       mode: "sync",
       defaultValues: () => ["localhost", "80"] as const,
-      factory: (
-        host: "localhost" | "remote",
-        port: "80" | "443",
-      ) =>
+      factory: (host: "localhost" | "remote", port: "80" | "443") =>
         choice([`http://${host}:${port}`, `https://${host}:${port}`] as const),
     });
 
@@ -8243,8 +8188,8 @@ describe("Suggestions with dependencies", () => {
   // Helper to extract text from suggestions
   const getSuggestionTexts = (suggestions: readonly Suggestion[]) =>
     suggestions
-      .filter((s): s is { kind: "literal"; text: string } =>
-        s.kind === "literal"
+      .filter(
+        (s): s is { kind: "literal"; text: string } => s.kind === "literal",
       )
       .map((s) => s.text);
 
@@ -8385,10 +8330,7 @@ describe("argument() with derived parsers", () => {
         ),
     });
 
-    const parser = tuple([
-      option("--type", typeParser),
-      argument(pathParser),
-    ]);
+    const parser = tuple([option("--type", typeParser), argument(pathParser)]);
 
     // File type
     const result1 = await parseAsync(parser, [
@@ -8470,12 +8412,10 @@ describe("argument() with derived parsers", () => {
       mode: "sync",
       defaultValues: () => ["dev", "us"] as const,
       factory: (env: "dev" | "prod", region: "us" | "eu") =>
-        choice(
-          [
-            `https://${env}.${region}.example.com`,
-            `https://api.${env}.${region}.example.com`,
-          ] as const,
-        ),
+        choice([
+          `https://${env}.${region}.example.com`,
+          `https://api.${env}.${region}.example.com`,
+        ] as const),
     });
 
     const parser = tuple([
@@ -8748,8 +8688,8 @@ describe("Circular dependency prevention", () => {
           s === "1"
             ? (["one"] as const)
             : s === "2"
-            ? (["two"] as const)
-            : (["three"] as const),
+              ? (["two"] as const)
+              : (["three"] as const),
         ),
     });
 
@@ -8844,8 +8784,8 @@ describe("Complex modifier chains with dependencies", () => {
           env === "test"
             ? (["localhost:3000", "localhost:8080"] as const)
             : env === "staging"
-            ? (["staging.api.com", "staging.cdn.com"] as const)
-            : (["api.example.com", "cdn.example.com"] as const),
+              ? (["staging.api.com", "staging.cdn.com"] as const)
+              : (["api.example.com", "cdn.example.com"] as const),
         ),
     });
 
@@ -8889,8 +8829,8 @@ describe("Complex modifier chains with dependencies", () => {
           format === "json"
             ? (["jsonschema", "openapi"] as const)
             : format === "yaml"
-            ? (["kwalify", "strictyaml"] as const)
-            : (["xsd", "dtd"] as const),
+              ? (["kwalify", "strictyaml"] as const)
+              : (["xsd", "dtd"] as const),
         ),
     });
 
@@ -8941,8 +8881,8 @@ describe("map() chain with multiple() and dependencies", () => {
           tier === "free"
             ? (["basic", "limited"] as const)
             : tier === "pro"
-            ? (["advanced", "priority"] as const)
-            : (["custom", "dedicated", "unlimited"] as const),
+              ? (["advanced", "priority"] as const)
+              : (["custom", "dedicated", "unlimited"] as const),
         ),
     });
 
@@ -8979,16 +8919,15 @@ describe("map() chain with multiple() and dependencies", () => {
           level === "low"
             ? (["1", "2", "3"] as const)
             : level === "medium"
-            ? (["10", "20", "30"] as const)
-            : (["100", "200", "300"] as const),
+              ? (["10", "20", "30"] as const)
+              : (["100", "200", "300"] as const),
         ),
     });
 
     const parser = object({
       level: option("--level", levelParser),
-      values: map(
-        multiple(option("--value", valueParser)),
-        (values) => values.map((v) => parseInt(v, 10)),
+      values: map(multiple(option("--value", valueParser)), (values) =>
+        values.map((v) => parseInt(v, 10)),
       ),
     });
 
@@ -9162,8 +9101,11 @@ describe("parseSync() with async derived parser", () => {
       factory: (mode: "sync" | "async") =>
         mode === "sync"
           ? choice(["a"] as const)
-          // TypeScript users cannot do this without casts, but JavaScript users can.
-          : asyncChoice(["b"] as const) as unknown as ValueParser<"sync", "b">,
+          : // TypeScript users cannot do this without casts, but JavaScript users can.
+            (asyncChoice(["b"] as const) as unknown as ValueParser<
+              "sync",
+              "b"
+            >),
     });
 
     const parser = object({
@@ -9171,12 +9113,7 @@ describe("parseSync() with async derived parser", () => {
       value: option("--value", valueParser),
     });
 
-    const result = parseSync(parser, [
-      "--mode",
-      "async",
-      "--value",
-      "b",
-    ]);
+    const result = parseSync(parser, ["--mode", "async", "--value", "b"]);
 
     assert.ok(!result.success);
     if (!result.success) {
@@ -9454,8 +9391,8 @@ describe("Suggestions with --option=value form and dependencies", () => {
           env === "dev"
             ? (["dev.json", "dev.yaml"] as const)
             : env === "test"
-            ? (["test.json", "test.yaml"] as const)
-            : (["prod.json", "prod.yaml"] as const),
+              ? (["test.json", "test.yaml"] as const)
+              : (["prod.json", "prod.yaml"] as const),
         ),
       defaultValue: () => "dev" as const,
     });
@@ -9544,14 +9481,12 @@ describe("Real-world scenario: Environment-based configuration", () => {
           case "staging":
             return choice(["staging-us-east", "staging-eu-west"] as const);
           case "production":
-            return choice(
-              [
-                "prod-us-east",
-                "prod-us-west",
-                "prod-eu-west",
-                "prod-ap-south",
-              ] as const,
-            );
+            return choice([
+              "prod-us-east",
+              "prod-us-west",
+              "prod-eu-west",
+              "prod-ap-south",
+            ] as const);
         }
       },
     });
@@ -9804,14 +9739,12 @@ describe("Real-world scenario: Mutually dependent option groups", () => {
           case "v2":
             return choice(["/users", "/posts", "/comments"] as const);
           case "v3":
-            return choice(
-              [
-                "/users",
-                "/posts",
-                "/comments",
-                "/reactions",
-              ] as const,
-            );
+            return choice([
+              "/users",
+              "/posts",
+              "/comments",
+              "/reactions",
+            ] as const);
         }
       },
     });
@@ -9915,17 +9848,14 @@ describe("source delivery from conditional()/command() to siblings", () => {
   test("delivers a CLI discriminator value to an outer sibling", async () => {
     const { mode, level } = createModeLevel();
     const parser = object({
-      cond: conditional(
-        option("--mode", mode),
-        {
-          dev: object({
-            d: withDefault(option("--d", choice(["x"] as const)), "x" as const),
-          }),
-          prod: object({
-            p: withDefault(option("--p", choice(["y"] as const)), "y" as const),
-          }),
-        },
-      ),
+      cond: conditional(option("--mode", mode), {
+        dev: object({
+          d: withDefault(option("--d", choice(["x"] as const)), "x" as const),
+        }),
+        prod: object({
+          p: withDefault(option("--p", choice(["y"] as const)), "y" as const),
+        }),
+      }),
       level: option("--level", level),
     });
 
@@ -9953,17 +9883,14 @@ describe("source delivery from conditional()/command() to siblings", () => {
   test("delivers a CLI discriminator value synchronously", () => {
     const { mode, level } = createModeLevel();
     const parser = object({
-      cond: conditional(
-        option("--mode", mode),
-        {
-          dev: object({
-            d: withDefault(option("--d", choice(["x"] as const)), "x" as const),
-          }),
-          prod: object({
-            p: withDefault(option("--p", choice(["y"] as const)), "y" as const),
-          }),
-        },
-      ),
+      cond: conditional(option("--mode", mode), {
+        dev: object({
+          d: withDefault(option("--d", choice(["x"] as const)), "x" as const),
+        }),
+        prod: object({
+          p: withDefault(option("--p", choice(["y"] as const)), "y" as const),
+        }),
+      }),
       level: option("--level", level),
     });
 
@@ -9981,13 +9908,10 @@ describe("source delivery from conditional()/command() to siblings", () => {
   test("delivers a committed named-branch CLI source to a sibling", async () => {
     const { mode, level } = createModeLevel();
     const parser = object({
-      cond: conditional(
-        option("--kind", choice(["a", "b"] as const)),
-        {
-          a: object({ mode: option("--mode", mode) }),
-          b: object({ y: option("--y", choice(["2"] as const)) }),
-        },
-      ),
+      cond: conditional(option("--kind", choice(["a", "b"] as const)), {
+        a: object({ mode: option("--mode", mode) }),
+        b: object({ y: option("--y", choice(["2"] as const)) }),
+      }),
       level: option("--level", level),
     });
 
@@ -10054,10 +9978,7 @@ describe("source delivery from conditional()/command() to siblings", () => {
   test("delivers a selected command()'s CLI source to a sibling", async () => {
     const { mode, level } = createModeLevel();
     const parser = object({
-      cmd: command(
-        "deploy",
-        object({ mode: option("--mode", mode) }),
-      ),
+      cmd: command("deploy", object({ mode: option("--mode", mode) })),
       level: option("--level", level),
     });
 
@@ -10089,10 +10010,9 @@ describe("source delivery from conditional()/command() to siblings", () => {
     const parser = object({
       cond: group(
         "Mode",
-        conditional(
-          option("--kind", choice(["a"] as const)),
-          { a: object({ mode: option("--mode", mode) }) },
-        ),
+        conditional(option("--kind", choice(["a"] as const)), {
+          a: object({ mode: option("--mode", mode) }),
+        }),
       ),
       level: option("--level", level),
     });
@@ -10112,245 +10032,203 @@ describe("source delivery from conditional()/command() to siblings", () => {
     assert.equal(valid.value.level, "silent");
   });
 
-  test(
-    "delivers through an optional()-wrapped conditional()",
-    async () => {
-      const { mode, level } = createModeLevel();
-      // The consumer is declared first on purpose: a later-declared one
-      // could be rescued by declaration-order completion leakage, which
-      // would mask a broken wrapper forwarding of the collection opt-in.
-      const parser = object({
-        level: option("--level", level),
-        cond: optional(
-          conditional(
-            option("--mode", mode),
-            {
-              dev: object({
-                d: withDefault(
-                  option("--d", choice(["x"] as const)),
-                  "x" as const,
-                ),
-              }),
-              prod: object({
-                p: withDefault(
-                  option("--p", choice(["y"] as const)),
-                  "y" as const,
-                ),
-              }),
-            },
-          ),
-        ),
-      });
+  test("delivers through an optional()-wrapped conditional()", async () => {
+    const { mode, level } = createModeLevel();
+    // The consumer is declared first on purpose: a later-declared one
+    // could be rescued by declaration-order completion leakage, which
+    // would mask a broken wrapper forwarding of the collection opt-in.
+    const parser = object({
+      level: option("--level", level),
+      cond: optional(
+        conditional(option("--mode", mode), {
+          dev: object({
+            d: withDefault(option("--d", choice(["x"] as const)), "x" as const),
+          }),
+          prod: object({
+            p: withDefault(option("--p", choice(["y"] as const)), "y" as const),
+          }),
+        }),
+      ),
+    });
 
-      const valid = await parseAsync(parser, [
-        "--level",
-        "silent",
-        "--mode",
-        "prod",
-      ]);
-      assert.ok(
-        valid.success,
-        `Expected success but got: ${JSON.stringify(valid)}`,
-      );
-      assert.equal(valid.value.level, "silent");
-    },
-  );
+    const valid = await parseAsync(parser, [
+      "--level",
+      "silent",
+      "--mode",
+      "prod",
+    ]);
+    assert.ok(
+      valid.success,
+      `Expected success but got: ${JSON.stringify(valid)}`,
+    );
+    assert.equal(valid.value.level, "silent");
+  });
 
-  test(
-    "delivers a command() selected through or() to a sibling",
-    async () => {
-      const { mode, level } = createModeLevel();
-      // or() forwards the collection opt-in when an alternative carries
-      // it, so the committed command's typed value reaches the
-      // earlier-declared consumer just like a prompted one would.
-      const parser = object({
-        level: option("--level", level),
-        cmd: or(
-          command("deploy", object({ mode: option("--mode", mode) })),
-          command(
-            "status",
-            object({ s: option("--s", choice(["1"] as const)) }),
-          ),
-        ),
-      });
+  test("delivers a command() selected through or() to a sibling", async () => {
+    const { mode, level } = createModeLevel();
+    // or() forwards the collection opt-in when an alternative carries
+    // it, so the committed command's typed value reaches the
+    // earlier-declared consumer just like a prompted one would.
+    const parser = object({
+      level: option("--level", level),
+      cmd: or(
+        command("deploy", object({ mode: option("--mode", mode) })),
+        command("status", object({ s: option("--s", choice(["1"] as const)) })),
+      ),
+    });
 
-      const valid = await parseAsync(parser, [
-        "deploy",
-        "--mode",
-        "prod",
-        "--level",
-        "silent",
-      ]);
-      assert.ok(
-        valid.success,
-        `Expected success but got: ${JSON.stringify(valid)}`,
-      );
-      assert.equal(valid.value.level, "silent");
+    const valid = await parseAsync(parser, [
+      "deploy",
+      "--mode",
+      "prod",
+      "--level",
+      "silent",
+    ]);
+    assert.ok(
+      valid.success,
+      `Expected success but got: ${JSON.stringify(valid)}`,
+    );
+    assert.equal(valid.value.level, "silent");
 
-      const invalid = await parseAsync(parser, [
-        "deploy",
-        "--mode",
-        "prod",
-        "--level",
-        "debug",
-      ]);
-      assert.ok(!invalid.success);
-    },
-  );
+    const invalid = await parseAsync(parser, [
+      "deploy",
+      "--mode",
+      "prod",
+      "--level",
+      "debug",
+    ]);
+    assert.ok(!invalid.success);
+  });
 
-  test(
-    "delivers through or() mixing a command() and a direct source",
-    async () => {
-      const { mode, level } = createModeLevel();
-      // Mixing a marked command() with a direct source alternative
-      // gives the or() composed source metadata; the committed branch
-      // must still expand through the scheduling hook, whichever
-      // alternative wins.
-      const parser = object({
-        level: option("--level", level),
-        cmd: or(
-          command("deploy", object({ mode: option("--mode", mode) })),
-          option("--fallback", mode),
-        ),
-      });
+  test("delivers through or() mixing a command() and a direct source", async () => {
+    const { mode, level } = createModeLevel();
+    // Mixing a marked command() with a direct source alternative
+    // gives the or() composed source metadata; the committed branch
+    // must still expand through the scheduling hook, whichever
+    // alternative wins.
+    const parser = object({
+      level: option("--level", level),
+      cmd: or(
+        command("deploy", object({ mode: option("--mode", mode) })),
+        option("--fallback", mode),
+      ),
+    });
 
-      const viaCommand = await parseAsync(parser, [
-        "deploy",
-        "--mode",
-        "prod",
-        "--level",
-        "silent",
-      ]);
-      assert.ok(
-        viaCommand.success,
-        `Expected success but got: ${JSON.stringify(viaCommand)}`,
-      );
-      assert.equal(viaCommand.value.level, "silent");
+    const viaCommand = await parseAsync(parser, [
+      "deploy",
+      "--mode",
+      "prod",
+      "--level",
+      "silent",
+    ]);
+    assert.ok(
+      viaCommand.success,
+      `Expected success but got: ${JSON.stringify(viaCommand)}`,
+    );
+    assert.equal(viaCommand.value.level, "silent");
 
-      const viaSource = await parseAsync(parser, [
-        "--fallback",
-        "prod",
-        "--level",
-        "silent",
-      ]);
-      assert.ok(
-        viaSource.success,
-        `Expected success but got: ${JSON.stringify(viaSource)}`,
-      );
-      assert.equal(viaSource.value.level, "silent");
+    const viaSource = await parseAsync(parser, [
+      "--fallback",
+      "prod",
+      "--level",
+      "silent",
+    ]);
+    assert.ok(
+      viaSource.success,
+      `Expected success but got: ${JSON.stringify(viaSource)}`,
+    );
+    assert.equal(viaSource.value.level, "silent");
 
-      const invalid = await parseAsync(parser, [
-        "deploy",
-        "--mode",
-        "prod",
-        "--level",
-        "debug",
-      ]);
-      assert.ok(!invalid.success);
-    },
-  );
+    const invalid = await parseAsync(parser, [
+      "deploy",
+      "--mode",
+      "prod",
+      "--level",
+      "debug",
+    ]);
+    assert.ok(!invalid.success);
+  });
 
   // https://github.com/dahlia/optique/issues/958
-  test(
-    "delivers a plain nested object() CLI source to an earlier consumer",
-    async () => {
-      const { mode, level } = createModeLevel();
-      // A plain nested object() is part of the enclosing declaration
-      // sequence, so its command-line source reaches a consumer
-      // declared before it, exactly as a source declared directly
-      // beside that consumer does.
-      const parser = object({
-        level: option("--level", level),
-        inner: object({ mode: option("--mode", mode) }),
-      });
+  test("delivers a plain nested object() CLI source to an earlier consumer", async () => {
+    const { mode, level } = createModeLevel();
+    // A plain nested object() is part of the enclosing declaration
+    // sequence, so its command-line source reaches a consumer
+    // declared before it, exactly as a source declared directly
+    // beside that consumer does.
+    const parser = object({
+      level: option("--level", level),
+      inner: object({ mode: option("--mode", mode) }),
+    });
 
-      const result = await parseAsync(parser, [
-        "--mode",
-        "prod",
-        "--level",
-        "silent",
-      ]);
-      assert.ok(
-        result.success,
-        `Expected success but got: ${JSON.stringify(result)}`,
-      );
-      assert.equal(result.value.level, "silent");
+    const result = await parseAsync(parser, [
+      "--mode",
+      "prod",
+      "--level",
+      "silent",
+    ]);
+    assert.ok(
+      result.success,
+      `Expected success but got: ${JSON.stringify(result)}`,
+    );
+    assert.equal(result.value.level, "silent");
 
-      const rejected = await parseAsync(parser, [
-        "--mode",
-        "prod",
-        "--level",
-        "debug",
-      ]);
-      assert.ok(!rejected.success);
-    },
-  );
+    const rejected = await parseAsync(parser, [
+      "--mode",
+      "prod",
+      "--level",
+      "debug",
+    ]);
+    assert.ok(!rejected.success);
+  });
 
-  test(
-    "delivers a CLI discriminator value to an earlier-declared sibling",
-    async () => {
-      const { mode, level } = createModeLevel();
-      const parser = object({
-        level: option("--level", level),
-        cond: conditional(
-          option("--mode", mode),
-          {
-            dev: object({
-              d: withDefault(
-                option("--d", choice(["x"] as const)),
-                "x" as const,
-              ),
-            }),
-            prod: object({
-              p: withDefault(
-                option("--p", choice(["y"] as const)),
-                "y" as const,
-              ),
-            }),
-          },
-        ),
-      });
+  test("delivers a CLI discriminator value to an earlier-declared sibling", async () => {
+    const { mode, level } = createModeLevel();
+    const parser = object({
+      level: option("--level", level),
+      cond: conditional(option("--mode", mode), {
+        dev: object({
+          d: withDefault(option("--d", choice(["x"] as const)), "x" as const),
+        }),
+        prod: object({
+          p: withDefault(option("--p", choice(["y"] as const)), "y" as const),
+        }),
+      }),
+    });
 
-      const valid = await parseAsync(parser, [
-        "--level",
-        "silent",
-        "--mode",
-        "prod",
-      ]);
-      assert.ok(
-        valid.success,
-        `Expected success but got: ${JSON.stringify(valid)}`,
-      );
-      assert.equal(valid.value.level, "silent");
-    },
-  );
+    const valid = await parseAsync(parser, [
+      "--level",
+      "silent",
+      "--mode",
+      "prod",
+    ]);
+    assert.ok(
+      valid.success,
+      `Expected success but got: ${JSON.stringify(valid)}`,
+    );
+    assert.equal(valid.value.level, "silent");
+  });
 
-  test(
-    "delivers a selected command()'s CLI source to an earlier-declared sibling",
-    async () => {
-      const { mode, level } = createModeLevel();
-      const parser = object({
-        level: option("--level", level),
-        cmd: command(
-          "deploy",
-          object({ mode: option("--mode", mode) }),
-        ),
-      });
+  test("delivers a selected command()'s CLI source to an earlier-declared sibling", async () => {
+    const { mode, level } = createModeLevel();
+    const parser = object({
+      level: option("--level", level),
+      cmd: command("deploy", object({ mode: option("--mode", mode) })),
+    });
 
-      const valid = await parseAsync(parser, [
-        "deploy",
-        "--mode",
-        "prod",
-        "--level",
-        "silent",
-      ]);
-      assert.ok(
-        valid.success,
-        `Expected success but got: ${JSON.stringify(valid)}`,
-      );
-      assert.equal(valid.value.level, "silent");
-    },
-  );
+    const valid = await parseAsync(parser, [
+      "deploy",
+      "--mode",
+      "prod",
+      "--level",
+      "silent",
+    ]);
+    assert.ok(
+      valid.success,
+      `Expected success but got: ${JSON.stringify(valid)}`,
+    );
+    assert.equal(valid.value.level, "silent");
+  });
 
   test("keeps declaration order across the conditional() boundary", async () => {
     const { mode, level } = createModeLevel();
@@ -10358,10 +10236,9 @@ describe("source delivery from conditional()/command() to siblings", () => {
     // occurrence of the same source, so the branch value must win.
     const parser = object({
       a: withDefault(option("--a", mode), "dev" as const),
-      cond: conditional(
-        option("--kind", choice(["k"] as const)),
-        { k: object({ b: option("--b", mode) }) },
-      ),
+      cond: conditional(option("--kind", choice(["k"] as const)), {
+        k: object({ b: option("--b", mode) }),
+      }),
       level: option("--level", level),
     });
 
@@ -10386,10 +10263,9 @@ describe("source delivery from conditional()/command() to siblings", () => {
     // from the derived default ("dev"), or an undelivered value would
     // pass the same assertion.
     const reversed = object({
-      cond: conditional(
-        option("--kind", choice(["k"] as const)),
-        { k: object({ b: option("--b", mode) }) },
-      ),
+      cond: conditional(option("--kind", choice(["k"] as const)), {
+        k: object({ b: option("--b", mode) }),
+      }),
       a: withDefault(option("--a", mode), "dev" as const),
       level: option("--level", level),
     });
@@ -10831,14 +10707,16 @@ describe("nested command-line source delivery to earlier consumers", () => {
   test("evaluates a nested derived source's default thunk once", () => {
     let calls = 0;
     const framework = dependency(choice(["fresh", "hono"] as const));
-    const middle = dependency(framework.deriveSync({
-      metavar: "MIDDLE",
-      factory: (value) => choice(value === "fresh" ? ["a"] : ["b"]),
-      defaultValue: () => {
-        calls += 1;
-        return "fresh" as const;
-      },
-    }));
+    const middle = dependency(
+      framework.deriveSync({
+        metavar: "MIDDLE",
+        factory: (value) => choice(value === "fresh" ? ["a"] : ["b"]),
+        defaultValue: () => {
+          calls += 1;
+          return "fresh" as const;
+        },
+      }),
+    );
     const parser = object({
       fw: option("--fw", framework),
       nested: object({ middle: option("--middle", middle) }),
@@ -10897,29 +10775,25 @@ describe("nested command-line source delivery to earlier consumers", () => {
       Parser<"sync", unknown, unknown>,
     ])[] = (() => {
       const built: [string, Parser<"sync", unknown, unknown>][] = [];
-      for (
-        const label of [
-          "plain",
-          "optional",
-          "map",
-          "multiple",
-          "withDefault",
-        ] as const
-      ) {
+      for (const label of [
+        "plain",
+        "optional",
+        "map",
+        "multiple",
+        "withDefault",
+      ] as const) {
         const { framework, pm } = fixture();
-        const alt = or(
-          option("--fw", framework),
-          option("--other", framework),
-        );
-        const wrapped = label === "optional"
-          ? optional(alt)
-          : label === "map"
-          ? map(alt, (value) => value)
-          : label === "multiple"
-          ? multiple(alt)
-          : label === "withDefault"
-          ? withDefault(alt, "fresh" as const)
-          : alt;
+        const alt = or(option("--fw", framework), option("--other", framework));
+        const wrapped =
+          label === "optional"
+            ? optional(alt)
+            : label === "map"
+              ? map(alt, (value) => value)
+              : label === "multiple"
+                ? multiple(alt)
+                : label === "withDefault"
+                  ? withDefault(alt, "fresh" as const)
+                  : alt;
         built.push([
           label,
           object({
@@ -10976,16 +10850,16 @@ describe("nested command-line source delivery to earlier consumers", () => {
         nested: object({
           alt: withBranchError
             ? conditional(
-              option("--kind", choice(["a"] as const)),
-              { a: alternatives() },
-              constant("none" as const),
-              { errors: { branchError: () => message`branch failed` } },
-            )
+                option("--kind", choice(["a"] as const)),
+                { a: alternatives() },
+                constant("none" as const),
+                { errors: { branchError: () => message`branch failed` } },
+              )
             : conditional(
-              option("--kind", choice(["a"] as const)),
-              { a: alternatives() },
-              constant("none" as const),
-            ),
+                option("--kind", choice(["a"] as const)),
+                { a: alternatives() },
+                constant("none" as const),
+              ),
         }),
       });
     for (const withBranchError of [false, true]) {
@@ -11005,7 +10879,9 @@ describe("nested command-line source delivery to earlier consumers", () => {
     const pm = framework.deriveAsync({
       metavar: "PM",
       factory: (value: "fresh" | "hono") =>
-        asyncChoice(value === "fresh" ? ["deno"] as const : ["npm"] as const),
+        asyncChoice(
+          value === "fresh" ? (["deno"] as const) : (["npm"] as const),
+        ),
       defaultValue: () => "fresh" as const,
     });
     const parser = object({
@@ -11031,7 +10907,7 @@ describe("nested command-line source delivery to earlier consumers", () => {
     });
     const suggestions = await suggestAsync(parser, ["--fw", "hono", "--pm="]);
     assert.deepEqual(
-      suggestions.flatMap((s) => s.kind === "literal" ? [s.text] : []),
+      suggestions.flatMap((s) => (s.kind === "literal" ? [s.text] : [])),
       ["--pm=npm"],
     );
   });

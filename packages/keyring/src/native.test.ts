@@ -46,21 +46,22 @@ function runFixture(
   environment: Readonly<Record<string, string>>,
 ): void {
   const fixturePath = fileURLToPath(fixture);
-  const args = "Deno" in globalThis
-    ? [
-      "run",
-      // Dependencies are installed by mise; auto mode would rewrite the
-      // shared node_modules tree while Node.js and Bun tests are running.
-      "--node-modules-dir=manual",
-      "--allow-env",
-      "--allow-sys",
-      "--allow-net",
-      "--allow-read=../../node_modules,/nonexistent/optique-keyring-secret-service.sock",
-      "--allow-write=/nonexistent/optique-keyring-secret-service.sock",
-      "--allow-ffi=../../node_modules",
-      fixturePath,
-    ]
-    : [fixturePath];
+  const args =
+    "Deno" in globalThis
+      ? [
+          "run",
+          // Dependencies are installed by mise; auto mode would rewrite the
+          // shared node_modules tree while Node.js and Bun tests are running.
+          "--node-modules-dir=manual",
+          "--allow-env",
+          "--allow-sys",
+          "--allow-net",
+          "--allow-read=../../node_modules,/nonexistent/optique-keyring-secret-service.sock",
+          "--allow-write=/nonexistent/optique-keyring-secret-service.sock",
+          "--allow-ffi=../../node_modules",
+          fixturePath,
+        ]
+      : [fixturePath];
 
   const result = spawnSync(process.execPath, args, {
     cwd: packagePath,

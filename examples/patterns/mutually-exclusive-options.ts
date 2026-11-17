@@ -9,11 +9,7 @@ const parser = or(
   object({
     mode: constant("server"),
     host: withDefault(
-      option(
-        "-h",
-        "--host",
-        string({ metavar: "HOST" }),
-      ),
+      option("-h", "--host", string({ metavar: "HOST" })),
       "0.0.0.0",
     ),
     port: option(

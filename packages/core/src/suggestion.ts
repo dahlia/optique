@@ -144,14 +144,14 @@ export function findSimilar(
   options: FindSimilarOptions = {},
 ): string[] {
   // Apply defaults
-  const maxDistance = options.maxDistance ??
-    DEFAULT_FIND_SIMILAR_OPTIONS.maxDistance;
-  const maxDistanceRatio = options.maxDistanceRatio ??
-    DEFAULT_FIND_SIMILAR_OPTIONS.maxDistanceRatio;
-  const maxSuggestions = options.maxSuggestions ??
-    DEFAULT_FIND_SIMILAR_OPTIONS.maxSuggestions;
-  const caseSensitive = options.caseSensitive ??
-    DEFAULT_FIND_SIMILAR_OPTIONS.caseSensitive;
+  const maxDistance =
+    options.maxDistance ?? DEFAULT_FIND_SIMILAR_OPTIONS.maxDistance;
+  const maxDistanceRatio =
+    options.maxDistanceRatio ?? DEFAULT_FIND_SIMILAR_OPTIONS.maxDistanceRatio;
+  const maxSuggestions =
+    options.maxSuggestions ?? DEFAULT_FIND_SIMILAR_OPTIONS.maxSuggestions;
+  const caseSensitive =
+    options.caseSensitive ?? DEFAULT_FIND_SIMILAR_OPTIONS.caseSensitive;
 
   // Return empty if input is empty
   if (input.length === 0) return [];
@@ -187,7 +187,8 @@ export function findSimilar(
     if (
       minimumDistance > maxDistance ||
       minimumDistance / input.length > maxDistanceRatio
-    ) continue;
+    )
+      continue;
 
     const distance = levenshteinDistance(normalizedInput, normalizedCandidate);
 
@@ -423,9 +424,10 @@ export function createErrorWithSuggestions(
     candidates,
     DEFAULT_FIND_SIMILAR_OPTIONS,
   );
-  const displaySuggestions = type === "option"
-    ? suggestions
-    : expandCommandAliasSuggestions(usage, suggestions);
+  const displaySuggestions =
+    type === "option"
+      ? suggestions
+      : expandCommandAliasSuggestions(usage, suggestions);
 
   const suggestionMsg = customFormatter
     ? customFormatter(displaySuggestions)
@@ -510,12 +512,13 @@ export function appendValueHint(
     candidates,
     options != null
       ? {
-        maxDistance: options.maxDistance ??
-          DEFAULT_FIND_SIMILAR_OPTIONS.maxDistance,
-        maxDistanceRatio: DEFAULT_FIND_SIMILAR_OPTIONS.maxDistanceRatio,
-        maxSuggestions: options.maxSuggestions ??
-          DEFAULT_FIND_SIMILAR_OPTIONS.maxSuggestions,
-      }
+          maxDistance:
+            options.maxDistance ?? DEFAULT_FIND_SIMILAR_OPTIONS.maxDistance,
+          maxDistanceRatio: DEFAULT_FIND_SIMILAR_OPTIONS.maxDistanceRatio,
+          maxSuggestions:
+            options.maxSuggestions ??
+            DEFAULT_FIND_SIMILAR_OPTIONS.maxSuggestions,
+        }
       : undefined,
   );
   return appendValueSuggestions(base, suggestions);
@@ -538,14 +541,12 @@ function getSuggestionKey(suggestion: Suggestion): string {
   }
   // File suggestion: create a composite key (excludes includeHidden,
   // which is merged separately in deduplicateSuggestions)
-  return `file:${
-    JSON.stringify([
-      suggestion.type,
-      suggestion.extensions?.toSorted().join(",") ?? "",
-      suggestion.pattern ?? "",
-      suggestion.prefix ?? "",
-    ])
-  }`;
+  return `file:${JSON.stringify([
+    suggestion.type,
+    suggestion.extensions?.toSorted().join(",") ?? "",
+    suggestion.pattern ?? "",
+    suggestion.prefix ?? "",
+  ])}`;
 }
 
 /**

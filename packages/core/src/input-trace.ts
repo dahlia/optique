@@ -264,7 +264,8 @@ function inspectNode(
   const right = inspectNode(root.right, root.key, upper);
   const actualHeight = 1 + Math.max(left.height, right.height);
   if (
-    root.height !== actualHeight || Math.abs(left.height - right.height) > 1
+    root.height !== actualHeight ||
+    Math.abs(left.height - right.height) > 1
   ) {
     throw new TypeError("Input trace heights or balance are invalid.");
   }
@@ -296,9 +297,10 @@ class InputTraceImpl implements InputTrace {
     return new InputTraceImpl(deleteEntry(this.#root, serializePath(path)));
   }
 
-  static inspect(
-    trace: InputTrace,
-  ): { readonly size: number; readonly height: number } {
+  static inspect(trace: InputTrace): {
+    readonly size: number;
+    readonly height: number;
+  } {
     if (!(trace instanceof InputTraceImpl)) {
       throw new TypeError("Expected an Optique input trace.");
     }
@@ -316,9 +318,10 @@ class InputTraceImpl implements InputTrace {
  * @internal
  * @since 1.0.16
  */
-export function inspectInputTrace(
-  trace: InputTrace,
-): { readonly size: number; readonly height: number } {
+export function inspectInputTrace(trace: InputTrace): {
+  readonly size: number;
+  readonly height: number;
+} {
   return InputTraceImpl.inspect(trace);
 }
 

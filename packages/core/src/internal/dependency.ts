@@ -112,8 +112,9 @@ export const suggestWithDependency: unique symbol = Symbol.for(
  */
 export type CombineMode<M1 extends Mode, M2 extends Mode> = M1 extends "async"
   ? "async"
-  : M2 extends "async" ? "async"
-  : "sync";
+  : M2 extends "async"
+    ? "async"
+    : "sync";
 
 /**
  * Options for creating a derived value parser.
@@ -218,8 +219,10 @@ export interface DeriveAsyncOptions<S, T> {
  * @template T The type of value this dependency source produces.
  * @since 0.10.0
  */
-export interface DependencySource<M extends Mode = "sync", T = unknown>
-  extends ValueParser<M, T> {
+export interface DependencySource<
+  M extends Mode = "sync",
+  T = unknown,
+> extends ValueParser<M, T> {
   /**
    * Marker to identify this as a dependency source.
    * @internal
@@ -295,16 +298,16 @@ interface InternalDeriveOptions<S, T, FM extends Mode = Mode> {
  * @template D The DependencySource type.
  * @since 0.10.0
  */
-export type DependencyValue<D> = D extends DependencySource<Mode, infer T> ? T
-  : never;
+export type DependencyValue<D> =
+  D extends DependencySource<Mode, infer T> ? T : never;
 
 /**
  * Extracts the mode from a DependencySource.
  * @template D The DependencySource type.
  * @since 0.10.0
  */
-export type DependencyMode<D> = D extends DependencySource<infer M, unknown> ? M
-  : never;
+export type DependencyMode<D> =
+  D extends DependencySource<infer M, unknown> ? M : never;
 
 /**
  * Maps a tuple of DependencySources to a tuple of their value types.
@@ -324,7 +327,8 @@ export type DependencyValues<T extends readonly unknown[]> = {
 export type CombinedDependencyMode<T extends readonly unknown[]> =
   "async" extends {
     [K in keyof T]: T[K] extends DependencySource<infer M, unknown> ? M : never;
-  }[number] ? "async"
+  }[number]
+    ? "async"
     : "sync";
 
 /**
@@ -645,8 +649,9 @@ export function dependency<M extends Mode, T>(
 export function isDependencySource<M extends Mode, T>(
   parser: ValueParser<M, T>,
 ): parser is DependencySource<M, T> {
-  return dependencySourceMarker in parser &&
-    parser[dependencySourceMarker] === true;
+  return (
+    dependencySourceMarker in parser && parser[dependencySourceMarker] === true
+  );
 }
 
 /**
@@ -681,10 +686,11 @@ export function getDependencySourceInfo(
   source: AnyDependencySource,
 ): DependencySourceInfo {
   if (
-    source == null || typeof source !== "object" ||
+    source == null ||
+    typeof source !== "object" ||
     (source as { readonly [dependencySourceMarker]?: unknown })[
-        dependencySourceMarker
-      ] !== true ||
+      dependencySourceMarker
+    ] !== true ||
     typeof source[dependencySourceId] !== "symbol"
   ) {
     throw new TypeError(
@@ -708,8 +714,10 @@ export function getDependencySourceInfo(
 export function isDerivedValueParser<M extends Mode, T>(
   parser: ValueParser<M, T>,
 ): parser is DerivedValueParser<M, T, unknown> {
-  return derivedValueParserMarker in parser &&
-    parser[derivedValueParserMarker] === true;
+  return (
+    derivedValueParserMarker in parser &&
+    parser[derivedValueParserMarker] === true
+  );
 }
 
 /**
@@ -764,9 +772,10 @@ export function deriveFrom<
 
   const depsAsync = options.dependencies.some((dep) => dep.mode === "async");
 
-  const sourceId = options.dependencies.length > 0
-    ? options.dependencies[0][dependencySourceId]
-    : Symbol();
+  const sourceId =
+    options.dependencies.length > 0
+      ? options.dependencies[0][dependencySourceId]
+      : Symbol();
 
   // Use the explicit mode to avoid calling the factory during
   // parser construction.
@@ -813,18 +822,16 @@ export function deriveFrom<
  * @returns A {@link DerivedValueParser} that depends on the given sources.
  * @since 0.10.0
  */
-export function deriveFromSync<
-  Deps extends readonly AnyDependencySource[],
-  T,
->(
+export function deriveFromSync<Deps extends readonly AnyDependencySource[], T>(
   options: DeriveFromSyncOptions<Deps, T>,
 ): DerivedValueParser<CombinedDependencyMode<Deps>, T, DependencyValues<Deps>> {
   // Check if any dependency is async
   const depsAsync = options.dependencies.some((dep) => dep.mode === "async");
 
-  const sourceId = options.dependencies.length > 0
-    ? options.dependencies[0][dependencySourceId]
-    : Symbol();
+  const sourceId =
+    options.dependencies.length > 0
+      ? options.dependencies[0][dependencySourceId]
+      : Symbol();
 
   if (depsAsync) {
     return createAsyncDerivedFromParserFromSyncFactory(
@@ -837,10 +844,7 @@ export function deriveFromSync<
     >;
   }
 
-  return createSyncDerivedFromParser(
-    sourceId,
-    options,
-  ) as DerivedValueParser<
+  return createSyncDerivedFromParser(sourceId, options) as DerivedValueParser<
     CombinedDependencyMode<Deps>,
     T,
     DependencyValues<Deps>
@@ -861,15 +865,13 @@ export function deriveFromSync<
  * @returns A {@link DerivedValueParser} that depends on the given sources.
  * @since 0.10.0
  */
-export function deriveFromAsync<
-  Deps extends readonly AnyDependencySource[],
-  T,
->(
+export function deriveFromAsync<Deps extends readonly AnyDependencySource[], T>(
   options: DeriveFromAsyncOptions<Deps, T>,
 ): DerivedValueParser<"async", T, DependencyValues<Deps>> {
-  const sourceId = options.dependencies.length > 0
-    ? options.dependencies[0][dependencySourceId]
-    : Symbol();
+  const sourceId =
+    options.dependencies.length > 0
+      ? options.dependencies[0][dependencySourceId]
+      : Symbol();
 
   return createAsyncDerivedFromParserFromAsyncFactory(sourceId, options);
 }
@@ -973,10 +975,12 @@ function parseDerivedResultSync<T>(
 }
 
 function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
-  return value != null &&
+  return (
+    value != null &&
     (typeof value === "object" || typeof value === "function") &&
     "then" in value &&
-    typeof (value as Record<PropertyKey, unknown>).then === "function";
+    typeof (value as Record<PropertyKey, unknown>).then === "function"
+  );
 }
 
 async function parseDerivedResultWithSnapshotAsync<T>(
@@ -999,8 +1003,8 @@ function createSyncDerivedFromParser<
   options: DeriveFromSyncOptions<Deps, T>,
 ): DerivedValueParser<"sync", T, DependencyValues<Deps>> {
   // Collect all dependency IDs for multi-dependency resolution
-  const alldependencyIds = options.dependencies.map((dep) =>
-    dep[dependencySourceId]
+  const alldependencyIds = options.dependencies.map(
+    (dep) => dep[dependencySourceId],
   );
 
   return {
@@ -1044,8 +1048,7 @@ function createSyncDerivedFromParser<
       if (isAsyncModeParser(derivedParser as { readonly mode: Mode })) {
         const failure: ValueParserResult<T> = {
           success: false,
-          error:
-            message`Factory returned an async parser where a sync parser is required.`,
+          error: message`Factory returned an async parser where a sync parser is required.`,
         };
         return sourceValues == null
           ? failure
@@ -1074,8 +1077,7 @@ function createSyncDerivedFromParser<
       if (isAsyncModeParser(derivedParser as { readonly mode: Mode })) {
         const failure: ValueParserResult<T> = {
           success: false,
-          error:
-            message`Factory returned an async parser where a sync parser is required.`,
+          error: message`Factory returned an async parser where a sync parser is required.`,
         };
         return failure;
       }
@@ -1116,9 +1118,8 @@ function createSyncDerivedFromParser<
 
     normalize(value: T): T {
       return normalizeWithDerivedParser(value, () =>
-        options.factory(
-          ...(options.defaultValues() as DependencyValues<Deps>),
-        ));
+        options.factory(...(options.defaultValues() as DependencyValues<Deps>)),
+      );
     },
 
     *[suggestWithDependency](
@@ -1164,8 +1165,8 @@ function createAsyncDerivedFromParserFromAsyncFactory<
   options: DeriveFromAsyncOptions<Deps, T>,
 ): DerivedValueParser<"async", T, DependencyValues<Deps>> {
   // Collect all dependency IDs for multi-dependency resolution
-  const alldependencyIds = options.dependencies.map((dep) =>
-    dep[dependencySourceId]
+  const alldependencyIds = options.dependencies.map(
+    (dep) => dep[dependencySourceId],
   );
 
   return {
@@ -1247,9 +1248,8 @@ function createAsyncDerivedFromParserFromAsyncFactory<
 
     normalize(value: T): T {
       return normalizeWithDerivedParser(value, () =>
-        options.factory(
-          ...(options.defaultValues() as DependencyValues<Deps>),
-        ));
+        options.factory(...(options.defaultValues() as DependencyValues<Deps>)),
+      );
     },
 
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
@@ -1310,8 +1310,8 @@ function createAsyncDerivedFromParserFromSyncFactory<
   options: DeriveFromSyncOptions<Deps, T>,
 ): DerivedValueParser<"async", T, DependencyValues<Deps>> {
   // Collect all dependency IDs for multi-dependency resolution
-  const alldependencyIds = options.dependencies.map((dep) =>
-    dep[dependencySourceId]
+  const alldependencyIds = options.dependencies.map(
+    (dep) => dep[dependencySourceId],
   );
 
   return {
@@ -1393,9 +1393,8 @@ function createAsyncDerivedFromParserFromSyncFactory<
 
     normalize(value: T): T {
       return normalizeWithDerivedParser(value, () =>
-        options.factory(
-          ...(options.defaultValues() as DependencyValues<Deps>),
-        ));
+        options.factory(...(options.defaultValues() as DependencyValues<Deps>)),
+      );
     },
 
     async *suggest(prefix: string): AsyncIterable<Suggestion> {
@@ -1440,12 +1439,7 @@ function createAsyncDerivedFromParserFromSyncFactory<
   };
 }
 
-function createDerivedValueParser<
-  M extends Mode,
-  S,
-  T,
-  FM extends Mode,
->(
+function createDerivedValueParser<M extends Mode, S, T, FM extends Mode>(
   sourceId: symbol,
   sourceParser: ValueParser<M, S>,
   options: InternalDeriveOptions<S, T, FM>,
@@ -1517,8 +1511,7 @@ function createSyncDerivedParser<S, T>(
       if (isAsyncModeParser(derivedParser as { readonly mode: Mode })) {
         const failure: ValueParserResult<T> = {
           success: false,
-          error:
-            message`Factory returned an async parser where a sync parser is required.`,
+          error: message`Factory returned an async parser where a sync parser is required.`,
         };
         return hasSourceValue
           ? snapshotDefaultDependencyValues(failure, [sourceValue])
@@ -1544,8 +1537,7 @@ function createSyncDerivedParser<S, T>(
       if (isAsyncModeParser(derivedParser as { readonly mode: Mode })) {
         return {
           success: false,
-          error:
-            message`Factory returned an async parser where a sync parser is required.`,
+          error: message`Factory returned an async parser where a sync parser is required.`,
         };
       }
       return parseDerivedResultSync(derivedParser, input);
@@ -1563,9 +1555,8 @@ function createSyncDerivedParser<S, T>(
     },
 
     normalize(value: T): T {
-      return normalizeWithDerivedParser(
-        value,
-        () => options.factory(options.defaultValue()),
+      return normalizeWithDerivedParser(value, () =>
+        options.factory(options.defaultValue()),
       );
     },
 
@@ -1655,11 +1646,9 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
           ? snapshotDefaultDependencyValues(failure, [sourceValue])
           : failure;
       }
-      return await parseDerivedResultWithSnapshotAsync(
-        derivedParser,
-        input,
-        [sourceValue],
-      );
+      return await parseDerivedResultWithSnapshotAsync(derivedParser, input, [
+        sourceValue,
+      ]);
     },
 
     async [parseWithDependency](
@@ -1691,9 +1680,8 @@ function createAsyncDerivedParserFromAsyncFactory<S, T>(
     },
 
     normalize(value: T): T {
-      return normalizeWithDerivedParser(
-        value,
-        () => options.factory(options.defaultValue()),
+      return normalizeWithDerivedParser(value, () =>
+        options.factory(options.defaultValue()),
       );
     },
 
@@ -1779,11 +1767,9 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
           ? snapshotDefaultDependencyValues(failure, [sourceValue])
           : failure;
       }
-      return await parseDerivedResultWithSnapshotAsync(
-        derivedParser,
-        input,
-        [sourceValue],
-      );
+      return await parseDerivedResultWithSnapshotAsync(derivedParser, input, [
+        sourceValue,
+      ]);
     },
 
     async [parseWithDependency](
@@ -1815,9 +1801,8 @@ function createAsyncDerivedParserFromSyncFactory<S, T>(
     },
 
     normalize(value: T): T {
-      return normalizeWithDerivedParser(
-        value,
-        () => options.factory(options.defaultValue()),
+      return normalizeWithDerivedParser(value, () =>
+        options.factory(options.defaultValue()),
       );
     },
 
@@ -1931,10 +1916,12 @@ export interface DeferredParseState<T = unknown> {
 export function isDeferredParseState<T>(
   value: unknown,
 ): value is DeferredParseState<T> {
-  return typeof value === "object" &&
+  return (
+    typeof value === "object" &&
     value !== null &&
     deferredParseMarker in value &&
-    (value as DeferredParseState)[deferredParseMarker] === true;
+    (value as DeferredParseState)[deferredParseMarker] === true
+  );
 }
 
 /**
@@ -1996,9 +1983,8 @@ export function createDeferredParseState<T, S>(
   preliminaryResult: ValueParserResult<T>,
 ): DeferredParseState<T> {
   // Check if parser has multiple dependency IDs (from deriveFrom)
-  const multipleIds = dependencyIds in parser
-    ? parser[dependencyIds]
-    : undefined;
+  const multipleIds =
+    dependencyIds in parser ? parser[dependencyIds] : undefined;
 
   // Get the default values if available
   const defaultValuesFn = getDefaultValuesFunction(parser);
@@ -2069,10 +2055,12 @@ export interface DependencySourceState<T = unknown> {
 export function isDependencySourceState<T>(
   value: unknown,
 ): value is DependencySourceState<T> {
-  return typeof value === "object" &&
+  return (
+    typeof value === "object" &&
     value !== null &&
     dependencySourceStateMarker in value &&
-    (value as DependencySourceState)[dependencySourceStateMarker] === true;
+    (value as DependencySourceState)[dependencySourceStateMarker] === true
+  );
 }
 
 /**
@@ -2133,12 +2121,14 @@ export interface PendingDependencySourceState {
 export function isPendingDependencySourceState(
   value: unknown,
 ): value is PendingDependencySourceState {
-  return typeof value === "object" &&
+  return (
+    typeof value === "object" &&
     value !== null &&
     pendingDependencySourceStateMarker in value &&
     (value as PendingDependencySourceState)[
-        pendingDependencySourceStateMarker
-      ] === true;
+      pendingDependencySourceStateMarker
+    ] === true
+  );
 }
 
 /**
@@ -2192,12 +2182,14 @@ export const transformsDependencyValueMarker: unique symbol = Symbol.for(
 export function transformsDependencyValue(
   parser: unknown,
 ): parser is { [transformsDependencyValueMarker]: true } {
-  return typeof parser === "object" &&
+  return (
+    typeof parser === "object" &&
     parser !== null &&
     transformsDependencyValueMarker in parser &&
     (parser as { [transformsDependencyValueMarker]: boolean })[
-        transformsDependencyValueMarker
-      ] === true;
+      transformsDependencyValueMarker
+    ] === true
+  );
 }
 
 /**
@@ -2210,9 +2202,11 @@ export function transformsDependencyValue(
 export function isWrappedDependencySource(
   parser: unknown,
 ): parser is { [wrappedDependencySourceMarker]: PendingDependencySourceState } {
-  return typeof parser === "object" &&
+  return (
+    typeof parser === "object" &&
     parser !== null &&
-    wrappedDependencySourceMarker in parser;
+    wrappedDependencySourceMarker in parser
+  );
 }
 
 /**
@@ -2285,28 +2279,28 @@ export class DependencyRegistry implements DependencyRegistryLike {
  */
 export type DependencyError =
   | {
-    /**
-     * The dependency was used in multiple locations.
-     */
-    readonly kind: "duplicate";
-    readonly dependencyId: symbol;
-    readonly locations: readonly string[];
-  }
+      /**
+       * The dependency was used in multiple locations.
+       */
+      readonly kind: "duplicate";
+      readonly dependencyId: symbol;
+      readonly locations: readonly string[];
+    }
   | {
-    /**
-     * A derived parser references a dependency that was not provided.
-     */
-    readonly kind: "unresolved";
-    readonly dependencyId: symbol;
-    readonly derivedParserMetavar: string;
-  }
+      /**
+       * A derived parser references a dependency that was not provided.
+       */
+      readonly kind: "unresolved";
+      readonly dependencyId: symbol;
+      readonly derivedParserMetavar: string;
+    }
   | {
-    /**
-     * Circular dependency detected.
-     */
-    readonly kind: "circular";
-    readonly cycle: readonly symbol[];
-  };
+      /**
+       * Circular dependency detected.
+       */
+      readonly kind: "circular";
+      readonly cycle: readonly symbol[];
+    };
 
 /**
  * Formats a {@link DependencyError} into a human-readable {@link Message}.
@@ -2321,17 +2315,16 @@ export function formatDependencyError(error: DependencyError): Message {
       return [
         {
           type: "text" as const,
-          text: `Dependency used in multiple locations: ${
-            error.locations.join(", ")
-          }.`,
+          text: `Dependency used in multiple locations: ${error.locations.join(
+            ", ",
+          )}.`,
         },
       ];
     case "unresolved":
       return [
         {
           type: "text" as const,
-          text:
-            `Unresolved dependency for ${error.derivedParserMetavar}: the dependency was not provided.`,
+          text: `Unresolved dependency for ${error.derivedParserMetavar}: the dependency was not provided.`,
         },
       ];
     case "circular":

@@ -178,9 +178,9 @@ type ProgramHooksWithBeforeEach<R> = ProgramHooks<R> & {
  *
  * @internal
  */
-type ProgramHooksWithoutBeforeEach<R> =
-  & Omit<ProgramHooks<R>, "beforeEach">
-  & { readonly beforeEach?: undefined };
+type ProgramHooksWithoutBeforeEach<R> = Omit<ProgramHooks<R>, "beforeEach"> & {
+  readonly beforeEach?: undefined;
+};
 
 /**
  * Input accepted by {@link defineCommand}.
@@ -253,8 +253,11 @@ export interface CommandDefinition<M extends Mode, T, R = unknown> {
  * @template R The resource made available to lifecycle hooks and the handler.
  * @since 1.1.0
  */
-export interface Command<M extends Mode, T, R = unknown>
-  extends CommandDefinition<M, T, R> {
+export interface Command<
+  M extends Mode,
+  T,
+  R = unknown,
+> extends CommandDefinition<M, T, R> {
   /**
    * Internal marker used to validate discovered modules.
    *
@@ -273,8 +276,11 @@ export interface Command<M extends Mode, T, R = unknown>
  * @template R The resource made available to lifecycle hooks and the handler.
  * @since 1.1.0
  */
-export interface StaticCommand<M extends Mode, T, R = unknown>
-  extends Command<M, T, R> {
+export interface StaticCommand<M extends Mode, T, R = unknown> extends Command<
+  M,
+  T,
+  R
+> {
   /**
    * Command path used by static command registration.
    */
@@ -295,27 +301,33 @@ type CommandWithBeforeEach<M extends Mode, T, R> = Command<M, T, R> & {
  *
  * @internal
  */
-type StaticCommandWithBeforeEach<M extends Mode, T, R> =
-  & StaticCommand<M, T, R>
-  & CommandWithBeforeEach<M, T, R>;
+type StaticCommandWithBeforeEach<M extends Mode, T, R> = StaticCommand<
+  M,
+  T,
+  R
+> &
+  CommandWithBeforeEach<M, T, R>;
 
 /**
  * A command that does not create its own command context.
  *
  * @internal
  */
-type CommandWithoutBeforeEach<M extends Mode, T, R> =
-  & Omit<Command<M, T, R>, "hooks">
-  & { readonly hooks?: ProgramHooksWithoutBeforeEach<R> };
+type CommandWithoutBeforeEach<M extends Mode, T, R> = Omit<
+  Command<M, T, R>,
+  "hooks"
+> & { readonly hooks?: ProgramHooksWithoutBeforeEach<R> };
 
 /**
  * A static command that does not create its own command context.
  *
  * @internal
  */
-type StaticCommandWithoutBeforeEach<M extends Mode, T, R> =
-  & Omit<StaticCommand<M, T, R>, "hooks">
-  & CommandWithoutBeforeEach<M, T, R>;
+type StaticCommandWithoutBeforeEach<M extends Mode, T, R> = Omit<
+  StaticCommand<M, T, R>,
+  "hooks"
+> &
+  CommandWithoutBeforeEach<M, T, R>;
 
 /**
  * Lifecycle hooks whose caller-defined resource type has been erased.
@@ -366,39 +378,35 @@ export type AnyCommand = Omit<Command<Mode, unknown>, "handler" | "hooks"> & {
  *
  * @since 1.1.0
  */
-export type AnyStaticCommand =
-  & Omit<
-    StaticCommand<Mode, unknown>,
-    "handler" | "hooks"
-  >
-  & {
-    /**
-     * Lifecycle hooks with their caller-defined resource type erased.
-     */
-    readonly hooks?: ErasedProgramHooks;
+export type AnyStaticCommand = Omit<
+  StaticCommand<Mode, unknown>,
+  "handler" | "hooks"
+> & {
+  /**
+   * Lifecycle hooks with their caller-defined resource type erased.
+   */
+  readonly hooks?: ErasedProgramHooks;
 
-    /**
-     * Erased command handler.
-     */
-    readonly handler: (
-      value: never,
-      context?: ProgramHookContext<never>,
-    ) => void | Promise<void>;
-  };
+  /**
+   * Erased command handler.
+   */
+  readonly handler: (
+    value: never,
+    context?: ProgramHookContext<never>,
+  ) => void | Promise<void>;
+};
 
 /**
  * A type-erased command whose handler consumes a program-level resource.
  *
  * @internal
  */
-type ProgramResourceCommand<R> =
-  & Omit<Command<Mode, unknown, R>, "handler">
-  & {
-    readonly handler: (
-      value: never,
-      context?: ProgramHookContext<R>,
-    ) => void | Promise<void>;
-  };
+type ProgramResourceCommand<R> = Omit<Command<Mode, unknown, R>, "handler"> & {
+  readonly handler: (
+    value: never,
+    context?: ProgramHookContext<R>,
+  ) => void | Promise<void>;
+};
 
 /**
  * A type-erased command that always creates its own command context.
@@ -415,14 +423,15 @@ type OwnResourceCommand = Omit<AnyCommand, "hooks"> & {
  *
  * @internal
  */
-type ProgramResourceStaticCommand<R> =
-  & Omit<StaticCommand<Mode, unknown, R>, "handler">
-  & {
-    readonly handler: (
-      value: never,
-      context?: ProgramHookContext<R>,
-    ) => void | Promise<void>;
-  };
+type ProgramResourceStaticCommand<R> = Omit<
+  StaticCommand<Mode, unknown, R>,
+  "handler"
+> & {
+  readonly handler: (
+    value: never,
+    context?: ProgramHookContext<R>,
+  ) => void | Promise<void>;
+};
 
 /**
  * A type-erased static command that always creates its own command context.
@@ -443,7 +452,8 @@ type OwnResourceStaticCommand = Omit<AnyStaticCommand, "hooks"> & {
  * @template R The resource made available by program-level lifecycle hooks.
  * @since 1.2.0
  */
-export type RunProgramCommand<R = unknown> = unknown extends R ? AnyCommand
+export type RunProgramCommand<R = unknown> = unknown extends R
+  ? AnyCommand
   : ProgramResourceCommand<R> | OwnResourceCommand;
 
 /**
@@ -477,26 +487,24 @@ export type RunProgramStaticCommand<R = unknown> = unknown extends R
  * @since 1.1.0
  */
 export function defineCommand<M extends Mode, T, R = unknown>(
-  command:
-    & CommandDefinition<M, T, R>
-    & { readonly path: CommandPath }
-    & { readonly hooks: ProgramHooksWithBeforeEach<R> },
+  command: CommandDefinition<M, T, R> & { readonly path: CommandPath } & {
+    readonly hooks: ProgramHooksWithBeforeEach<R>;
+  },
 ): StaticCommandWithBeforeEach<M, T, R>;
 export function defineCommand<M extends Mode, T, R = unknown>(
-  command:
-    & Omit<CommandDefinition<M, T, R>, "hooks">
-    & { readonly path: CommandPath }
-    & { readonly hooks?: ProgramHooksWithoutBeforeEach<R> },
+  command: Omit<CommandDefinition<M, T, R>, "hooks"> & {
+    readonly path: CommandPath;
+  } & { readonly hooks?: ProgramHooksWithoutBeforeEach<R> },
 ): StaticCommandWithoutBeforeEach<M, T, R>;
 export function defineCommand<M extends Mode, T, R = unknown>(
-  command:
-    & CommandDefinition<M, T, R>
-    & { readonly hooks: ProgramHooksWithBeforeEach<R> },
+  command: CommandDefinition<M, T, R> & {
+    readonly hooks: ProgramHooksWithBeforeEach<R>;
+  },
 ): CommandWithBeforeEach<M, T, R>;
 export function defineCommand<M extends Mode, T, R = unknown>(
-  command:
-    & Omit<CommandDefinition<M, T, R>, "hooks">
-    & { readonly hooks?: ProgramHooksWithoutBeforeEach<R> },
+  command: Omit<CommandDefinition<M, T, R>, "hooks"> & {
+    readonly hooks?: ProgramHooksWithoutBeforeEach<R>;
+  },
 ): CommandWithoutBeforeEach<M, T, R>;
 export function defineCommand<M extends Mode, T, R = unknown>(
   command: CommandDefinition<M, T, R> & { readonly path: CommandPath },
@@ -539,10 +547,8 @@ export function isCommand(value: unknown): value is AnyCommand {
     value != null &&
     typeof value === "object" &&
     (value as { readonly [commandBrand]?: unknown })[commandBrand] === true &&
-    (
-      (value as { readonly path?: unknown }).path == null ||
-      isCommandPath((value as { readonly path?: unknown }).path)
-    ) &&
+    ((value as { readonly path?: unknown }).path == null ||
+      isCommandPath((value as { readonly path?: unknown }).path)) &&
     isParser((value as { readonly parser?: unknown }).parser) &&
     typeof (value as { readonly handler?: unknown }).handler === "function"
   );
@@ -579,15 +585,15 @@ export function validateHooks(
 
 function validateCommandPath(path: unknown): asserts path is CommandPath {
   if (!isCommandPath(path)) {
-    throw new TypeError(
-      "Command path must be an array of non-empty strings.",
-    );
+    throw new TypeError("Command path must be an array of non-empty strings.");
   }
 }
 
 function isCommandPath(path: unknown): path is CommandPath {
-  return Array.isArray(path) &&
-    path.every((segment) => typeof segment === "string" && segment.length > 0);
+  return (
+    Array.isArray(path) &&
+    path.every((segment) => typeof segment === "string" && segment.length > 0)
+  );
 }
 
 function isParser(value: unknown): value is Parser<Mode, unknown, unknown> {
@@ -595,11 +601,10 @@ function isParser(value: unknown): value is Parser<Mode, unknown, unknown> {
     value != null &&
     typeof value === "object" &&
     typeof (value as { readonly parse?: unknown }).parse === "function" &&
-    typeof (value as { readonly complete?: unknown }).complete ===
-      "function" &&
+    typeof (value as { readonly complete?: unknown }).complete === "function" &&
     typeof (value as { readonly suggest?: unknown }).suggest === "function" &&
-    typeof (value as { readonly getDocFragments?: unknown })
-        .getDocFragments === "function" &&
+    typeof (value as { readonly getDocFragments?: unknown }).getDocFragments ===
+      "function" &&
     ((value as { readonly mode?: unknown }).mode === "sync" ||
       (value as { readonly mode?: unknown }).mode === "async")
   );

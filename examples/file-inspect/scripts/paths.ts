@@ -13,6 +13,10 @@ export function isPathWithin(
   style: Pick<typeof path, "relative" | "isAbsolute" | "sep"> = path,
 ): boolean {
   const relative = style.relative(directory, candidate);
-  return relative !== "" && relative !== ".." &&
-    !relative.startsWith(`..${style.sep}`) && !style.isAbsolute(relative);
+  return (
+    relative !== "" &&
+    relative !== ".." &&
+    !relative.startsWith(`..${style.sep}`) &&
+    !style.isAbsolute(relative)
+  );
 }

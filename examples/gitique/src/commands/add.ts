@@ -19,8 +19,7 @@ const stagingOptions = group(
       description: message`Add all files in the working directory to the index`,
     }),
     force: option("-f", "--force", {
-      description:
-        message`Allow adding gitignore-excluded files by skipping ignore rules`,
+      description: message`Allow adding gitignore-excluded files by skipping ignore rules`,
     }),
   }),
 );
@@ -64,12 +63,12 @@ export const addCommand = command("add", addOptionsParser, {
   brief: message`Add file contents to the index`,
   description: message`Add file contents to the index for the next commit`,
   footer: message`Examples:${lineBreak()}
-  ${
-    commandLine("gitique add .")
-  }              Add all files in current directory${lineBreak()}
-  ${
-    commandLine("gitique add -A")
-  }             Add all files (including deletions)${lineBreak()}
+  ${commandLine(
+    "gitique add .",
+  )}              Add all files in current directory${lineBreak()}
+  ${commandLine(
+    "gitique add -A",
+  )}             Add all files (including deletions)${lineBreak()}
   ${commandLine("gitique add file1.ts")}       Add a specific file${lineBreak()}
   ${commandLine("gitique add -v *.ts")}        Add files with verbose output`,
 });
@@ -120,11 +119,9 @@ export async function executeAdd(config: AddConfig): Promise<void> {
         } catch (error) {
           hadError = true;
           printError(
-            message`Failed to add ${file}: ${
-              text(
-                error instanceof Error ? error.message : String(error),
-              )
-            }`,
+            message`Failed to add ${file}: ${text(
+              error instanceof Error ? error.message : String(error),
+            )}`,
           );
         }
       }

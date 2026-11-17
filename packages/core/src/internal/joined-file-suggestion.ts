@@ -31,16 +31,23 @@ export function joinedFileSuggestion(
     description: file.description,
   };
   joinedFiles.set(literal, {
-    files: [{
-      prefix,
-      // An echoed value is not a fixed pattern, unless it carries a literal
-      // insertion prefix that the shell must strip before matching.
-      file: file.pattern === value && !/[?*]/.test(value) &&
-          !(file.prefix != null && file.prefix !== "" &&
-            value.startsWith(file.prefix))
-        ? { ...file, pattern: undefined }
-        : file,
-    }],
+    files: [
+      {
+        prefix,
+        // An echoed value is not a fixed pattern, unless it carries a literal
+        // insertion prefix that the shell must strip before matching.
+        file:
+          file.pattern === value &&
+          !/[?*]/.test(value) &&
+          !(
+            file.prefix != null &&
+            file.prefix !== "" &&
+            value.startsWith(file.prefix)
+          )
+            ? { ...file, pattern: undefined }
+            : file,
+      },
+    ],
     literal: false,
   });
   return literal;

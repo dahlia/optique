@@ -41,11 +41,15 @@ const options: ts.CompilerOptions = {
 };
 
 function diagnostics(program: ts.Program): readonly string[] {
-  return ts.getPreEmitDiagnostics(program).map((diagnostic) =>
-    `${diagnostic.code}: ${
-      ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")
-    }`
-  );
+  return ts
+    .getPreEmitDiagnostics(program)
+    .map(
+      (diagnostic) =>
+        `${diagnostic.code}: ${ts.flattenDiagnosticMessageText(
+          diagnostic.messageText,
+          "\n",
+        )}`,
+    );
 }
 
 it("private aliases belong to the importer and workspace exports use source", () => {
@@ -177,14 +181,14 @@ it("unknown private aliases cannot fall back to package distribution mappings", 
       loadWorkspace(root),
     );
     assert.ok(
-      ts.getPreEmitDiagnostics(program).some((diagnostic) =>
-        diagnostic.code === 2307
-      ),
+      ts
+        .getPreEmitDiagnostics(program)
+        .some((diagnostic) => diagnostic.code === 2307),
     );
     assert.ok(
-      program.getSourceFiles().every((file) =>
-        !file.fileName.includes("/dist/")
-      ),
+      program
+        .getSourceFiles()
+        .every((file) => !file.fileName.includes("/dist/")),
     );
   } finally {
     rmSync(root, { recursive: true });
@@ -203,12 +207,10 @@ it("strict inference contracts catch wrong types and stale expect-error comments
       'import {count} from "./contract.js"; const value: string = count;',
   });
   try {
-    for (
-      const [file, code] of [["negative.ts", 2322], [
-        "unused.ts",
-        2578,
-      ]] as const
-    ) {
+    for (const [file, code] of [
+      ["negative.ts", 2322],
+      ["unused.ts", 2578],
+    ] as const) {
       const diagnostics = ts.getPreEmitDiagnostics(
         createCheckProgram([join(root, file)], options, loadWorkspace(root)),
       );
@@ -217,27 +219,27 @@ it("strict inference contracts catch wrong types and stale expect-error comments
     // Declaration internals are skipped even for owned explicit roots.
     const declaration = [join(root, "owned.d.ts")];
     assert.deepEqual(
-      diagnostics(createCheckProgram(
-        declaration,
-        options,
-        [],
-      )),
+      diagnostics(createCheckProgram(declaration, options, [])),
       [],
     );
     assert.ok(
-      ts.getPreEmitDiagnostics(createCheckProgram(
-        declaration,
-        { ...options, skipLibCheck: false },
-        [],
-      )).some((d) => d.code === 2304),
+      ts
+        .getPreEmitDiagnostics(
+          createCheckProgram(
+            declaration,
+            { ...options, skipLibCheck: false },
+            [],
+          ),
+        )
+        .some((d) => d.code === 2304),
     );
     // Known declaration contracts still constrain checked source consumers.
     assert.deepEqual(
-      ts.getPreEmitDiagnostics(createCheckProgram(
-        [join(root, "consumer.ts")],
-        options,
-        [],
-      )).map((d) => d.code),
+      ts
+        .getPreEmitDiagnostics(
+          createCheckProgram([join(root, "consumer.ts")], options, []),
+        )
+        .map((d) => d.code),
       [2322],
     );
   } finally {
@@ -263,18 +265,22 @@ it("inventory includes build configs, inference tests, runtime fixtures and all 
     const files = inventoryOwnedFiles(root);
     assert.equal(files.length, 7);
     assert.ok(files.includes(join(root, "packages/a/fixtures/malformed.ts")));
-    const program = createCheckProgram(files, {
-      ...options,
-      jsx: ts.JsxEmit.Preserve,
-    }, []);
+    const program = createCheckProgram(
+      files,
+      {
+        ...options,
+        jsx: ts.JsxEmit.Preserve,
+      },
+      [],
+    );
     assert.doesNotThrow(() =>
-      verifyInventory(files, program.getRootFileNames())
+      verifyInventory(files, program.getRootFileNames()),
     );
     assert.doesNotThrow(() =>
       verifyInventory(
         files,
         program.getSourceFiles().map((file) => file.fileName),
-      )
+      ),
     );
     assert.throws(() => verifyInventory(files, files.slice(1)), /not checked/);
     assert.doesNotThrow(() => verifyInventory(files, files));
@@ -289,17 +295,18 @@ it("neutral browser program has DOM APIs but no implicit Node globals", () => {
     "check.ts": "new AbortController(); process.cwd();",
   });
   try {
-    const diagnostics = ts.getPreEmitDiagnostics(createCheckProgram(
-      [join(root, "check.ts")],
-      { ...options, lib: ["lib.esnext.d.ts", "lib.dom.d.ts"] },
-      [],
-    ));
+    const diagnostics = ts.getPreEmitDiagnostics(
+      createCheckProgram(
+        [join(root, "check.ts")],
+        { ...options, lib: ["lib.esnext.d.ts", "lib.dom.d.ts"] },
+        [],
+      ),
+    );
     assert.equal(diagnostics.length, 1);
     assert.ok(
-      ts.flattenDiagnosticMessageText(
-        diagnostics[0].messageText,
-        "\n",
-      ).includes("process"),
+      ts
+        .flattenDiagnosticMessageText(diagnostics[0].messageText, "\n")
+        .includes("process"),
     );
   } finally {
     rmSync(root, { recursive: true });
@@ -320,30 +327,26 @@ it("Temporal bridge preserves namespace, constructors and negative contracts", (
   });
   try {
     const program = createCheckProgram(
-      [
-        join(root, "check.ts"),
-        resolve("scripts/types/temporal.d.ts"),
-      ],
+      [join(root, "check.ts"), resolve("scripts/types/temporal.d.ts")],
       options,
       loadWorkspace(root),
     );
     assert.deepEqual(diagnostics(program), []);
     // Validate our actual checker-only declaration without skipping internals.
     assert.deepEqual(
-      diagnostics(createCheckProgram(
-        [resolve("scripts/types/temporal.d.ts")],
-        { ...options, skipLibCheck: false },
-        loadWorkspace(root),
-      )),
+      diagnostics(
+        createCheckProgram(
+          [resolve("scripts/types/temporal.d.ts")],
+          { ...options, skipLibCheck: false },
+          loadWorkspace(root),
+        ),
+      ),
       [],
     );
     const source = readFileSync(join(root, "check.ts"), "utf8");
     writeFileSync(
       join(root, "removed.ts"),
-      source.replaceAll(
-        "@ts-expect-error",
-        "expect-error disabled",
-      ),
+      source.replaceAll("@ts-expect-error", "expect-error disabled"),
     );
     writeFileSync(
       join(root, "stale.ts"),
@@ -353,11 +356,13 @@ it("Temporal bridge preserves namespace, constructors and negative contracts", (
       ),
     );
     const check = (file: string) =>
-      ts.getPreEmitDiagnostics(createCheckProgram(
-        [join(root, file), resolve("scripts/types/temporal.d.ts")],
-        options,
-        loadWorkspace(root),
-      ));
+      ts.getPreEmitDiagnostics(
+        createCheckProgram(
+          [join(root, file), resolve("scripts/types/temporal.d.ts")],
+          options,
+          loadWorkspace(root),
+        ),
+      );
     assert.ok(check("removed.ts").some((d) => d.code === 2345));
     assert.ok(check("stale.ts").some((d) => d.code === 2578));
   } finally {
@@ -408,7 +413,8 @@ function fileSymlinkUnavailable(): string | false {
     return false;
   } catch (error) {
     if (
-      error instanceof Error && "code" in error &&
+      error instanceof Error &&
+      "code" in error &&
       (error.code === "EPERM" || error.code === "EACCES")
     ) {
       return `Windows file symlink permission unavailable (${error.code}).`;
@@ -421,85 +427,90 @@ function fileSymlinkUnavailable(): string | false {
 
 const symlinkSkip = fileSymlinkUnavailable();
 
-it("symlinked entry points still reject invalid owned source", {
-  skip: symlinkSkip,
-}, () => {
-  // Bun may ignore skip, so keep the early return and report its reason too.
-  if (symlinkSkip) {
-    console.warn(symlinkSkip);
-    return;
-  }
-  const root = fixture({
-    "project/package.json": '{"type":"module"}',
-    "project/deno.json": '{"workspace":[]}',
-    "project/tsconfig.check.json": JSON.stringify({
-      compilerOptions: {
-        target: "ESNext",
-        module: "NodeNext",
-        moduleResolution: "NodeNext",
-        strict: true,
-        noEmit: true,
-        allowImportingTsExtensions: true,
-        skipLibCheck: true,
-        types: ["node"],
-      },
-    }),
-    "project/bad.ts": "const value: string = 123;",
-    "project/scripts/check-types.ts": readFileSync(
-      resolve("scripts/check-types.ts"),
-      "utf8",
-    ),
-  });
-  try {
-    const directoryLink = process.platform === "win32" ? "junction" : "dir";
-    symlinkSync(
-      resolve("node_modules"),
-      join(root, "project/node_modules"),
-      directoryLink,
-    );
-    symlinkSync(
-      join(root, "project"),
-      join(root, "checkout-link"),
-      directoryLink,
-    );
-    symlinkSync(
-      join(root, "project/scripts/check-types.ts"),
-      join(root, "entry.ts"),
-      "file",
-    );
-    for (
-      const entry of [
+it(
+  "symlinked entry points still reject invalid owned source",
+  {
+    skip: symlinkSkip,
+  },
+  () => {
+    // Bun may ignore skip, so keep the early return and report its reason too.
+    if (symlinkSkip) {
+      console.warn(symlinkSkip);
+      return;
+    }
+    const root = fixture({
+      "project/package.json": '{"type":"module"}',
+      "project/deno.json": '{"workspace":[]}',
+      "project/tsconfig.check.json": JSON.stringify({
+        compilerOptions: {
+          target: "ESNext",
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          strict: true,
+          noEmit: true,
+          allowImportingTsExtensions: true,
+          skipLibCheck: true,
+          types: ["node"],
+        },
+      }),
+      "project/bad.ts": "const value: string = 123;",
+      "project/scripts/check-types.ts": readFileSync(
+        resolve("scripts/check-types.ts"),
+        "utf8",
+      ),
+    });
+    try {
+      const directoryLink = process.platform === "win32" ? "junction" : "dir";
+      symlinkSync(
+        resolve("node_modules"),
+        join(root, "project/node_modules"),
+        directoryLink,
+      );
+      symlinkSync(
+        join(root, "project"),
+        join(root, "checkout-link"),
+        directoryLink,
+      );
+      symlinkSync(
+        join(root, "project/scripts/check-types.ts"),
+        join(root, "entry.ts"),
+        "file",
+      );
+      for (const entry of [
         join(root, "checkout-link/scripts/check-types.ts"),
         join(root, "entry.ts"),
-      ]
-    ) {
-      const result = spawnSync("node", [entry], {
-        encoding: "utf8",
-        timeout: 30_000,
-      });
-      assert.equal(result.status, 1, result.stdout + result.stderr);
-      assert.match(result.stderr, /TS2322/);
-    }
-    const entry =
-      pathToFileURL(join(root, "project/scripts/check-types.ts")).href;
-    for (
-      const prelude of [
+      ]) {
+        const result = spawnSync("node", [entry], {
+          encoding: "utf8",
+          timeout: 30_000,
+        });
+        assert.equal(result.status, 1, result.stdout + result.stderr);
+        assert.match(result.stderr, /TS2322/);
+      }
+      const entry = pathToFileURL(
+        join(root, "project/scripts/check-types.ts"),
+      ).href;
+      for (const prelude of [
         "",
         'process.argv[1] = "nonexistent-checker-entry.ts";',
         `process.argv[1] = ${JSON.stringify(join(root, "project/bad.ts"))};`,
-      ]
-    ) {
-      const result = spawnSync("node", [
-        "--input-type=module",
-        "--eval",
-        `${prelude} await import(${
-          JSON.stringify(entry)
-        }); console.log("import-only");`,
-      ], { encoding: "utf8", timeout: 30_000 });
-      assert.equal(result.status, 0, result.stdout + result.stderr);
-      assert.equal(result.stdout.trim(), "import-only");
+      ]) {
+        const result = spawnSync(
+          "node",
+          [
+            "--input-type=module",
+            "--eval",
+            `${prelude} await import(${JSON.stringify(
+              entry,
+            )}); console.log("import-only");`,
+          ],
+          { encoding: "utf8", timeout: 30_000 },
+        );
+        assert.equal(result.status, 0, result.stdout + result.stderr);
+        assert.equal(result.stdout.trim(), "import-only");
+      }
+    } finally {
+      rmSync(root, { recursive: true });
     }
-  } finally {
-    rmSync(root, { recursive: true });
-  }
-});
+  },
+);

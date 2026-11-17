@@ -115,15 +115,15 @@ export type TerminalFragment =
   | { readonly type: "text"; readonly text: string }
   | { readonly type: "concat"; readonly children: readonly TerminalFragment[] }
   | {
-    readonly type: "style";
-    readonly style: TerminalStyle;
-    readonly children: readonly TerminalFragment[];
-  }
+      readonly type: "style";
+      readonly style: TerminalStyle;
+      readonly children: readonly TerminalFragment[];
+    }
   | {
-    readonly type: "link";
-    readonly href: string;
-    readonly children: readonly TerminalFragment[];
-  };
+      readonly type: "link";
+      readonly href: string;
+      readonly children: readonly TerminalFragment[];
+    };
 /**
  * Context supplied to a semantic formatter.
  * @since 1.3.0
@@ -196,27 +196,29 @@ export const defaultTerminalTheme: Formatters & {
   optionNames: (term, ctx) => ({
     type: "concat",
     children: term.optionNames.flatMap((name, i) => [
-      ...(i === 0 ? [] : [
-        ctx.format({
-          type: "syntaxPunctuation",
-          punctuation: "/",
-          kind: "messageOptionSeparator",
-        }),
-      ]),
+      ...(i === 0
+        ? []
+        : [
+            ctx.format({
+              type: "syntaxPunctuation",
+              punctuation: "/",
+              kind: "messageOptionSeparator",
+            }),
+          ]),
       ctx.format({ type: "optionName", optionName: name }),
     ]),
   }),
   metavar: (_term, ctx) =>
     ctx.usage === "optionValue"
       ? {
-        type: "style",
-        style: { underline: true },
-        children: [styled(ctx.text, { dim: true })],
-      }
+          type: "style",
+          style: { underline: true },
+          children: [styled(ctx.text, { dim: true })],
+        }
       : styled(
-        ctx.text,
-        ctx.usage === "argument" ? { underline: true } : { bold: true },
-      ),
+          ctx.text,
+          ctx.usage === "argument" ? { underline: true } : { bold: true },
+        ),
   value: (_term, ctx) =>
     ctx.usage === "literal"
       ? plain(ctx.text)
@@ -237,21 +239,22 @@ export const defaultTerminalTheme: Formatters & {
   }),
   programName: (_term, ctx) => styled(ctx.text, { bold: true }),
   label: (term, ctx) =>
-    term.kind === "usageSummary" || term.kind === "choices" ||
-      term.kind === "aliases"
+    term.kind === "usageSummary" ||
+    term.kind === "choices" ||
+    term.kind === "aliases"
       ? plain(ctx.text)
       : styled(ctx.text, { bold: true, dim: true }),
   syntaxPunctuation: (term, ctx) =>
     [
-        "alternative",
-        "messageOptionSeparator",
-        "defaultPrefix",
-        "defaultSuffix",
-        "choicesPrefix",
-        "choicesSuffix",
-        "aliasesPrefix",
-        "aliasesSuffix",
-      ].includes(term.kind)
+      "alternative",
+      "messageOptionSeparator",
+      "defaultPrefix",
+      "defaultSuffix",
+      "choicesPrefix",
+      "choicesSuffix",
+      "aliasesPrefix",
+      "aliasesSuffix",
+    ].includes(term.kind)
       ? plain(ctx.text)
       : styled(ctx.text, { dim: true }),
   errorLabel: (_term, ctx) => plain(ctx.text),

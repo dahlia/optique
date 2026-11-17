@@ -10,9 +10,11 @@ import { createInputScope, type InputScope } from "./input.ts";
  * @param options Optional scope factory for embedding and in-process tests.
  * @returns Program options; handlers receive only program-level resources.
  */
-export function createFileProgram(options: {
-  readonly createScope?: () => InputScope;
-} = {}) {
+export function createFileProgram(
+  options: {
+    readonly createScope?: () => InputScope;
+  } = {},
+) {
   const close = (context: ProgramHookContext<InputScope>) =>
     context.resource?.close();
   return {

@@ -44,10 +44,10 @@ function unwrapDelegatedAnnotationClone<T>(value: T): T {
   if (value == null || typeof value !== "object") {
     return value;
   }
-  return (delegatedAnnotationCloneTargets.get(value as object) as
-    | T
-    | undefined) ??
-    value;
+  return (
+    (delegatedAnnotationCloneTargets.get(value as object) as T | undefined) ??
+    value
+  );
 }
 
 /**
@@ -146,13 +146,13 @@ export function normalizeDelegatedAnnotationState<T>(state: T): T {
  * @internal
  */
 export function hasDelegatedAnnotationCarrier(state: unknown): boolean {
-  return state != null &&
+  return (
+    state != null &&
     typeof state === "object" &&
-    (
-      isInjectedAnnotationWrapper(state) ||
+    (isInjectedAnnotationWrapper(state) ||
       delegatedAnnotationCloneTargets.has(state as object) ||
-      annotationViewTargets.has(state as object)
-    );
+      annotationViewTargets.has(state as object))
+  );
 }
 
 interface NestedNormalizationEntry {
@@ -179,9 +179,10 @@ function getPendingNestedNormalizationEntry(
     return undefined;
   }
   const entry = seen.get(originalValue as object);
-  return entry != null && entry.clone != null &&
-      entry.clone === normalizedValue &&
-      (!entry.finalized || entry.preferCloneOnRead)
+  return entry != null &&
+    entry.clone != null &&
+    entry.clone === normalizedValue &&
+    (!entry.finalized || entry.preferCloneOnRead)
     ? entry
     : undefined;
 }
@@ -255,7 +256,7 @@ function normalizeNestedDelegatedStructuredState<T extends object>(
     overrides.set(key, nextValue);
     if (
       getPendingNestedNormalizationEntry(descriptor.value, nextValue, seen) ==
-        null
+      null
     ) {
       changed = true;
     } else {
@@ -324,9 +325,7 @@ function normalizeNestedDelegatedMapState<T extends Map<unknown, unknown>>(
       }
     }
     if (nextValue !== value) {
-      if (
-        getPendingNestedNormalizationEntry(value, nextValue, seen) == null
-      ) {
+      if (getPendingNestedNormalizationEntry(value, nextValue, seen) == null) {
         changed = true;
       } else {
         hasPendingAliasOverride = true;
@@ -350,7 +349,7 @@ function normalizeNestedDelegatedMapState<T extends Map<unknown, unknown>>(
     overrides.set(key, nextValue);
     if (
       getPendingNestedNormalizationEntry(descriptor.value, nextValue, seen) ==
-        null
+      null
     ) {
       changed = true;
     } else {
@@ -440,7 +439,7 @@ function normalizeNestedDelegatedSetState<T extends Set<unknown>>(
     overrides.set(key, nextValue);
     if (
       getPendingNestedNormalizationEntry(descriptor.value, nextValue, seen) ==
-        null
+      null
     ) {
       changed = true;
     } else {
@@ -580,10 +579,8 @@ export function getDelegatedAnnotationState<TState>(
   }
   if (
     getAnnotations(childState) === annotations &&
-    (
-      delegatedAnnotationCloneTargets.has(childState as object) ||
-      annotationViewTargets.has(childState as object)
-    )
+    (delegatedAnnotationCloneTargets.has(childState as object) ||
+      annotationViewTargets.has(childState as object))
   ) {
     return childState;
   }
@@ -646,7 +643,7 @@ export function getWrappedChildParseState<TState>(
   }
   const injectedState = injectAnnotations(childState, annotations);
   return getAnnotations(injectedState) === annotations
-    ? injectedState as TState
+    ? (injectedState as TState)
     : childState;
 }
 

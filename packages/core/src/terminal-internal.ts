@@ -54,8 +54,8 @@ function valuesFormatter(theme: TerminalTheme) {
 }
 /** Default callback identity survives any number of per-pass caches. */
 const defaultFormatters = new WeakSet<object>(
-  Object.values(defaultTerminalTheme).filter((value) =>
-    typeof value === "function"
+  Object.values(defaultTerminalTheme).filter(
+    (value) => typeof value === "function",
   ),
 );
 
@@ -84,7 +84,7 @@ export function formatTerminalLeaf(
   quotes = false,
   usage?: TerminalFormatContext["usage"],
 ): { readonly fragment: TerminalFragment; readonly defaultOrigin: boolean } {
-  const quote = (s: string) => quotes ? `\`${s}\`` : s;
+  const quote = (s: string) => (quotes ? `\`${s}\`` : s);
   let text: string;
   switch (term.type) {
     case "text":
@@ -104,7 +104,7 @@ export function formatTerminalLeaf(
       text = quotes ? JSON.stringify(term.value) : term.value;
       break;
     case "values":
-      text = term.values.map((v) => quotes ? JSON.stringify(v) : v).join(" ");
+      text = term.values.map((v) => (quotes ? JSON.stringify(v) : v)).join(" ");
       break;
     case "envVar":
       text = quote(term.envVar);
@@ -176,8 +176,7 @@ export function formatTerminalLeaf(
       return render(theme.label ?? defaultTerminalTheme.label, term);
     case "syntaxPunctuation":
       return render(
-        theme.syntaxPunctuation ??
-          defaultTerminalTheme.syntaxPunctuation,
+        theme.syntaxPunctuation ?? defaultTerminalTheme.syntaxPunctuation,
         term,
       );
     case "errorLabel":
@@ -231,10 +230,14 @@ export function styleCode(style: TerminalStyle): string {
   return codes.length ? `\x1b[${codes.join(";")}m` : "";
 }
 function sameStyle(a: TerminalStyle, b: TerminalStyle): boolean {
-  return a.bold === b.bold && a.dim === b.dim && a.italic === b.italic &&
+  return (
+    a.bold === b.bold &&
+    a.dim === b.dim &&
+    a.italic === b.italic &&
     a.underline === b.underline &&
     JSON.stringify(a.foreground) === JSON.stringify(b.foreground) &&
-    JSON.stringify(a.background) === JSON.stringify(b.background);
+    JSON.stringify(a.background) === JSON.stringify(b.background)
+  );
 }
 export function* fragmentTokens(
   fragment: TerminalFragment,
@@ -285,9 +288,11 @@ export function serializeTokens(
   function transition(next: readonly Scope[]) {
     let common = 0;
     while (
-      common < active.length && common < next.length &&
+      common < active.length &&
+      common < next.length &&
       active[common] === next[common]
-    ) common++;
+    )
+      common++;
     const surviving = active.slice(0, common);
     const restored = surviving.reduce<TerminalStyle>(
       (style, scope) => ({ ...style, ...scope.style }),
@@ -317,7 +322,9 @@ export function serializeTokens(
             (s, x) => ({ ...s, ...x.style }),
             ambient,
           );
-          output += "\x1b[0m" + resetSuffix +
+          output +=
+            "\x1b[0m" +
+            resetSuffix +
             styleCode({ ...inherited, ...scope.style });
         } else output += styleCode(scope.style);
       }
@@ -331,9 +338,11 @@ export function serializeTokens(
       const next = items.slice(i + 1).find((t) => t.width !== -1)?.scopes ?? [];
       let common = 0;
       while (
-        common < active.length && common < next.length &&
+        common < active.length &&
+        common < next.length &&
         active[common] === next[common]
-      ) common++;
+      )
+        common++;
       transition(active.slice(0, common));
     } else if (colors) transition(token.scopes);
     output += token.text;
@@ -406,19 +415,26 @@ export function cacheTerminalTheme(theme: TerminalTheme = {}): TerminalTheme {
       theme.syntaxPunctuation ?? defaultTerminalTheme.syntaxPunctuation,
     ),
     errorLabel: cache(theme.errorLabel ?? defaultTerminalTheme.errorLabel),
-    annotationStyles: theme.annotationStyles == null ? undefined : {
-      default: theme.annotationStyles.default == null
+    annotationStyles:
+      theme.annotationStyles == null
         ? undefined
-        : { ...theme.annotationStyles.default },
-      choices: theme.annotationStyles.choices == null
-        ? undefined
-        : { ...theme.annotationStyles.choices },
-      environment: theme.annotationStyles.environment == null
-        ? undefined
-        : { ...theme.annotationStyles.environment },
-      aliases: theme.annotationStyles.aliases == null
-        ? undefined
-        : { ...theme.annotationStyles.aliases },
-    },
+        : {
+            default:
+              theme.annotationStyles.default == null
+                ? undefined
+                : { ...theme.annotationStyles.default },
+            choices:
+              theme.annotationStyles.choices == null
+                ? undefined
+                : { ...theme.annotationStyles.choices },
+            environment:
+              theme.annotationStyles.environment == null
+                ? undefined
+                : { ...theme.annotationStyles.environment },
+            aliases:
+              theme.annotationStyles.aliases == null
+                ? undefined
+                : { ...theme.annotationStyles.aliases },
+          },
   };
 }

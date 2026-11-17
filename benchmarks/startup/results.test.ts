@@ -18,7 +18,8 @@ const testRoot = fileURLToPath(
 );
 
 describe("validateReport", () => {
-  const stdout = "ok\n", stderr = "";
+  const stdout = "ok\n",
+    stderr = "";
   const outputHash = sha256(JSON.stringify({ stdout, stderr }));
   const report = () => ({
     schemaVersion: 1 as const,
@@ -33,35 +34,38 @@ describe("validateReport", () => {
     },
     order: [["case"]],
     outputs: { [outputHash]: { stdout, stderr } },
-    cases: [{
-      id: "case",
-      expectedStatus: 0,
-      expectedOutputHash: outputHash,
-      command: { executable: "node", args: [], cwd: ".", env: {} },
-      loadingMode: "packaged-esm",
-      warmups: [],
-      samples: [{
-        wallMs: 12,
-        status: 0,
-        signal: null,
-        error: null,
-        outputHash,
-      }],
-      summary: { count: 1, medianMs: 12, p95Ms: null },
-    }],
+    cases: [
+      {
+        id: "case",
+        expectedStatus: 0,
+        expectedOutputHash: outputHash,
+        command: { executable: "node", args: [], cwd: ".", env: {} },
+        loadingMode: "packaged-esm",
+        warmups: [],
+        samples: [
+          {
+            wallMs: 12,
+            status: 0,
+            signal: null,
+            error: null,
+            outputHash,
+          },
+        ],
+        summary: { count: 1, medianMs: 12, p95Ms: null },
+      },
+    ],
   });
   it("should accept a self-consistent report", () => validateReport(report()));
   it("should reject malformed results and recomputation mismatches", () => {
-    for (
-      const change of [
-        { schemaVersion: 2 },
-        { sampleCount: 100 },
-        { order: [[]] },
-        { outputs: {} },
-        { cases: [] },
-        { metadata: {} },
-      ]
-    ) assert.throws(() => validateReport({ ...report(), ...change }));
+    for (const change of [
+      { schemaVersion: 2 },
+      { sampleCount: 100 },
+      { order: [[]] },
+      { outputs: {} },
+      { cases: [] },
+      { metadata: {} },
+    ])
+      assert.throws(() => validateReport({ ...report(), ...change }));
     const altered = report();
     altered.cases[0].summary.medianMs = 1;
     assert.throws(() => validateReport(altered), /summary/i);
@@ -111,8 +115,9 @@ describe("validateReport", () => {
     const inspect = (value: unknown): void => {
       if (typeof value === "string") {
         assert.ok(
-          !/^(?:file:\/\/)?(?:\/(?!usr\/bin(?:[/:]|$)|bin(?:[/:]|$))|[A-Za-z]:[\\/])/
-            .test(value),
+          !/^(?:file:\/\/)?(?:\/(?!usr\/bin(?:[/:]|$)|bin(?:[/:]|$))|[A-Za-z]:[\\/])/.test(
+            value,
+          ),
           value,
         );
       } else if (Array.isArray(value)) value.forEach(inspect);
@@ -120,9 +125,9 @@ describe("validateReport", () => {
         Object.values(value).forEach(inspect);
       }
     };
-    for (
-      const file of readdirSync(root).filter((file) => file.endsWith(".json"))
-    ) {
+    for (const file of readdirSync(root).filter((file) =>
+      file.endsWith(".json"),
+    )) {
       const text = readFileSync(new URL(file, root), "utf8");
       assert.ok(!text.includes("/home/") && !text.includes("/Users/"));
       const value = JSON.parse(text);

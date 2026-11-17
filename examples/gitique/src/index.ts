@@ -46,36 +46,35 @@ export const program = defineProgram({
     name: "gitique",
     version: pkgJson.version,
     brief: message`A Git-like CLI built with Optique.`,
-    description:
-      message`A realistic Git CLI implementation showcasing Optique's type-safe combinatorial parsing and es-git's modern Git operations.`,
+    description: message`A realistic Git CLI implementation showcasing Optique's type-safe combinatorial parsing and es-git's modern Git operations.`,
     author: message`Hong Minhee ${url("https://hongminhee.org/")}`,
     examples: message`Common commands:
 
-${
-      commandLine("gitique add .")
-    }                     Stage all changes${lineBreak()}
-${
-      commandLine('gitique commit -m "message"')
-    }       Create a commit${lineBreak()}
-${
-      commandLine("gitique status")
-    }                    Show working tree status${lineBreak()}
-${
-      commandLine("gitique log --oneline")
-    }             View commit history${lineBreak()}
-${
-      commandLine("gitique diff --cached")
-    }             Show staged changes${lineBreak()}
+${commandLine(
+  "gitique add .",
+)}                     Stage all changes${lineBreak()}
+${commandLine(
+  'gitique commit -m "message"',
+)}       Create a commit${lineBreak()}
+${commandLine(
+  "gitique status",
+)}                    Show working tree status${lineBreak()}
+${commandLine(
+  "gitique log --oneline",
+)}             View commit history${lineBreak()}
+${commandLine(
+  "gitique diff --cached",
+)}             Show staged changes${lineBreak()}
 
 Shell completion:
 
-${
-      commandLine("gitique completion bash > ~/.bashrc.d/gitique.bash")
-    }${lineBreak()}
+${commandLine(
+  "gitique completion bash > ~/.bashrc.d/gitique.bash",
+)}${lineBreak()}
 ${commandLine("gitique completion zsh > ~/.zsh/completions/_gitique")}`,
-    footer: message`For more information, visit ${
-      url("https://github.com/dahlia/optique")
-    }.`,
+    footer: message`For more information, visit ${url(
+      "https://github.com/dahlia/optique",
+    )}.`,
   },
 });
 
@@ -142,7 +141,8 @@ export async function main(args = process.argv.slice(2)) {
 }
 
 // Run main() when executed directly.
-const isMain: boolean = "main" in import.meta
-  ? import.meta.main
-  : process.argv[1] === fileURLToPath(import.meta.url);
+const isMain: boolean =
+  "main" in import.meta
+    ? import.meta.main
+    : process.argv[1] === fileURLToPath(import.meta.url);
 if (isMain) main();

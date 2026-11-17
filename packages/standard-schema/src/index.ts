@@ -52,10 +52,7 @@ export interface StandardSchemaParserOptions<T = unknown> {
      */
     readonly schemaError?:
       | Message
-      | ((
-        issues: readonly StandardSchemaV1.Issue[],
-        input: string,
-      ) => Message);
+      | ((issues: readonly StandardSchemaV1.Issue[], input: string) => Message);
   };
 }
 
@@ -97,9 +94,7 @@ function validateOptions<T>(
   options: unknown,
 ): asserts options is StandardSchemaParserOptions<T> {
   if (options == null || typeof options !== "object") {
-    throw new TypeError(
-      `${functionName}() requires an options object.`,
-    );
+    throw new TypeError(`${functionName}() requires an options object.`);
   }
   if (Array.isArray(options)) {
     throw new TypeError(
@@ -108,9 +103,7 @@ function validateOptions<T>(
   }
   const prototype = Object.getPrototypeOf(options);
   if (prototype !== Object.prototype && prototype !== null) {
-    throw new TypeError(
-      `${functionName}() requires an options object.`,
-    );
+    throw new TypeError(`${functionName}() requires an options object.`);
   }
   if (!Object.hasOwn(options, "placeholder")) {
     throw new TypeError(
@@ -120,10 +113,12 @@ function validateOptions<T>(
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-  return value != null &&
+  return (
+    value != null &&
     (typeof value === "object" || typeof value === "function") &&
     "then" in value &&
-    typeof (value as Record<string, unknown>).then === "function";
+    typeof (value as Record<string, unknown>).then === "function"
+  );
 }
 
 function safeString(value: unknown): string {

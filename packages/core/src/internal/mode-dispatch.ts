@@ -153,10 +153,10 @@ export function wrapIterableForMode<M extends Mode, T>(
   mode: M,
   value: Iterable<T> | AsyncIterable<T>,
 ): ModeIterable<M, T> {
-  const canCheckAsyncIterator = value != null &&
-    (typeof value === "object" || typeof value === "function");
-  const isAsyncIterable = canCheckAsyncIterator &&
-    Symbol.asyncIterator in value;
+  const canCheckAsyncIterator =
+    value != null && (typeof value === "object" || typeof value === "function");
+  const isAsyncIterable =
+    canCheckAsyncIterator && Symbol.asyncIterator in value;
   return dispatchIterableByMode(
     mode,
     () => {

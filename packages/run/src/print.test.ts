@@ -248,9 +248,9 @@ describe("print module", () => {
       try {
         const printer = createPrinter({ colors: false, quotes: false });
         const choices = ["red", "green", "blue"];
-        const msg = message`Choose from ${values(choices)} for ${
-          optionName("--color")
-        }`;
+        const msg = message`Choose from ${values(choices)} for ${optionName(
+          "--color",
+        )}`;
 
         printer(msg);
 
@@ -273,8 +273,7 @@ describe("print module", () => {
 
       try {
         const printer = createPrinter({ maxWidth: 20 });
-        const longMsg =
-          message`This is a very long message that should be wrapped`;
+        const longMsg = message`This is a very long message that should be wrapped`;
 
         printer(longMsg);
 

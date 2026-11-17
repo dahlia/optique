@@ -17,11 +17,12 @@ process.exitCode = await convertFile(options, {
   stderr: (line) => process.stderr.write(`${line}\n`),
   // Ask only when a person can answer.  In scripts and pipelines, an
   // existing destination is refused instead of waiting for input.
-  confirm: process.stdin.isTTY && process.stderr.isTTY
-    ? (output) =>
-      confirmOverwrite(output, {
-        input: process.stdin,
-        output: process.stderr,
-      })
-    : undefined,
+  confirm:
+    process.stdin.isTTY && process.stderr.isTTY
+      ? (output) =>
+          confirmOverwrite(output, {
+            input: process.stdin,
+            output: process.stderr,
+          })
+      : undefined,
 });

@@ -14,13 +14,14 @@ export function parseTestScript(script, docs = false) {
     throw new TypeError(`Unsupported test script: ${script}`);
   }
   const tokens = script.match(/"[^"]*"|'[^']*'|[^\s]+/g) ?? [];
-  const args = tokens.slice(1).map((token) =>
-    token.replace(/^(['"])(.*)\1$/, "$2")
-  );
+  const args = tokens
+    .slice(1)
+    .map((token) => token.replace(/^(['"])(.*)\1$/, "$2"));
   for (const token of args.slice(1)) {
     if (
-      !/^[\w./*?-]+$/.test(token) || token.startsWith("-") ||
-      !/\.[cm]?tsx?$/.test(token) && !/\.test\.mjs$/.test(token)
+      !/^[\w./*?-]+$/.test(token) ||
+      token.startsWith("-") ||
+      (!/\.[cm]?tsx?$/.test(token) && !/\.test\.mjs$/.test(token))
     ) {
       throw new TypeError(`Unsupported test argument: ${token}`);
     }
@@ -64,9 +65,11 @@ export function testCommand(root, plan, index) {
       "--test-reporter=spec",
       "--test-reporter=junit",
       "--test-reporter-destination=stdout",
-      `--test-reporter-destination=${
-        resolve(root, "coverage/junit", `${index}.xml`)
-      }`,
+      `--test-reporter-destination=${resolve(
+        root,
+        "coverage/junit",
+        `${index}.xml`,
+      )}`,
       ...tail.slice(1),
     ],
   };
@@ -81,17 +84,19 @@ export function validateLcov(text, root) {
     if (!name) continue;
     const local = relative(root, resolve(root, name)).split(sep).join("/");
     if (
-      isAbsolute(local) || local.startsWith("../") ||
+      isAbsolute(local) ||
+      local.startsWith("../") ||
       !/^packages\/[^/]+\/src\/.+\.[cm]?tsx?$/.test(local) ||
-      /(?:^|\/)(?:dist|node_modules|fixtures|test-fixtures|generated)(?:\/|$)/
-        .test(local) ||
+      /(?:^|\/)(?:dist|node_modules|fixtures|test-fixtures|generated)(?:\/|$)/.test(
+        local,
+      ) ||
       /\.(?:test|fixture)\.[cm]?tsx?$/.test(local)
     ) {
       throw new Error(`Unexpected coverage source: ${name}`);
     }
     source = true;
-    hit ||= [...record.matchAll(/^DA:\d+,(\d+)/gm)].some((match) =>
-      Number(match[1]) > 0
+    hit ||= [...record.matchAll(/^DA:\d+,(\d+)/gm)].some(
+      (match) => Number(match[1]) > 0,
     );
   }
   if (!source || !hit) {
@@ -102,7 +107,8 @@ export function validateLcov(text, root) {
 /** Node's own JUnit reporter must describe actual, nonfailing test cases. */
 export function validateJunit(text) {
   if (
-    !/<testsuites?\b/.test(text) || !/<testcase\b/.test(text) ||
+    !/<testsuites?\b/.test(text) ||
+    !/<testcase\b/.test(text) ||
     /<(?:failure|error)\b/.test(text) ||
     /\b(?:failures|errors)="[1-9]\d*"/.test(text)
   ) {
@@ -123,12 +129,11 @@ export function runChild(command, { env = process.env, signal } = {}) {
     const kill = (force) => {
       if (child.pid === undefined) return;
       if (process.platform === "win32") {
-        const killer = spawn("taskkill.exe", [
-          "/PID",
-          String(child.pid),
-          "/T",
-          ...(force ? ["/F"] : []),
-        ], { stdio: "ignore" });
+        const killer = spawn(
+          "taskkill.exe",
+          ["/PID", String(child.pid), "/T", ...(force ? ["/F"] : [])],
+          { stdio: "ignore" },
+        );
         // A raced process exit can make taskkill fail; the child close event
         // remains authoritative and the forced retry is still bounded.
         killer.once("error", () => child.kill(force ? "SIGKILL" : "SIGTERM"));
@@ -137,9 +142,11 @@ export function runChild(command, { env = process.env, signal } = {}) {
           process.kill(-child.pid, force ? "SIGKILL" : "SIGTERM");
         } catch (error) {
           if (
-            !(error instanceof Error) || !("code" in error) ||
+            !(error instanceof Error) ||
+            !("code" in error) ||
             error.code !== "ESRCH"
-          ) throw error;
+          )
+            throw error;
         }
       }
     };

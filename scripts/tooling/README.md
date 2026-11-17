@@ -35,13 +35,13 @@ Coverage does not repeat the docs script's compiler prefix; `mise test:node`
 retains that mandatory check. Source LCOV and per-child JUnit reports are
 validated under _coverage/_. `mise coverage:smoke` runs only the Temporal file.
 
-Oxfmt is preparatory, not the active formatting gate. `mise oxfmt:inventory`
-lists the constrained JavaScript/TypeScript and JSON/JSONC file set.
+Oxfmt is the active source formatting gate. `mise oxfmt:inventory` lists the
+constrained JavaScript/TypeScript and JSON/JSONC file set.
 `mise oxfmt:check` and `mise oxfmt:write` use that same inventory; do not use an
 unrestricted `oxfmt .`. Original root/member exclusions remain, but Deno-only
 Node.js tooling exclusions do not remove Node.js quality ownership. Markdown
 stays with Hongdown/Sacho; TOML stays with mise. The measured configuration
-preserves objects and uses JSON width 1, without import/package sorting, JSDoc
-rewriting or embedded-language formatting. Repository-wide adoption is a
-separate mechanical change. Until then, `mise check` and `mise dev` still
-require Deno for the transitional formatter.
+preserves existing object wrapping and uses JSON width 1, without
+import/package sorting, JSDoc rewriting or embedded-language formatting.
+`mise check` and `mise dev` do not require Deno; compatibility checks remain
+explicit.

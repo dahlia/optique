@@ -227,9 +227,9 @@ export function formatDiffStat(
   const insertionBars = Math.round((insertions / total) * barWidth) || 0;
   const deletionBars = barWidth - insertionBars;
 
-  const bar = `${colors.green}${
-    "+".repeat(insertionBars)
-  }${colors.reset}${colors.red}${"-".repeat(deletionBars)}${colors.reset}`;
+  const bar = `${colors.green}${"+".repeat(
+    insertionBars,
+  )}${colors.reset}${colors.red}${"-".repeat(deletionBars)}${colors.reset}`;
 
   return ` ${path} | ${total} ${bar}`;
 }

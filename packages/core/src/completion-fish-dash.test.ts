@@ -133,12 +133,10 @@ describe("fish completion with dash-prefixed filenames", { skip }, () => {
 
   it("completes files inside a dash-prefixed directory", () => {
     if (skip) return;
-    assertCompletions(
-      "__FILE__:file:::0",
-      ["-d/-n", "-d/a.txt"],
-      "-d/",
-      ["-d/-n", "-d/a.txt"],
-    );
+    assertCompletions("__FILE__:file:::0", ["-d/-n", "-d/a.txt"], "-d/", [
+      "-d/-n",
+      "-d/a.txt",
+    ]);
   });
 
   // Patterns containing `[` and `?]` take the wildcard branch of the fish
@@ -156,21 +154,15 @@ describe("fish completion with dash-prefixed filenames", { skip }, () => {
 
   it("filters a dash-prefixed wildcard pattern", () => {
     if (skip) return;
-    assertCompletions(
-      "__FILE__:file::-x[?]*:0",
-      ["-x[?]a.txt", "b.txt"],
-      "",
-      ["-x[?]a.txt"],
-    );
+    assertCompletions("__FILE__:file::-x[?]*:0", ["-x[?]a.txt", "b.txt"], "", [
+      "-x[?]a.txt",
+    ]);
   });
 
   it("filters a hidden wildcard pattern under a dash-prefixed directory", () => {
     if (skip) return;
-    assertCompletions(
-      "__FILE__:file::-d/.x[?]*:0",
-      ["-d/.x[?]a", "-d/b"],
-      "",
-      ["-d/.x[?]a"],
-    );
+    assertCompletions("__FILE__:file::-d/.x[?]*:0", ["-d/.x[?]a", "-d/b"], "", [
+      "-d/.x[?]a",
+    ]);
   });
 });

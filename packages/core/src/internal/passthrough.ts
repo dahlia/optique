@@ -19,9 +19,10 @@ export function retainConsumingFailure(
   priority: number,
 ): ConsumingFailure {
   return {
-    failure: current != null && current.failure.consumed >= failure.consumed
-      ? current.failure
-      : failure,
+    failure:
+      current != null && current.failure.consumed >= failure.consumed
+        ? current.failure
+        : failure,
     priority: Math.max(current?.priority ?? -Infinity, priority),
   };
 }
@@ -53,8 +54,8 @@ export function getPassThroughFailure<TState>(
   const hinted: HintedContext<TState> = context;
   const hint = hinted[passThroughFailure];
   return hint?.buffer === context.buffer &&
-      hint.optionsTerminated === context.optionsTerminated &&
-      hint.failure.priority >= capturePriority
+    hint.optionsTerminated === context.optionsTerminated &&
+    hint.failure.priority >= capturePriority
     ? hint.failure
     : undefined;
 }
@@ -91,9 +92,12 @@ export function withPassThroughFailure<TState>(
     context = rest;
   }
   if (
-    failure == null || failure.failure.consumed < 1 ||
+    failure == null ||
+    failure.failure.consumed < 1 ||
     failure.priority < capturePriority ||
-    context.optionsTerminated || token == null || token === "--" ||
+    context.optionsTerminated ||
+    token == null ||
+    token === "--" ||
     !/^[-/+]/.test(token)
   ) {
     return context;
@@ -122,7 +126,7 @@ export function getOwnConsumingFailure<TState>(
   const hinted: HintedContext<TState> = context;
   const hint = hinted[passThroughFailure];
   return hint?.buffer === context.buffer &&
-      hint.optionsTerminated === context.optionsTerminated
+    hint.optionsTerminated === context.optionsTerminated
     ? hint.own
     : undefined;
 }
@@ -140,9 +144,13 @@ export function withReturnedConsumingFailure<TState>(
   if (failure == null || getPassThroughFailure(next) == null) return next;
   const token = next.buffer[0];
   if (
-    next.optionsTerminated || token == null || token === "--" ||
-    !/^[-/+]/.test(token) || failure.failure.consumed < 1
-  ) return next;
+    next.optionsTerminated ||
+    token == null ||
+    token === "--" ||
+    !/^[-/+]/.test(token) ||
+    failure.failure.consumed < 1
+  )
+    return next;
   const hinted: HintedContext<TState> = next;
   const hint = hinted[passThroughFailure];
   if (hint == null) return next;
@@ -162,7 +170,8 @@ export function retainConsumingFailureHint<TState, TChildState>(
   if (
     next.buffer !== context.buffer ||
     next.optionsTerminated !== context.optionsTerminated
-  ) return current;
+  )
+    return current;
   const own = getOwnConsumingFailure(next);
   return own == null || own === getOwnConsumingFailure(context)
     ? current
@@ -182,11 +191,12 @@ interface CapturePriority<TState> {
 
 /** Checks for capture through usage-preserving wrappers. @internal */
 export function hasPassThroughUsage(usage: Usage): boolean {
-  return usage.some((term) =>
-    term.type === "passthrough" ||
-    ((term.type === "optional" || term.type === "multiple") &&
-      hasPassThroughUsage(term.terms)) ||
-    (term.type === "exclusive" && term.terms.some(hasPassThroughUsage))
+  return usage.some(
+    (term) =>
+      term.type === "passthrough" ||
+      ((term.type === "optional" || term.type === "multiple") &&
+        hasPassThroughUsage(term.terms)) ||
+      (term.type === "exclusive" && term.terms.some(hasPassThroughUsage)),
   );
 }
 
@@ -212,14 +222,13 @@ export function getPassThroughPriority<TState>(
   } = parser;
   const hint = annotated[capturePriority];
   if (hint == null) return parser.priority;
-  const priority = hint.getPriority == null
-    ? hint.priority
-    : hint.getPriority(state, token);
+  const priority =
+    hint.getPriority == null ? hint.priority : hint.getPriority(state, token);
   return priority == null
     ? undefined
     : hint.ownerPriority === parser.priority
-    ? priority
-    : parser.priority;
+      ? priority
+      : parser.priority;
 }
 
 /**
@@ -234,9 +243,8 @@ export function definePassThroughPriority<TState>(
   children: readonly PrioritySource[],
   getPriority?: (state: TState, token?: string) => number | undefined,
 ): void {
-  const priorities = children.filter((child) =>
-    hasPassThroughUsage(child.usage)
-  )
+  const priorities = children
+    .filter((child) => hasPassThroughUsage(child.usage))
     .map((child) => getPassThroughPriority(child) ?? child.priority);
   if (priorities.length === 0) return;
   Object.defineProperty(parser, capturePriority, {
@@ -269,13 +277,15 @@ export function getPassThroughFailureHint<TState>(
 
 /** Finds a Boolean option through usage-preserving wrappers. */
 function hasFlagUsage(usage: Usage, name: string): boolean {
-  return usage.some((term) =>
-    (term.type === "option" && term.metavar == null &&
-      term.names.some((optionName) => optionName === name)) ||
-    ((term.type === "optional" || term.type === "multiple") &&
-      hasFlagUsage(term.terms, name)) ||
-    (term.type === "exclusive" &&
-      term.terms.some((terms) => hasFlagUsage(terms, name)))
+  return usage.some(
+    (term) =>
+      (term.type === "option" &&
+        term.metavar == null &&
+        term.names.some((optionName) => optionName === name)) ||
+      ((term.type === "optional" || term.type === "multiple") &&
+        hasFlagUsage(term.terms, name)) ||
+      (term.type === "exclusive" &&
+        term.terms.some((terms) => hasFlagUsage(terms, name))),
   );
 }
 
@@ -293,18 +303,23 @@ export function matchesOptionToken(
   const separator = slashOption
     ? token.indexOf(":")
     : token.startsWith("-")
-    ? token.indexOf("=")
-    : -1;
+      ? token.indexOf("=")
+      : -1;
   if (
     separator > (slashOption ? 0 : 2) &&
     parser.leadingNames.has(token.slice(0, separator))
-  ) return true;
+  )
+    return true;
 
   // Only Boolean short options accept bundles. A value option such as -m
   // does not recognize -mhello as an attached value.
   const shortName = token.slice(0, 2);
-  return token.length > 2 && /^-[^-]$/.test(shortName) &&
-    parser.leadingNames.has(shortName) && hasFlagUsage(parser.usage, shortName);
+  return (
+    token.length > 2 &&
+    /^-[^-]$/.test(shortName) &&
+    parser.leadingNames.has(shortName) &&
+    hasFlagUsage(parser.usage, shortName)
+  );
 }
 
 /** A known option reachable at the current parser state. @internal */
@@ -329,9 +344,10 @@ export function defineOptionMatch<TState>(
   match: (state: TState, token: string) => OptionMatch | undefined,
 ): void {
   Object.defineProperty(parser, optionMatchKey, {
-    value: { ownerPriority: parser.priority, match } satisfies OptionMatcher<
-      TState
-    >,
+    value: {
+      ownerPriority: parser.priority,
+      match,
+    } satisfies OptionMatcher<TState>,
     enumerable: true,
   });
 }
@@ -380,10 +396,12 @@ export function combineOptionMatches(
   matches: readonly (OptionMatch | undefined)[],
 ): OptionMatch | undefined {
   const found = matches.filter((match) => match != null);
-  return found.length === 0 ? undefined : {
-    priority: Math.max(...found.map((match) => match.priority)),
-    continuesCommand: found.some((match) => match.continuesCommand),
-  };
+  return found.length === 0
+    ? undefined
+    : {
+        priority: Math.max(...found.map((match) => match.priority)),
+        continuesCommand: found.some((match) => match.continuesCommand),
+      };
 }
 
 const knownCompletionKey = Symbol("knownCompletion");
@@ -409,9 +427,7 @@ export function defineKnownCompletionLookup<TState>(
     value: {
       complete: parser.complete,
       value,
-    } satisfies KnownCompletion<
-      TState
-    >,
+    } satisfies KnownCompletion<TState>,
     enumerable: true,
   });
 }
@@ -475,26 +491,21 @@ export function defineReachableChildren<TOuterState, TChildState>(
   children: readonly PrioritySource[],
   select: (state: TOuterState) => readonly ReachableChild<TChildState>[],
 ): void {
-  defineOptionMatch(
-    parser,
-    (state, token) =>
-      combineOptionMatches(
-        select(state).map((child) => {
-          const match = getOptionMatch(child.parser, child.state, token);
-          return match == null || !child.continuesCommand
-            ? match
-            : { ...match, continuesCommand: true };
-        }),
-      ),
+  defineOptionMatch(parser, (state, token) =>
+    combineOptionMatches(
+      select(state).map((child) => {
+        const match = getOptionMatch(child.parser, child.state, token);
+        return match == null || !child.continuesCommand
+          ? match
+          : { ...match, continuesCommand: true };
+      }),
+    ),
   );
-  definePassThroughPriority(
-    parser,
-    children,
-    (state, token) =>
-      combinePassThroughPriorities(
-        select(state).map((child) =>
-          getPassThroughPriority(child.parser, child.state, token)
-        ),
+  definePassThroughPriority(parser, children, (state, token) =>
+    combinePassThroughPriorities(
+      select(state).map((child) =>
+        getPassThroughPriority(child.parser, child.state, token),
       ),
+    ),
   );
 }

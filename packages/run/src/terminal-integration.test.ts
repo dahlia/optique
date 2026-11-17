@@ -18,18 +18,24 @@ describe("runner terminal detection", () => {
   });
 
   it("should fall back from zero stream columns to COLUMNS", async () => {
-    const result = await invoke({ columns: "0", colors: false }, {
-      COLUMNS: "60",
-    });
+    const result = await invoke(
+      { columns: "0", colors: false },
+      {
+        COLUMNS: "60",
+      },
+    );
     assert.equal(result.exitCode, 0);
     assert.ok(result.formatting.some((options) => options.maxWidth === 60));
     assert.ok(result.stdout.split("\n").every((line) => line.length <= 60));
   });
 
   it("should leave output unwrapped when both detected widths are invalid", async () => {
-    const result = await invoke({ columns: "NaN", colors: false }, {
-      COLUMNS: "bad",
-    });
+    const result = await invoke(
+      { columns: "NaN", colors: false },
+      {
+        COLUMNS: "bad",
+      },
+    );
     assert.equal(result.exitCode, 0);
     assert.ok(result.formatting.every((options) => options.maxWidth === null));
     assert.ok(result.stdout.split("\n").some((line) => line.length > 80));
@@ -56,44 +62,56 @@ describe("runner terminal detection", () => {
   });
 
   it("should let FORCE_COLOR override both disabling variables", async () => {
-    const result = await invoke({}, {
-      FORCE_COLOR: "false",
-      NO_COLOR: "1",
-      NODE_DISABLE_COLORS: "1",
-      COLUMNS: "60",
-    });
+    const result = await invoke(
+      {},
+      {
+        FORCE_COLOR: "false",
+        NO_COLOR: "1",
+        NODE_DISABLE_COLORS: "1",
+        COLUMNS: "60",
+      },
+    );
     assert.match(result.stdout, ansiSequence);
     assert.ok(
-      result.formatting.some(({ colors, maxWidth }) =>
-        colors && maxWidth === 60
+      result.formatting.some(
+        ({ colors, maxWidth }) => colors && maxWidth === 60,
       ),
     );
   });
 
   it("should prefer a valid stream width over COLUMNS", async () => {
-    const result = await invoke({ columns: "72", colors: false }, {
-      COLUMNS: "60",
-    });
+    const result = await invoke(
+      { columns: "72", colors: false },
+      {
+        COLUMNS: "60",
+      },
+    );
     assert.ok(result.formatting.some((options) => options.maxWidth === 72));
     assert.ok(result.stdout.split("\n").some((line) => line.length > 60));
   });
 
   it("should preserve explicit colors and width over automatic values", async () => {
-    const plain = await invoke({
-      tty: true,
-      columns: "60",
-      colors: false,
-      width: "72",
-    }, {
-      FORCE_COLOR: "1",
-      COLUMNS: "60",
-    });
+    const plain = await invoke(
+      {
+        tty: true,
+        columns: "60",
+        colors: false,
+        width: "72",
+      },
+      {
+        FORCE_COLOR: "1",
+        COLUMNS: "60",
+      },
+    );
     assert.doesNotMatch(plain.stdout, ansiSequence);
     assert.ok(plain.formatting.some((options) => options.maxWidth === 72));
-    const colored = await invoke({ colors: true }, {
-      NO_COLOR: "1",
-      NODE_DISABLE_COLORS: "1",
-    });
+    const colored = await invoke(
+      { colors: true },
+      {
+        NO_COLOR: "1",
+        NODE_DISABLE_COLORS: "1",
+      },
+    );
     assert.match(colored.stdout, ansiSequence);
   });
 
@@ -113,54 +131,59 @@ describe("runner terminal detection", () => {
   });
 
   it("should use stdout preferences for errors even when stderr disagrees", async () => {
-    const result = await invoke({ request: "error", tty: true }, {
-      NO_COLOR: "1",
-    });
+    const result = await invoke(
+      { request: "error", tty: true },
+      {
+        NO_COLOR: "1",
+      },
+    );
     assert.equal(result.exitCode, 1);
     assert.match(result.stderr, /Error:/u);
     assert.doesNotMatch(result.stderr, ansiSequence);
     assert.equal(result.stdout, "");
-    const forced = await invoke({ request: "error", tty: false }, {
-      FORCE_COLOR: "0",
-    });
+    const forced = await invoke(
+      { request: "error", tty: false },
+      {
+        FORCE_COLOR: "0",
+      },
+    );
     assert.match(forced.stderr, ansiSequence);
   });
 
-  for (
-    const mode of [
-      "runSync",
-      "runAsync",
-      "async-parser",
-      "run-context",
-      "runSync-context",
-      "program",
-    ]
-  ) {
+  for (const mode of [
+    "runSync",
+    "runAsync",
+    "async-parser",
+    "run-context",
+    "runSync-context",
+    "program",
+  ]) {
     it(`should apply shared defaults through ${mode}`, async () => {
-      const result = await invoke({ mode, columns: "0" }, {
-        FORCE_COLOR: "0",
-        COLUMNS: "60",
-      });
+      const result = await invoke(
+        { mode, columns: "0" },
+        {
+          FORCE_COLOR: "0",
+          COLUMNS: "60",
+        },
+      );
       assert.equal(result.exitCode, 0);
       assert.match(result.stdout, ansiSequence);
       assert.ok(
-        result.formatting.some(({ colors, maxWidth }) =>
-          colors && maxWidth === 60
+        result.formatting.some(
+          ({ colors, maxWidth }) => colors && maxWidth === 60,
         ),
       );
     });
   }
 
-  for (
-    const request of [
-      "help",
-      "error",
-      "error-help",
-      "error-only",
-      "unsupported-shell",
-      "completion-error",
-    ] as const
-  ) {
+  for (const request of [
+    "help",
+    "error",
+    "error-help",
+    "error-only",
+    "unsupported-shell",
+    "completion-error",
+  ] as const) {
     it(`should render ${request} once without wrapping when automatic widths are too narrow`, async () => {
       const baseline = await invoke({ request, colors: false });
       if (request === "completion-error") {
@@ -170,18 +193,19 @@ describe("runner terminal detection", () => {
           ),
         );
       }
-      for (
-        const width
-          of request === "error-only" || request === "unsupported-shell"
-            ? ["1"]
-            : ["1", "10"]
-      ) {
+      for (const width of request === "error-only" ||
+      request === "unsupported-shell"
+        ? ["1"]
+        : ["1", "10"]) {
         for (const source of ["stream", "environment"]) {
-          const result = await invoke({
-            request,
-            colors: false,
-            columns: source === "stream" ? width : undefined,
-          }, { COLUMNS: source === "environment" ? width : "60" });
+          const result = await invoke(
+            {
+              request,
+              colors: false,
+              columns: source === "stream" ? width : undefined,
+            },
+            { COLUMNS: source === "environment" ? width : "60" },
+          );
           assert.equal(result.stdout, baseline.stdout);
           assert.equal(result.stderr, baseline.stderr);
           assert.equal(result.exitCode, request === "help" ? 0 : 1);
@@ -194,16 +218,14 @@ describe("runner terminal detection", () => {
     });
   }
 
-  for (
-    const mode of [
-      "runSync",
-      "runAsync",
-      "async-parser",
-      "run-context",
-      "runSync-context",
-      "program",
-    ]
-  ) {
+  for (const mode of [
+    "runSync",
+    "runAsync",
+    "async-parser",
+    "run-context",
+    "runSync-context",
+    "program",
+  ]) {
     it(`should preserve automatic width provenance through ${mode}`, async () => {
       const result = await invoke({ mode, colors: false }, { COLUMNS: "1" });
       assert.equal(result.exitCode, 0);
@@ -224,11 +246,14 @@ describe("runner terminal detection", () => {
 
   it("should propagate custom formatter errors without retrying", async () => {
     for (const COLUMNS of ["1", "60"]) {
-      const result = await invoke({
-        colors: false,
-        formatterThrows: true,
-        expectedError: "RangeError",
-      }, { COLUMNS });
+      const result = await invoke(
+        {
+          colors: false,
+          formatterThrows: true,
+          expectedError: "RangeError",
+        },
+        { COLUMNS },
+      );
       assert.equal(result.failure?.message, "Custom formatter failed.");
       assert.equal(result.formatting.length, 1);
       assert.equal(result.exitCalls, 0);
@@ -238,9 +263,8 @@ describe("runner terminal detection", () => {
 
   it("should preserve explicit invalid-width errors", async () => {
     for (const width of ["0", "-1", "1.5", "NaN", "Infinity"]) {
-      const expectedError = width === "0" || width === "-1"
-        ? "RangeError"
-        : "TypeError";
+      const expectedError =
+        width === "0" || width === "-1" ? "RangeError" : "TypeError";
       const result = await invoke({ width, expectedError }, { COLUMNS: "60" });
       assert.equal(result.failure?.name, expectedError);
       assert.equal(result.exitCode, undefined);
@@ -260,15 +284,19 @@ describe("runner terminal detection", () => {
         const expectedWidth = permissions.includes("--allow-env=COLUMNS")
           ? 60
           : null;
-        const result = await invoke({ tty: true, columns: "0" }, {
-          NODE_DISABLE_COLORS: "1",
-          COLUMNS: "60",
-        }, permissions);
+        const result = await invoke(
+          { tty: true, columns: "0" },
+          {
+            NODE_DISABLE_COLORS: "1",
+            COLUMNS: "60",
+          },
+          permissions,
+        );
         assert.equal(result.exitCode, 0);
         assert.match(result.stdout, ansiSequence);
         assert.ok(
-          result.formatting.some((options) =>
-            options.maxWidth === expectedWidth
+          result.formatting.some(
+            (options) => options.maxWidth === expectedWidth,
           ),
         );
         const forced = await invoke({}, { FORCE_COLOR: "0" }, permissions);
@@ -282,13 +310,17 @@ describe("runner terminal detection", () => {
         const success = await invoke({ request: "success" }, {}, permissions);
         assert.equal(success.value, "ok");
         assert.equal(success.exitCode, undefined);
-        const explicit = await invoke({ colors: true, width: "72" }, {
-          NO_COLOR: "1",
-          COLUMNS: "60",
-        }, permissions);
+        const explicit = await invoke(
+          { colors: true, width: "72" },
+          {
+            NO_COLOR: "1",
+            COLUMNS: "60",
+          },
+          permissions,
+        );
         assert.ok(
-          explicit.formatting.some(({ colors, maxWidth }) =>
-            colors && maxWidth === 72
+          explicit.formatting.some(
+            ({ colors, maxWidth }) => colors && maxWidth === 72,
           ),
         );
       },
@@ -339,9 +371,12 @@ async function invoke(
   envPermissions: readonly string[] = ["--allow-env"],
 ): Promise<Result> {
   const env = { ...process.env };
-  for (
-    const key of ["FORCE_COLOR", "NO_COLOR", "NODE_DISABLE_COLORS", "COLUMNS"]
-  ) {
+  for (const key of [
+    "FORCE_COLOR",
+    "NO_COLOR",
+    "NODE_DISABLE_COLORS",
+    "COLUMNS",
+  ]) {
     delete env[key];
   }
   Object.assign(env, variables);
@@ -360,9 +395,10 @@ async function invoke(
   );
   const result: Result = JSON.parse(child.stdout);
   assert.deepEqual(result.observed, {
-    columns: scenario.columns === undefined
-      ? "undefined"
-      : String(Number(scenario.columns)),
+    columns:
+      scenario.columns === undefined
+        ? "undefined"
+        : String(Number(scenario.columns)),
     tty: scenario.tty ?? null,
   });
   return result;

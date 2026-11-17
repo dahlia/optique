@@ -29,18 +29,28 @@ export function projectCommandUsage(
   if (meta == null) return projectCommandTerms(usage, path, 0);
   const top = usage[0];
   if (
-    usage.length !== 1 || top.type !== "exclusive" ||
+    usage.length !== 1 ||
+    top.type !== "exclusive" ||
     top.terms.length !== meta.alternativeCount + 1
-  ) return undefined;
+  )
+    return undefined;
   const selected = projectCommandTerms(top.terms[meta.optionCount], path, 0);
   if (selected == null) return undefined;
-  const options = top.terms.slice(0, meta.optionCount).filter((branch) =>
-    branch.some((term) => term.type === "option" && !isUsageHidden(term.hidden))
-  );
-  return options.length === 0 ? selected : [{
-    type: "exclusive",
-    terms: [...options, selected],
-  }];
+  const options = top.terms
+    .slice(0, meta.optionCount)
+    .filter((branch) =>
+      branch.some(
+        (term) => term.type === "option" && !isUsageHidden(term.hidden),
+      ),
+    );
+  return options.length === 0
+    ? selected
+    : [
+        {
+          type: "exclusive",
+          terms: [...options, selected],
+        },
+      ];
 }
 
 function containsCommand(usage: Usage): boolean {
@@ -91,9 +101,11 @@ function projectCommandTerms(
   const suffix = usage.slice(index + 1);
   // A required prefix can be a conditional() discriminator. Keep its order
   // attached to the selected grammar instead of hoisting commands over it.
-  const orderedPrefix = prefix.some((term) =>
-    term.type === "option" || term.type === "argument" ||
-    term.type === "literal"
+  const orderedPrefix = prefix.some(
+    (term) =>
+      term.type === "option" ||
+      term.type === "argument" ||
+      term.type === "literal",
   );
   const preserveOrder = (terms: Usage): Usage =>
     orderedPrefix ? [{ type: "sequence", terms }] : terms;
@@ -305,7 +317,8 @@ export function collectActiveOptionNames(
         );
       }
     } else if (
-      term.type === "optional" || term.type === "multiple" ||
+      term.type === "optional" ||
+      term.type === "multiple" ||
       term.type === "sequence"
     ) {
       collectActiveOptionNames(

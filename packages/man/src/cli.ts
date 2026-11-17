@@ -55,22 +55,22 @@ a ${metavar("PROGRAM")} or ${metavar("PARSER")} to generate a man page from.`,
       "--section",
       choice(sectionValues, { metavar: "SECTION" }),
       {
-        description:
-          message`Man page section number (${"1"}-${"8"}). Common sections:
+        description: message`Man page section number (${"1"}-${"8"}). Common sections:
 
   ${"1"}  User commands
   ${"5"}  File formats
   ${"8"}  System administration`,
       },
     ),
-    showEnvironment: optional(option(
-      "--show-environment",
-      choice(["inline", "section", "both"] as const, { metavar: "LAYOUT" }),
-      {
-        description:
-          message`Document declared environment bindings inline, in a section, or both.`,
-      },
-    )),
+    showEnvironment: optional(
+      option(
+        "--show-environment",
+        choice(["inline", "section", "both"] as const, { metavar: "LAYOUT" }),
+        {
+          description: message`Document declared environment bindings inline, in a section, or both.`,
+        },
+      ),
+    ),
     showAliases: option("--show-aliases", {
       description: message`Document command aliases next to their commands.`,
     }),
@@ -180,9 +180,9 @@ Write output to a file:
 Override the program name:
 
   ${commandLine("optique-man ./src/cli.ts -s 1 --name myapp")}`,
-    bugs: message`Report bugs to: ${
-      url("https://github.com/dahlia/optique/issues")
-    }.`,
+    bugs: message`Report bugs to: ${url(
+      "https://github.com/dahlia/optique/issues",
+    )}.`,
   },
 });
 
@@ -231,9 +231,8 @@ function exportNotFoundError(
   exportName: string,
   availableExports: readonly string[],
 ): never {
-  const exportDisplay = exportName === "default"
-    ? "default export"
-    : `export ${exportName}`;
+  const exportDisplay =
+    exportName === "default" ? "default export" : `export ${exportName}`;
 
   let suggestion: Message;
   if (availableExports.length > 0) {
@@ -247,10 +246,9 @@ Use ${optionName("-e")} to specify one of these exports.`;
 The file has no exports. Make sure it exports a Program or Parser.`;
   }
 
-  printError(
-    message`No ${exportDisplay} found in ${filePath}.${suggestion}`,
-    { exitCode: EXIT_EXPORT_NOT_FOUND },
-  );
+  printError(message`No ${exportDisplay} found in ${filePath}.${suggestion}`, {
+    exitCode: EXIT_EXPORT_NOT_FOUND,
+  });
 }
 
 /**
@@ -261,9 +259,8 @@ function notProgramOrParserError(
   exportName: string,
   actualType: string,
 ): never {
-  const exportDisplay = exportName === "default"
-    ? "default export"
-    : `export ${exportName}`;
+  const exportDisplay =
+    exportName === "default" ? "default export" : `export ${exportName}`;
 
   printError(
     message`The ${exportDisplay} in ${filePath} is not a Program or Parser.
@@ -324,10 +321,9 @@ Alternatively, use a pre-compiled JavaScript file instead.`,
  * Error handler for man page generation failure.
  */
 function generationError(error: Error): never {
-  printError(
-    message`Failed to generate man page: ${error.message}`,
-    { exitCode: EXIT_GENERATION_FAILED },
-  );
+  printError(message`Failed to generate man page: ${error.message}`, {
+    exitCode: EXIT_GENERATION_FAILED,
+  });
 }
 
 /**
@@ -369,7 +365,8 @@ async function importModule(
   // stripping does not handle JSX transform), while plain TS files only need
   // it on older Node versions without native type stripping.
   if (
-    !isDeno && !isBun &&
+    !isDeno &&
+    !isBun &&
     (isJsxOrTsx || (isPlainTs && !nodeSupportsNativeTypeScript()))
   ) {
     await registerTsx(filePath, isJsxOrTsx);
@@ -391,7 +388,8 @@ async function importModule(
     // dependency and tsx is not installed, show a helpful error message
     // instead of the raw Node.js error.
     if (
-      !isDeno && !isBun &&
+      !isDeno &&
+      !isBun &&
       isNodeError(error) &&
       error.code === "ERR_UNKNOWN_FILE_EXTENSION"
     ) {
@@ -410,8 +408,11 @@ async function importModule(
  * @returns `true` if the error has a string `code` property.
  */
 function isNodeError(error: unknown): error is Error & { code: string } {
-  return error instanceof Error && "code" in error &&
-    typeof (error as { code: unknown }).code === "string";
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    typeof (error as { code: unknown }).code === "string"
+  );
 }
 
 /**
@@ -438,10 +439,7 @@ async function registerTsx(
     const tsx = await import("tsx/esm/api");
     tsx.register();
   } catch (error: unknown) {
-    if (
-      !isNodeError(error) ||
-      error.code !== "ERR_MODULE_NOT_FOUND"
-    ) {
+    if (!isNodeError(error) || error.code !== "ERR_MODULE_NOT_FOUND") {
       throw error;
     }
     if (isJsxOrTsx) {
@@ -474,9 +472,7 @@ async function tryRegisterTsx(): Promise<void> {
 /**
  * Checks if a value is a Program object.
  */
-function isProgram(
-  value: unknown,
-): value is Program<Mode, unknown> {
+function isProgram(value: unknown): value is Program<Mode, unknown> {
   try {
     return (
       value != null &&
@@ -496,9 +492,7 @@ function isProgram(
 /**
  * Checks if a value is a Parser object.
  */
-function isParser(
-  value: unknown,
-): value is Parser<Mode, unknown, unknown> {
+function isParser(value: unknown): value is Parser<Mode, unknown, unknown> {
   try {
     return (
       value != null &&
@@ -558,29 +552,21 @@ export async function main(): Promise<void> {
   const mod = await importModule(args.file);
 
   // Get the export
-  const target = args.exportName === "default"
-    ? mod.default
-    : mod[args.exportName];
+  const target =
+    args.exportName === "default" ? mod.default : mod[args.exportName];
 
   if (target === undefined) {
-    exportNotFoundError(
-      args.file,
-      args.exportName,
-      getAvailableExports(mod),
-    );
+    exportNotFoundError(args.file, args.exportName, getAvailableExports(mod));
   }
 
   // Validate type
   if (!isProgram(target) && !isParser(target)) {
-    notProgramOrParserError(
-      args.file,
-      args.exportName,
-      describeType(target),
-    );
+    notProgramOrParserError(args.file, args.exportName, describeType(target));
   }
 
   // Determine the program name
-  const name = args.name ??
+  const name =
+    args.name ??
     (isProgram(target) ? target.metadata.name : null) ??
     inferNameFromPath(args.file);
 
@@ -595,9 +581,10 @@ export async function main(): Promise<void> {
         date,
         version: args.versionString,
         manual: args.manual,
-        showEnvironment: args.showEnvironment == null
-          ? undefined
-          : { placement: args.showEnvironment },
+        showEnvironment:
+          args.showEnvironment == null
+            ? undefined
+            : { placement: args.showEnvironment },
         showAliases: args.showAliases,
       });
     } else {
@@ -607,9 +594,10 @@ export async function main(): Promise<void> {
         date,
         version: args.versionString,
         manual: args.manual,
-        showEnvironment: args.showEnvironment == null
-          ? undefined
-          : { placement: args.showEnvironment },
+        showEnvironment:
+          args.showEnvironment == null
+            ? undefined
+            : { placement: args.showEnvironment },
         showAliases: args.showAliases,
       });
     }
@@ -637,7 +625,8 @@ export async function main(): Promise<void> {
 // - Deno/Bun: import.meta.main
 // - Node.js 22.18.0+/24.2.0+: import.meta.main
 // - Older Node.js: compare process.argv[1] with import.meta.url
-const isMain: boolean = "main" in import.meta
-  ? import.meta.main
-  : process.argv[1] === fileURLToPath(import.meta.url);
+const isMain: boolean =
+  "main" in import.meta
+    ? import.meta.main
+    : process.argv[1] === fileURLToPath(import.meta.url);
 if (isMain) main();

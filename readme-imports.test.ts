@@ -25,13 +25,7 @@ const CONSTRUCTS = [
   "conditional",
 ];
 
-const MODIFIERS = [
-  "optional",
-  "withDefault",
-  "map",
-  "multiple",
-  "nonEmpty",
-];
+const MODIFIERS = ["optional", "withDefault", "map", "multiple", "nonEmpty"];
 
 const MOVED_SYMBOLS = new Map<string, string>([
   ...PRIMITIVES.map((s) => [s, "@optique/core/primitives"] as const),
@@ -57,7 +51,7 @@ async function findReadmeFiles(dir: string): Promise<string[]> {
       continue;
     }
     if (info.isDirectory()) {
-      results.push(...await findReadmeFiles(full));
+      results.push(...(await findReadmeFiles(full)));
     } else if (entry === "README.md") {
       results.push(full);
     }
@@ -121,9 +115,7 @@ describe("README run() usage", () => {
       const content = await readFile(readme, "utf-8");
       const rel = readme.replace(root, "");
       // Only check inside code blocks
-      const codeBlocks = content.matchAll(
-        /~~~~ typescript\n([\s\S]*?)~~~~/g,
-      );
+      const codeBlocks = content.matchAll(/~~~~ typescript\n([\s\S]*?)~~~~/g);
       for (const block of codeBlocks) {
         if (runObjectPattern.test(block[1])) {
           violations.push(
@@ -176,9 +168,7 @@ describe("README run() usage", () => {
     for (const readme of readmes) {
       const content = await readFile(readme, "utf-8");
       const rel = readme.replace(root, "");
-      const codeBlocks = content.matchAll(
-        /~~~~ typescript\n([\s\S]*?)~~~~/g,
-      );
+      const codeBlocks = content.matchAll(/~~~~ typescript\n([\s\S]*?)~~~~/g);
       for (const block of codeBlocks) {
         if (pattern.test(block[1])) {
           violations.push(
@@ -222,9 +212,9 @@ describe("README imports", () => {
     assert.deepStrictEqual(
       violations,
       [],
-      `Found stale @optique/core/parser imports in README files:\n${
-        violations.join("\n")
-      }`,
+      `Found stale @optique/core/parser imports in README files:\n${violations.join(
+        "\n",
+      )}`,
     );
   });
 });

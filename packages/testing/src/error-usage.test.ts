@@ -42,9 +42,13 @@ describe("command-scoped error usage", () => {
       assert.equal(after.stdout, "");
       const usage = after.stderr.slice(0, after.stderr.indexOf("Error:"));
       assert.match(usage, /tool config set/);
-      for (
-        const name of ["--port", "--verbose", "--global", "--help", "--version"]
-      ) {
+      for (const name of [
+        "--port",
+        "--verbose",
+        "--global",
+        "--help",
+        "--version",
+      ]) {
         assert.ok(usage.includes(name), usage);
       }
       assert.doesNotMatch(
@@ -56,7 +60,10 @@ describe("command-scoped error usage", () => {
     });
   }
 
-  for (const aliases of [["cfg", "s"], ["configuration", "change"]]) {
+  for (const aliases of [
+    ["cfg", "s"],
+    ["configuration", "change"],
+  ]) {
     it(`should show canonical names for ${aliases.join(" ")}`, async () => {
       const result = await captureRun(nestedCommands(), {
         ...format,
@@ -115,12 +122,10 @@ describe("command-scoped error usage", () => {
     });
   }
 
-  for (
-    const args of [
-      ["--", "config", "set", "--port", "bad"],
-      ["config", "set", "--", "--unknown"],
-    ]
-  ) {
+  for (const args of [
+    ["--", "config", "set", "--port", "bad"],
+    ["config", "set", "--", "--unknown"],
+  ]) {
     it(`should use recorded command context with ${args.join(" ")}`, async () => {
       const result = await captureRun(nestedCommands(), {
         ...format,
@@ -136,10 +141,12 @@ describe("command-scoped error usage", () => {
   for (const wrapper of [optional, multiple]) {
     it(`should fall back for ${wrapper.name} command hosts`, async () => {
       const parser = object({
-        commands: wrapper(or(
-          command("config", option("--port", choice(["80", "443"]))),
-          command("serve", constant(null)),
-        )),
+        commands: wrapper(
+          or(
+            command("config", option("--port", choice(["80", "443"]))),
+            command("serve", constant(null)),
+          ),
+        ),
       });
       const options = { ...format, args: ["config", "--port", "bad"] };
       const root = await captureRun(parser, { ...options, errorUsage: "root" });
@@ -172,30 +179,38 @@ describe("command-scoped error usage", () => {
       }),
       root,
     );
-    const control = await captureRun({
-      ...inner,
-      usage: or(inner, command("serve", constant(null))).usage,
-    }, { ...options, errorUsage: "command" });
+    const control = await captureRun(
+      {
+        ...inner,
+        usage: or(inner, command("serve", constant(null))).usage,
+      },
+      { ...options, errorUsage: "command" },
+    );
     assert.doesNotMatch(control.stderr, /serve/);
   });
 
   for (const wrapped of [false, true]) {
     it(`should fall back for custom duplicate ${wrapped ? "wrapped" : "direct"} paths`, async () => {
       const inner = command("config", option("--port", choice(["80", "443"])));
-      const branch: Usage = [{ type: "command", name: "config" }, {
-        type: "option",
-        names: ["--other"],
-      }];
+      const branch: Usage = [
+        { type: "command", name: "config" },
+        {
+          type: "option",
+          names: ["--other"],
+        },
+      ];
       const parser = {
         ...inner,
-        usage: [{
-          type: "exclusive",
-          terms: [
-            inner.usage,
-            wrapped ? [{ type: "optional", terms: branch }] : branch,
-            [{ type: "command", name: "serve" }],
-          ],
-        }] satisfies Usage,
+        usage: [
+          {
+            type: "exclusive",
+            terms: [
+              inner.usage,
+              wrapped ? [{ type: "optional", terms: branch }] : branch,
+              [{ type: "command", name: "serve" }],
+            ],
+          },
+        ] satisfies Usage,
       };
       const options = { ...format, args: ["config", "--port", "bad"] };
       const root = await captureRun(parser, { ...options, errorUsage: "root" });
@@ -207,10 +222,13 @@ describe("command-scoped error usage", () => {
         }),
         root,
       );
-      const control = await captureRun({
-        ...inner,
-        usage: or(inner, command("serve", constant(null))).usage,
-      }, { ...options, errorUsage: "command" });
+      const control = await captureRun(
+        {
+          ...inner,
+          usage: or(inner, command("serve", constant(null))).usage,
+        },
+        { ...options, errorUsage: "command" },
+      );
       assert.doesNotMatch(control.stderr, /serve/);
     });
   }
@@ -314,11 +332,12 @@ describe("command-scoped error usage", () => {
         command("serve", constant(null)),
       ),
     );
-    for (
-      const help of [{ command: true }, {
+    for (const help of [
+      { command: true },
+      {
         option: { hidden: "usage" },
-      }] as const
-    ) {
+      },
+    ] as const) {
       const result = await captureRun(parser, {
         ...format,
         help,
@@ -441,15 +460,17 @@ describe("command-scoped error usage", () => {
     assert.equal(result.exitCode, 7);
     assert.match(plain, /tool config set/);
     assert.doesNotMatch(plain, /serve/);
-    assert.ok(plain.split("\n").every((line) => line.length <= 40), plain);
+    assert.ok(
+      plain.split("\n").every((line) => line.length <= 40),
+      plain,
+    );
   });
 
-  for (
-    const args of [["completion", "unknown-shell"], ["version", "extra"], [
-      "help",
-      "unknown",
-    ]]
-  ) {
+  for (const args of [
+    ["completion", "unknown-shell"],
+    ["version", "extra"],
+    ["help", "unknown"],
+  ]) {
     it(`should preserve meta failure behavior for ${args.join(" ")}`, async () => {
       const options = {
         ...format,

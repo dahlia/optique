@@ -5,9 +5,9 @@ import { getDisplayWidth, stripAnsi } from "#src/displaywidth.ts";
 
 const propertyParameters = { numRuns: 200 } as const;
 const printableAsciiArbitrary = fc.string({
-  unit: fc.integer({ min: 0x20, max: 0x7e }).map((codePoint) =>
-    String.fromCharCode(codePoint)
-  ),
+  unit: fc
+    .integer({ min: 0x20, max: 0x7e })
+    .map((codePoint) => String.fromCharCode(codePoint)),
 });
 
 describe("getDisplayWidth", () => {
@@ -230,10 +230,7 @@ describe("getDisplayWidth", () => {
     });
 
     it("should ignore truecolor SGR with colon sub-parameters", () => {
-      assert.equal(
-        getDisplayWidth("\x1b[38:2:255:0:0mhello\x1b[0m"),
-        5,
-      );
+      assert.equal(getDisplayWidth("\x1b[38:2:255:0:0mhello\x1b[0m"), 5);
     });
 
     it("should ignore OSC 8 hyperlinks with params", () => {
@@ -260,16 +257,12 @@ describe("getDisplayWidth", () => {
 
     it("should ignore generated SGR wrappers around printable ASCII", () => {
       fc.assert(
-        fc.property(
-          printableAsciiArbitrary,
-          fc.nat(),
-          (text, color) => {
-            assert.equal(
-              getDisplayWidth(`\x1b[${color}m${text}\x1b[0m`),
-              getDisplayWidth(text),
-            );
-          },
-        ),
+        fc.property(printableAsciiArbitrary, fc.nat(), (text, color) => {
+          assert.equal(
+            getDisplayWidth(`\x1b[${color}m${text}\x1b[0m`),
+            getDisplayWidth(text),
+          );
+        }),
         propertyParameters,
       );
     });
@@ -360,15 +353,16 @@ describe("getDisplayWidth", () => {
 
     it("should be additive across printable ASCII concatenation", () => {
       fc.assert(
-        fc.property(printableAsciiArbitrary, printableAsciiArbitrary, (
-          left,
-          right,
-        ) => {
-          assert.equal(
-            getDisplayWidth(left + right),
-            getDisplayWidth(left) + getDisplayWidth(right),
-          );
-        }),
+        fc.property(
+          printableAsciiArbitrary,
+          printableAsciiArbitrary,
+          (left, right) => {
+            assert.equal(
+              getDisplayWidth(left + right),
+              getDisplayWidth(left) + getDisplayWidth(right),
+            );
+          },
+        ),
         propertyParameters,
       );
     });

@@ -51,8 +51,9 @@ describe("bindKeyring()", () => {
         service: "example.test",
         username: "alice",
       } satisfies BindKeyringOptions;
-      const parser = bindKeyring(option("--password", string()), options)
-        .map((value) => value.length);
+      const parser = bindKeyring(option("--password", string()), options).map(
+        (value) => value.length,
+      );
 
       assert.equal(parser.mode, "async");
       assert.equal(typeof parser.map, "function");
@@ -66,11 +67,14 @@ describe("bindKeyring()", () => {
 
       assert.throws(
         () =>
-          Reflect.apply(bindKeyring, undefined, [inner, {
-            context,
-            service: 1,
-            username: "alice",
-          }]),
+          Reflect.apply(bindKeyring, undefined, [
+            inner,
+            {
+              context,
+              service: 1,
+              username: "alice",
+            },
+          ]),
         {
           name: "TypeError",
           message: "Expected service to be a string, but got: number.",
@@ -78,11 +82,14 @@ describe("bindKeyring()", () => {
       );
       assert.throws(
         () =>
-          Reflect.apply(bindKeyring, undefined, [inner, {
-            context,
-            service: "example.test",
-            username: null,
-          }]),
+          Reflect.apply(bindKeyring, undefined, [
+            inner,
+            {
+              context,
+              service: "example.test",
+              username: null,
+            },
+          ]),
         {
           name: "TypeError",
           message: "Expected username to be a string, but got: null.",
@@ -242,10 +249,7 @@ describe("bindKeyring()", () => {
         source: () => Promise.resolve(undefined),
       });
       const parser = bindKeyring(
-        withDefault(
-          option("--password", asyncString()),
-          "inner-default",
-        ),
+        withDefault(option("--password", asyncString()), "inner-default"),
         binding(context),
       );
 
@@ -296,17 +300,15 @@ describe("bindKeyring()", () => {
       });
     });
 
-    for (
-      const wrap of [
-        { name: "optional", parser: optional, fallback: undefined },
-        {
-          name: "withDefault",
-          parser: (parser: Parser<"async", string, unknown>) =>
-            withDefault(parser, "outer-default"),
-          fallback: "outer-default",
-        },
-      ]
-    ) {
+    for (const wrap of [
+      { name: "optional", parser: optional, fallback: undefined },
+      {
+        name: "withDefault",
+        parser: (parser: Parser<"async", string, unknown>) =>
+          withDefault(parser, "outer-default"),
+        fallback: "outer-default",
+      },
+    ]) {
       it(`should resolve keyring under ${wrap.name} in an object`, async () => {
         const context = createKeyringContext({
           source: () => Promise.resolve("stored-value"),
@@ -392,7 +394,7 @@ describe("bindKeyring()", () => {
         },
       });
       const envContext = createEnvContext({
-        source: (key) => key === "PASSWORD" ? "env-value" : undefined,
+        source: (key) => (key === "PASSWORD" ? "env-value" : undefined),
       });
       const parser = bindEnv(
         bindKeyring(option("--password", string()), binding(keyringContext)),
@@ -403,8 +405,8 @@ describe("bindKeyring()", () => {
         },
       );
       const annotations = {
-        ...await keyringContext.getAnnotations(),
-        ...await envContext.getAnnotations(),
+        ...(await keyringContext.getAnnotations()),
+        ...(await envContext.getAnnotations()),
       };
 
       const result = await parseAsync(parser, [], { annotations });
@@ -434,8 +436,8 @@ describe("bindKeyring()", () => {
         binding(keyringContext),
       );
       const annotations = {
-        ...await keyringContext.getAnnotations(),
-        ...await envContext.getAnnotations(),
+        ...(await keyringContext.getAnnotations()),
+        ...(await envContext.getAnnotations()),
       };
 
       const result = await parseAsync(parser, [], { annotations });
@@ -459,8 +461,8 @@ describe("bindKeyring()", () => {
         binding(keyringContext),
       );
       const annotations = {
-        ...await keyringContext.getAnnotations(),
-        ...await envContext.getAnnotations(),
+        ...(await keyringContext.getAnnotations()),
+        ...(await envContext.getAnnotations()),
       };
 
       const result = await parseAsync(parser, [], { annotations });
@@ -655,8 +657,8 @@ describe("bindKeyring()", () => {
         binding(second),
       );
       const annotations = {
-        ...await first.getAnnotations(),
-        ...await second.getAnnotations(),
+        ...(await first.getAnnotations()),
+        ...(await second.getAnnotations()),
       };
 
       const result = await parseAsync(parser, [], { annotations });
@@ -693,49 +695,46 @@ describe("bindKeyring()", () => {
     });
 
     for (const twoPass of [false, true]) {
-      it(
-        `should bypass an inner environment source for a keyring dependency in a ${
-          twoPass ? "two-pass" : "single-pass"
-        } run`,
-        async () => {
-          const keyringContext = createKeyringContext({
-            source: () => Promise.resolve("prod"),
-          });
-          const envContext = createEnvContext({
-            source: () => {
-              throw new Error("Unexpected environment lookup.");
-            },
-          });
-          const { mode, level } = modeDependency();
-          const parser = object({
-            mode: bindKeyring(
-              bindEnv(option("--mode", mode), {
-                context: envContext,
-                key: "MODE",
-                parser: choice(["dev", "prod"] as const),
-              }),
-              binding(keyringContext),
-            ),
-            level: option("--level", level),
-          });
-          const twoPassContext: SourceContext = {
-            id: Symbol("two-pass"),
-            phase: "two-pass",
-            getAnnotations: () => ({}),
-          };
+      it(`should bypass an inner environment source for a keyring dependency in a ${
+        twoPass ? "two-pass" : "single-pass"
+      } run`, async () => {
+        const keyringContext = createKeyringContext({
+          source: () => Promise.resolve("prod"),
+        });
+        const envContext = createEnvContext({
+          source: () => {
+            throw new Error("Unexpected environment lookup.");
+          },
+        });
+        const { mode, level } = modeDependency();
+        const parser = object({
+          mode: bindKeyring(
+            bindEnv(option("--mode", mode), {
+              context: envContext,
+              key: "MODE",
+              parser: choice(["dev", "prod"] as const),
+            }),
+            binding(keyringContext),
+          ),
+          level: option("--level", level),
+        });
+        const twoPassContext: SourceContext = {
+          id: Symbol("two-pass"),
+          phase: "two-pass",
+          getAnnotations: () => ({}),
+        };
 
-          const result = await runWith(
-            parser,
-            "test",
-            twoPass
-              ? [keyringContext, envContext, twoPassContext]
-              : [keyringContext, envContext],
-            { args: ["--level", "silent"] },
-          );
+        const result = await runWith(
+          parser,
+          "test",
+          twoPass
+            ? [keyringContext, envContext, twoPassContext]
+            : [keyringContext, envContext],
+          { args: ["--level", "silent"] },
+        );
 
-          assert.deepEqual(result, { mode: "prod", level: "silent" });
-        },
-      );
+        assert.deepEqual(result, { mode: "prod", level: "silent" });
+      });
     }
 
     it("should resolve a dependency from the environment after a keyring miss", async () => {
@@ -1048,7 +1047,7 @@ describe("bindKeyring()", () => {
       });
       const source = dependency(string());
       const inner = option("--password", source).map((value) =>
-        value.toUpperCase()
+        value.toUpperCase(),
       );
       const parser = bindKeyring(inner, binding(context));
 
@@ -1399,10 +1398,7 @@ describe("bindKeyring()", () => {
       for (let run = 0; run < 2; run++) {
         const results = new Map<symbol, ValueParserResult<unknown>>();
         const completeAt = (path: readonly PropertyKey[]) =>
-          parser.complete(
-            state,
-            executionContext(parser, { results, path }),
-          );
+          parser.complete(state, executionContext(parser, { results, path }));
 
         const [first, second, repeated] = await Promise.all([
           completeAt(firstPath),
@@ -1457,7 +1453,9 @@ describe("bindKeyring()", () => {
         metavar: "LEVEL",
         mode: "sync",
         factory: (value: "dev" | "prod") =>
-          choice(value === "dev" ? ["debug"] as const : ["silent"] as const),
+          choice(
+            value === "dev" ? (["debug"] as const) : (["silent"] as const),
+          ),
         defaultValue: () => "dev" as const,
       });
       const parser = object({
@@ -1527,9 +1525,10 @@ describe("bindKeyring()", () => {
         getDocFragments(state) {
           return {
             fragments: [],
-            description: state.kind === "available"
-              ? message`Initial time: ${state.state.toISOString()}`
-              : undefined,
+            description:
+              state.kind === "available"
+                ? message`Initial time: ${state.state.toISOString()}`
+                : undefined,
           };
         },
       };
@@ -1578,7 +1577,7 @@ function modeDependency() {
     metavar: "LEVEL",
     mode: "sync",
     factory: (value: "dev" | "prod") =>
-      choice(value === "dev" ? ["debug"] as const : ["silent"] as const),
+      choice(value === "dev" ? (["debug"] as const) : (["silent"] as const)),
     defaultValue: () => "dev" as const,
   });
 

@@ -241,10 +241,7 @@ describe("formatUsageTermAsRoff()", () => {
         },
       ],
     };
-    assert.equal(
-      formatUsageTermAsRoff(term),
-      "[foo [\\fIBAR\\fR]]",
-    );
+    assert.equal(formatUsageTermAsRoff(term), "[foo [\\fIBAR\\fR]]");
   });
 
   it("keeps an option required within a mixed optional group", () => {
@@ -288,20 +285,19 @@ describe("formatUsageTermAsRoff()", () => {
         },
       ],
     };
-    assert.equal(
-      formatUsageTermAsRoff(term),
-      "[foo [\\fIBAR\\fR ...]]",
-    );
+    assert.equal(formatUsageTermAsRoff(term), "[foo [\\fIBAR\\fR ...]]");
   });
 
   it("avoids double brackets for optional(multiple(option(...)))", () => {
     const term: UsageTerm = {
       type: "optional",
-      terms: [{
-        type: "multiple",
-        terms: [{ type: "option", names: ["--tag"], metavar: "STRING" }],
-        min: 0,
-      }],
+      terms: [
+        {
+          type: "multiple",
+          terms: [{ type: "option", names: ["--tag"], metavar: "STRING" }],
+          min: 0,
+        },
+      ],
     };
     assert.equal(
       formatUsageTermAsRoff(term),
@@ -312,26 +308,27 @@ describe("formatUsageTermAsRoff()", () => {
   it("avoids double brackets for multiple(optional(option(...)))", () => {
     const term: UsageTerm = {
       type: "multiple",
-      terms: [{
-        type: "optional",
-        terms: [{ type: "option", names: ["--flag"] }],
-      }],
+      terms: [
+        {
+          type: "optional",
+          terms: [{ type: "option", names: ["--flag"] }],
+        },
+      ],
       min: 0,
     };
-    assert.equal(
-      formatUsageTermAsRoff(term),
-      "[\\fB\\-\\-flag\\fR ...]",
-    );
+    assert.equal(formatUsageTermAsRoff(term), "[\\fB\\-\\-flag\\fR ...]");
   });
 
   it("preserves grouping for nested multiple(min=0) wrapping option", () => {
     const term: UsageTerm = {
       type: "multiple",
-      terms: [{
-        type: "multiple",
-        terms: [{ type: "option", names: ["--tag"], metavar: "STRING" }],
-        min: 0,
-      }],
+      terms: [
+        {
+          type: "multiple",
+          terms: [{ type: "option", names: ["--tag"], metavar: "STRING" }],
+          min: 0,
+        },
+      ],
       min: 0,
     };
     assert.equal(
@@ -343,14 +340,18 @@ describe("formatUsageTermAsRoff()", () => {
   it("preserves grouping for multiple wrapping optional wrapping multiple", () => {
     const term: UsageTerm = {
       type: "multiple",
-      terms: [{
-        type: "optional",
-        terms: [{
-          type: "multiple",
-          terms: [{ type: "option", names: ["--tag"], metavar: "STRING" }],
-          min: 0,
-        }],
-      }],
+      terms: [
+        {
+          type: "optional",
+          terms: [
+            {
+              type: "multiple",
+              terms: [{ type: "option", names: ["--tag"], metavar: "STRING" }],
+              min: 0,
+            },
+          ],
+        },
+      ],
       min: 0,
     };
     assert.equal(
@@ -397,10 +398,7 @@ describe("formatUsageTermAsRoff()", () => {
         [{ type: "command", name: "stop" }],
       ],
     };
-    assert.equal(
-      formatUsageTermAsRoff(term),
-      "(\\fBstart\\fR | \\fBstop\\fR)",
-    );
+    assert.equal(formatUsageTermAsRoff(term), "(\\fBstart\\fR | \\fBstop\\fR)");
   });
 
   it("keeps an option required in an exclusive branch", () => {
@@ -704,10 +702,7 @@ describe("formatDocPageAsMan()", () => {
     const result = formatDocPageAsMan(page, options);
     const thLine = result.split("\n").find((l) => l.startsWith(".TH"))!;
 
-    assert.equal(
-      thLine,
-      '.TH "MYAPP" 1 "" "myapp 1.0.0" "User Commands"',
-    );
+    assert.equal(thLine, '.TH "MYAPP" 1 "" "myapp 1.0.0" "User Commands"');
   });
 
   it("includes version and date in header", () => {
@@ -1085,18 +1080,20 @@ describe("formatDocPageAsMan()", () => {
 
   it("infers COMMANDS heading for untitled command-only sections", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [
-          {
-            term: { type: "command", name: "build" },
-            description: message`Build the project.`,
-          },
-          {
-            term: { type: "command", name: "test" },
-            description: message`Run tests.`,
-          },
-        ],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "command", name: "build" },
+              description: message`Build the project.`,
+            },
+            {
+              term: { type: "command", name: "test" },
+              description: message`Run tests.`,
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPageAsMan(page, minimalOptions);
@@ -1107,13 +1104,15 @@ describe("formatDocPageAsMan()", () => {
 
   it("infers ARGUMENTS heading for untitled argument-only sections", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [
-          {
-            term: { type: "argument", metavar: "INPUT" },
-          },
-        ],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "argument", metavar: "INPUT" },
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPageAsMan(page, minimalOptions);
@@ -1124,14 +1123,16 @@ describe("formatDocPageAsMan()", () => {
 
   it("infers OPTIONS heading for untitled option-only sections", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [
-          {
-            term: { type: "option", names: ["--verbose"] },
-            description: message`Enable verbose output.`,
-          },
-        ],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--verbose"] },
+              description: message`Enable verbose output.`,
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPageAsMan(page, minimalOptions);
@@ -1141,18 +1142,20 @@ describe("formatDocPageAsMan()", () => {
 
   it("falls back to OPTIONS for untitled mixed sections", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [
-          {
-            term: { type: "option", names: ["--verbose"] },
-            description: message`Enable verbose output.`,
-          },
-          {
-            term: { type: "command", name: "build" },
-            description: message`Build the project.`,
-          },
-        ],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--verbose"] },
+              description: message`Enable verbose output.`,
+            },
+            {
+              term: { type: "command", name: "build" },
+              description: message`Build the project.`,
+            },
+          ],
+        },
+      ],
     };
 
     const result = formatDocPageAsMan(page, minimalOptions);
@@ -1718,9 +1721,7 @@ describe("formatDocPageAsMan()", () => {
             {
               term: {
                 type: "optional",
-                terms: [
-                  { type: "argument", metavar: "SECRET", hidden: "doc" },
-                ],
+                terms: [{ type: "argument", metavar: "SECRET", hidden: "doc" }],
               },
               description: message`A wrapped secret`,
             },
@@ -1752,9 +1753,7 @@ describe("formatDocPageAsMan()", () => {
             {
               term: {
                 type: "multiple",
-                terms: [
-                  { type: "argument", metavar: "SECRET", hidden: "doc" },
-                ],
+                terms: [{ type: "argument", metavar: "SECRET", hidden: "doc" }],
                 min: 0,
               },
               description: message`A repeated secret`,
@@ -1917,9 +1916,7 @@ describe("formatDocPageAsMan()", () => {
             {
               term: {
                 type: "optional",
-                terms: [
-                  { type: "option", names: ["-v", "--verbose"] },
-                ],
+                terms: [{ type: "option", names: ["-v", "--verbose"] }],
               },
               description: message`Verbose output`,
             },
@@ -2357,9 +2354,10 @@ describe("formatDocPageAsMan()", () => {
     const synopsisStart = result.indexOf(".SH SYNOPSIS");
     assert.notEqual(synopsisStart, -1);
     const nextSection = result.indexOf(".SH", synopsisStart + 1);
-    const synopsis = nextSection === -1
-      ? result.slice(synopsisStart)
-      : result.slice(synopsisStart, nextSection);
+    const synopsis =
+      nextSection === -1
+        ? result.slice(synopsisStart)
+        : result.slice(synopsisStart, nextSection);
 
     assert.ok(synopsis.includes("\\fBserve\\fR"));
     assert.ok(synopsis.includes("serve-custom"));
@@ -2371,10 +2369,7 @@ describe("formatDocPageAsMan()", () => {
   it("renders function usageLine override via getDocPage() in SYNOPSIS", async () => {
     const parser = command(
       "config",
-      or(
-        command("get", constant("get")),
-        command("set", constant("set")),
-      ),
+      or(command("get", constant("get")), command("set", constant("set"))),
       {
         usageLine: (defaultUsage) => [
           { type: "literal", value: "SUBCOMMAND" },
@@ -2391,9 +2386,10 @@ describe("formatDocPageAsMan()", () => {
     const synopsisStart = result.indexOf(".SH SYNOPSIS");
     assert.notEqual(synopsisStart, -1);
     const nextSection = result.indexOf(".SH", synopsisStart + 1);
-    const synopsis = nextSection === -1
-      ? result.slice(synopsisStart)
-      : result.slice(synopsisStart, nextSection);
+    const synopsis =
+      nextSection === -1
+        ? result.slice(synopsisStart)
+        : result.slice(synopsisStart, nextSection);
 
     assert.ok(synopsis.includes("\\fBconfig\\fR"));
     assert.ok(synopsis.includes("SUBCOMMAND"));
@@ -2406,10 +2402,7 @@ describe("formatDocPageAsMan()", () => {
   it("skips ancestor usageLine on subcommand man pages", async () => {
     const parser = command(
       "config",
-      or(
-        command("get", constant("get")),
-        command("set", constant("set")),
-      ),
+      or(command("get", constant("get")), command("set", constant("set"))),
       {
         usageLine: [{ type: "ellipsis" }],
       },
@@ -2422,9 +2415,10 @@ describe("formatDocPageAsMan()", () => {
     const synopsisStart = result.indexOf(".SH SYNOPSIS");
     assert.notEqual(synopsisStart, -1);
     const nextSection = result.indexOf(".SH", synopsisStart + 1);
-    const synopsis = nextSection === -1
-      ? result.slice(synopsisStart)
-      : result.slice(synopsisStart, nextSection);
+    const synopsis =
+      nextSection === -1
+        ? result.slice(synopsisStart)
+        : result.slice(synopsisStart, nextSection);
 
     assert.ok(synopsis.includes("\\fBget\\fR"));
     assert.ok(synopsis.includes("\\fBconfig\\fR"));
@@ -2543,11 +2537,13 @@ describe("doc-level usage term formatting (nested terms)", () => {
             {
               term: {
                 type: "optional",
-                terms: [{
-                  type: "argument",
-                  metavar: "ARG",
-                  hidden: "doc",
-                }],
+                terms: [
+                  {
+                    type: "argument",
+                    metavar: "ARG",
+                    hidden: "doc",
+                  },
+                ],
               },
               description: message`Hidden arg.`,
             },
@@ -2595,18 +2591,22 @@ describe("doc-level usage term formatting (nested terms)", () => {
     // terms inside each branch are doc-hidden), formatDocUsageAsRoff returns
     // "" for the exclusive—line 400 in man.ts.
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: {
-            type: "exclusive",
-            terms: [
-              [{ type: "argument", metavar: "A", hidden: "doc" }],
-              [{ type: "argument", metavar: "B", hidden: "doc" }],
-            ],
-          },
-          description: message`A choice.`,
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: {
+                type: "exclusive",
+                terms: [
+                  [{ type: "argument", metavar: "A", hidden: "doc" }],
+                  [{ type: "argument", metavar: "B", hidden: "doc" }],
+                ],
+              },
+              description: message`A choice.`,
+            },
+          ],
+        },
+      ],
     };
     const result = formatDocPageAsMan(page, minimalOptions);
     // Both A and B are doc-hidden, so the entry is skipped entirely —
@@ -2620,18 +2620,22 @@ describe("doc-level usage term formatting (nested terms)", () => {
     // When only one alternative is non-empty, the result is unwrapped
     // (no surrounding parens)—line 401 in man.ts.
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: {
-            type: "exclusive",
-            terms: [
-              [{ type: "argument", metavar: "FILE" }],
-              [{ type: "argument", metavar: "HIDDEN", hidden: "doc" }],
-            ],
-          },
-          description: message`A choice.`,
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: {
+                type: "exclusive",
+                terms: [
+                  [{ type: "argument", metavar: "FILE" }],
+                  [{ type: "argument", metavar: "HIDDEN", hidden: "doc" }],
+                ],
+              },
+              description: message`A choice.`,
+            },
+          ],
+        },
+      ],
     };
     const result = formatDocPageAsMan(page, minimalOptions);
     // FILE is visible; it renders as \fIFILE\fR in roff.
@@ -2644,16 +2648,20 @@ describe("doc-level usage term formatting (nested terms)", () => {
     // When all inner terms of a multiple are doc-hidden,
     // formatDocUsageAsRoff returns ""—line 389 in man.ts.
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: {
-            type: "multiple",
-            min: 0,
-            terms: [{ type: "argument", metavar: "ARG", hidden: "doc" }],
-          },
-          description: message`A repeatable.`,
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: {
+                type: "multiple",
+                min: 0,
+                terms: [{ type: "argument", metavar: "ARG", hidden: "doc" }],
+              },
+              description: message`A repeatable.`,
+            },
+          ],
+        },
+      ],
     };
     const result = formatDocPageAsMan(page, minimalOptions);
     // All inner terms are doc-hidden, so multiple renders to "" and the
@@ -2688,10 +2696,13 @@ describe("formatDocPageAsMan() display controls", () => {
       "Entries",
     );
     assert.equal(
-      renderAnnotations({ ...entry, description: undefined }, {
-        showDefault: false,
-        showChoices: false,
-      }),
+      renderAnnotations(
+        { ...entry, description: undefined },
+        {
+          showDefault: false,
+          showChoices: false,
+        },
+      ),
       "",
     );
   });
@@ -2700,15 +2711,21 @@ describe("formatDocPageAsMan() display controls", () => {
     for (const description of [message`Entries`, undefined, []]) {
       const lead = description?.length ? "Entries " : "";
       assert.equal(
-        renderAnnotations({ description }, {
-          showDefault: { prefix: " [", suffix: "]" },
-        }),
+        renderAnnotations(
+          { description },
+          {
+            showDefault: { prefix: " [", suffix: "]" },
+          },
+        ),
         lead + "[20]",
       );
       assert.equal(
-        renderAnnotations({ description }, {
-          showDefault: { prefix: "", suffix: "" },
-        }),
+        renderAnnotations(
+          { description },
+          {
+            showDefault: { prefix: "", suffix: "" },
+          },
+        ),
         (description?.length ? "Entries" : "") + "20",
       );
       assert.equal(
@@ -2717,9 +2734,12 @@ describe("formatDocPageAsMan() display controls", () => {
       );
     }
     assert.equal(
-      renderAnnotations({}, {
-        showDefault: { prefix: undefined, suffix: undefined },
-      }),
+      renderAnnotations(
+        {},
+        {
+          showDefault: { prefix: undefined, suffix: undefined },
+        },
+      ),
       "Entries (default: 20)",
     );
   });
@@ -2741,11 +2761,14 @@ describe("formatDocPageAsMan() display controls", () => {
       "{20}<10, 20>",
     );
     assert.equal(
-      renderAnnotations({
-        description: undefined,
-        default: undefined,
-        choices: message`10, 20`,
-      }, { showChoices: { prefix: "", label: " choices: " } }),
+      renderAnnotations(
+        {
+          description: undefined,
+          default: undefined,
+          choices: message`10, 20`,
+        },
+        { showChoices: { prefix: "", label: " choices: " } },
+      ),
       "choices: 10, 20)",
     );
   });
@@ -2785,11 +2808,14 @@ describe("formatDocPageAsMan() display controls", () => {
       "Entries (aliases: ls) [env: \\fBAPP_TOP\\fR]",
     );
     assert.equal(
-      renderAnnotations({ ...entry, description: undefined }, {
-        showAliases: true,
-        showEnvironment: true,
-        showDefault: { prefix: " [", suffix: "]" },
-      }),
+      renderAnnotations(
+        { ...entry, description: undefined },
+        {
+          showAliases: true,
+          showEnvironment: true,
+          showDefault: { prefix: " [", suffix: "]" },
+        },
+      ),
       "(aliases: ls) [20] (choices: 10, 20) [env: \\fBAPP_TOP\\fR]",
     );
   });
@@ -2816,9 +2842,12 @@ describe("formatDocPageAsMan() display controls", () => {
         );
       }
       assert.equal(
-        renderAnnotations({ default: undefined, choices }, {
-          showChoices: { maxItems: Infinity },
-        }),
+        renderAnnotations(
+          { default: undefined, choices },
+          {
+            showChoices: { maxItems: Infinity },
+          },
+        ),
         `Entries (choices: ${full})`,
       );
     }
@@ -2831,14 +2860,17 @@ describe("formatDocPageAsMan() display controls", () => {
       type: "unit",
     });
     assert.equal(
-      renderAnnotations({ default: [value("a,b")], choices }, {
-        showChoices: {
-          maxItems: 2,
-          prefix: " {",
-          label: "pick: ",
-          suffix: "}",
+      renderAnnotations(
+        { default: [value("a,b")], choices },
+        {
+          showChoices: {
+            maxItems: 2,
+            prefix: " {",
+            label: "pick: ",
+            suffix: "}",
+          },
         },
-      }),
+      ),
       'Entries (default: "a,b") {pick: a,b, c"d, ...}',
     );
     assert.equal(
@@ -2847,9 +2879,12 @@ describe("formatDocPageAsMan() display controls", () => {
     );
     const plain = message`1, 2, 3, 4, 5, 6, 7, 8, 9`;
     assert.equal(
-      renderAnnotations({ default: undefined, choices: plain }, {
-        showChoices: true,
-      }),
+      renderAnnotations(
+        { default: undefined, choices: plain },
+        {
+          showChoices: true,
+        },
+      ),
       "Entries (choices: 1, 2, 3, 4, 5, 6, 7, 8, 9)",
     );
   });
@@ -2858,15 +2893,17 @@ describe("formatDocPageAsMan() display controls", () => {
     for (const maxItems of [0, -1, -Infinity]) {
       assert.throws(
         () =>
-          formatDocPageAsMan({ sections: [] }, {
-            name: "app",
-            section: 1,
-            showChoices: { maxItems },
-          }),
+          formatDocPageAsMan(
+            { sections: [] },
+            {
+              name: "app",
+              section: 1,
+              showChoices: { maxItems },
+            },
+          ),
         {
           name: "RangeError",
-          message:
-            `showChoices.maxItems must be at least 1, but got ${maxItems}.`,
+          message: `showChoices.maxItems must be at least 1, but got ${maxItems}.`,
         },
       );
     }
@@ -2874,19 +2911,25 @@ describe("formatDocPageAsMan() display controls", () => {
 
   it("should escape custom roff text after trimming the first prefix", () => {
     for (const prefix of [" .DEFAULT ", " 'DEFAULT "]) {
-      const result = renderAnnotations({ description: undefined }, {
-        showDefault: { prefix, suffix: "" },
-      });
+      const result = renderAnnotations(
+        { description: undefined },
+        {
+          showDefault: { prefix, suffix: "" },
+        },
+      );
       assert.equal(result, "\\&" + prefix.trimStart() + "20");
     }
-    const result = renderAnnotations({ choices: message`a` }, {
-      showDefault: { prefix: " \\fB", suffix: "\n.SH BAD" },
-      showChoices: {
-        prefix: "\n'BAD ",
-        label: "\\fI",
-        suffix: "\n.SH ALSO_BAD",
+    const result = renderAnnotations(
+      { choices: message`a` },
+      {
+        showDefault: { prefix: " \\fB", suffix: "\n.SH BAD" },
+        showChoices: {
+          prefix: "\n'BAD ",
+          label: "\\fI",
+          suffix: "\n.SH ALSO_BAD",
+        },
       },
-    });
+    );
     assert.ok(!result.includes("\n.SH BAD"), result);
     assert.ok(!result.includes("\n'BAD"), result);
     assert.ok(!result.includes("\n.SH ALSO_BAD"), result);
@@ -2901,41 +2944,52 @@ describe("formatDocPageAsMan() display controls", () => {
       renderAnnotations({ description: [text("Entries"), lineBreak()] }),
       "Entries\n(default: 20)",
     );
-    const boundary = renderAnnotations({ default: [text("20"), lineBreak()] }, {
-      showDefault: { suffix: ".DEFAULT" },
-    });
+    const boundary = renderAnnotations(
+      { default: [text("20"), lineBreak()] },
+      {
+        showDefault: { suffix: ".DEFAULT" },
+      },
+    );
     assert.ok(boundary.includes("\n\\&.DEFAULT"), boundary);
   });
 
   it("should apply controls to explicit environment, files, and exit-status sections", () => {
     const section: DocSection = {
-      entries: [{
-        term: { type: "literal", value: "ENTRY" },
-        description: message`Entry`,
-        default: message`20`,
-        choices: valueSet(["a", "b"], {
-          fallback: "",
-          locale: "en",
-          type: "unit",
-        }),
-      }],
+      entries: [
+        {
+          term: { type: "literal", value: "ENTRY" },
+          description: message`Entry`,
+          default: message`20`,
+          choices: valueSet(["a", "b"], {
+            fallback: "",
+            locale: "en",
+            type: "unit",
+          }),
+        },
+      ],
     };
     for (const key of ["environment", "files", "exitStatus"] as const) {
-      const result = formatDocPageAsMan({ sections: [] }, {
-        name: "app",
-        section: 1,
-        [key]: section,
-        showDefault: false,
-        showChoices: { maxItems: 1 },
-      });
+      const result = formatDocPageAsMan(
+        { sections: [] },
+        {
+          name: "app",
+          section: 1,
+          [key]: section,
+          showDefault: false,
+          showChoices: { maxItems: 1 },
+        },
+      );
       assert.ok(result.endsWith("Entry (choices: a, ...)"), result);
-      const hidden = formatDocPageAsMan({ sections: [] }, {
-        name: "app",
-        section: 1,
-        [key]: section,
-        showDefault: { prefix: " [", suffix: "]" },
-        showChoices: false,
-      });
+      const hidden = formatDocPageAsMan(
+        { sections: [] },
+        {
+          name: "app",
+          section: 1,
+          [key]: section,
+          showDefault: { prefix: " [", suffix: "]" },
+          showChoices: false,
+        },
+      );
       assert.ok(hidden.endsWith("Entry [20]"), hidden);
     }
   });
@@ -2947,14 +3001,18 @@ function renderAnnotations(
   controls: Partial<ManPageOptions> = {},
 ): string {
   const page: DocPage = {
-    sections: [{
-      entries: [{
-        term: { type: "option", names: ["--top-n"], metavar: "N" },
-        description: message`Entries`,
-        default: message`20`,
-        ...entry,
-      }],
-    }],
+    sections: [
+      {
+        entries: [
+          {
+            term: { type: "option", names: ["--top-n"], metavar: "N" },
+            description: message`Entries`,
+            default: message`20`,
+            ...entry,
+          },
+        ],
+      },
+    ],
   };
   const result = formatDocPageAsMan(page, {
     name: "app",

@@ -55,11 +55,11 @@ export interface ValibotParserOptions<T = unknown> {
     valibotError?:
       | Message
       | ((
-        issues: v.InferIssue<
-          v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>
-        >[],
-        input: string,
-      ) => Message);
+          issues: v.InferIssue<
+            v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>
+          >[],
+          input: string,
+        ) => Message);
   };
 }
 
@@ -231,9 +231,7 @@ function containsAsyncSchema(
       for (const option of s.options) {
         if (typeof option !== "object" || option == null) continue;
         if (isCatchAllSchema(option, afterTransform)) break;
-        if (
-          containsAsyncSchema(option, visited, afterTransform)
-        ) return true;
+        if (containsAsyncSchema(option, visited, afterTransform)) return true;
       }
     } else if (s.type === "variant") {
       // Variant schemas only parse objects, so at top level (before
@@ -251,9 +249,7 @@ function containsAsyncSchema(
     } else {
       for (const option of s.options) {
         if (typeof option === "object" && option != null) {
-          if (
-            containsAsyncSchema(option, visited, afterTransform)
-          ) {
+          if (containsAsyncSchema(option, visited, afterTransform)) {
             return true;
           }
         }
@@ -322,7 +318,8 @@ function containsAsyncSchema(
       }
     }
     if (
-      s.key && typeof s.key === "object" &&
+      s.key &&
+      typeof s.key === "object" &&
       containsAsyncSchema(s.key, visited, true)
     ) {
       return true;
@@ -331,10 +328,11 @@ function containsAsyncSchema(
     if (s.rest && containsAsyncSchema(s.rest, visited, true)) return true;
     // v.promise() stores its inner schema in the overloaded `message` field
     if (s.type === "promise") {
-      const promiseInner =
-        (schema as unknown as Record<string, unknown>).message;
+      const promiseInner = (schema as unknown as Record<string, unknown>)
+        .message;
       if (
-        typeof promiseInner === "object" && promiseInner != null &&
+        typeof promiseInner === "object" &&
+        promiseInner != null &&
         "kind" in promiseInner &&
         containsAsyncSchema(
           promiseInner as v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>,
@@ -467,7 +465,8 @@ function inferMetavar(
 
   // 9. Handle optional/nullable wrappers by unwrapping
   if (
-    schemaType === "optional" || schemaType === "nullable" ||
+    schemaType === "optional" ||
+    schemaType === "nullable" ||
     schemaType === "nullish"
   ) {
     const wrapped = internalSchema.wrapped;
@@ -548,7 +547,8 @@ function inferChoices(
 
   // Optional/nullable/nullish wrappers → unwrap
   if (
-    schemaType === "optional" || schemaType === "nullable" ||
+    schemaType === "optional" ||
+    schemaType === "nullable" ||
     schemaType === "nullish"
   ) {
     const wrapped = internalSchema.wrapped;
@@ -706,18 +706,18 @@ export function valibot<T>(
     placeholder: options.placeholder,
     ...(choices != null && choices.length > 0
       ? {
-        // Safe cast: inferChoices() only extracts values from schemas
-        // that accept string input and return it as-is (picklist, literal,
-        // union of string literals).
-        choices: Object.freeze(choices) as readonly T[],
-        *suggest(prefix: string) {
-          for (const c of choices) {
-            if (c.startsWith(prefix)) {
-              yield { kind: "literal" as const, text: c };
+          // Safe cast: inferChoices() only extracts values from schemas
+          // that accept string input and return it as-is (picklist, literal,
+          // union of string literals).
+          choices: Object.freeze(choices) as readonly T[],
+          *suggest(prefix: string) {
+            for (const c of choices) {
+              if (c.startsWith(prefix)) {
+                yield { kind: "literal" as const, text: c };
+              }
             }
-          }
-        },
-      }
+          },
+        }
       : {}),
 
     parse(input: string): ValueParserResult<T> {
@@ -730,7 +730,7 @@ export function valibot<T>(
       // async schemas returned by lazy getters.
       if (
         typeof (result as unknown as Record<string, unknown>).typed !==
-          "boolean"
+        "boolean"
       ) {
         throw new TypeError(
           "Async Valibot schemas (e.g., async validations) are not " +
@@ -746,9 +746,10 @@ export function valibot<T>(
       if (options.errors?.valibotError) {
         return {
           success: false,
-          error: typeof options.errors.valibotError === "function"
-            ? options.errors.valibotError(result.issues, input)
-            : options.errors.valibotError,
+          error:
+            typeof options.errors.valibotError === "function"
+              ? options.errors.valibotError(result.issues, input)
+              : options.errors.valibotError,
         };
       }
 
@@ -813,15 +814,15 @@ export function valibotAsync<T>(
     placeholder: options.placeholder,
     ...(choices != null && choices.length > 0
       ? {
-        choices: Object.freeze(choices) as readonly T[],
-        async *suggest(prefix: string) {
-          for (const c of choices) {
-            if (c.startsWith(prefix)) {
-              yield { kind: "literal" as const, text: c };
+          choices: Object.freeze(choices) as readonly T[],
+          async *suggest(prefix: string) {
+            for (const c of choices) {
+              if (c.startsWith(prefix)) {
+                yield { kind: "literal" as const, text: c };
+              }
             }
-          }
-        },
-      }
+          },
+        }
       : {}),
 
     async parse(input: string): Promise<ValueParserResult<T>> {
@@ -834,9 +835,10 @@ export function valibotAsync<T>(
       if (options.errors?.valibotError) {
         return {
           success: false,
-          error: typeof options.errors.valibotError === "function"
-            ? options.errors.valibotError(result.issues, input)
-            : options.errors.valibotError,
+          error:
+            typeof options.errors.valibotError === "function"
+              ? options.errors.valibotError(result.issues, input)
+              : options.errors.valibotError,
         };
       }
 

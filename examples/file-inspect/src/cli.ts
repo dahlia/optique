@@ -11,9 +11,10 @@ try {
   const printableReason = reason.replace(
     /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu,
     (character) =>
-      character.split("").map((unit) =>
-        `\\u${unit.charCodeAt(0).toString(16).padStart(4, "0")}`
-      ).join(""),
+      character
+        .split("")
+        .map((unit) => `\\u${unit.charCodeAt(0).toString(16).padStart(4, "0")}`)
+        .join(""),
   );
   process.stderr.write(`file-inspect: ${printableReason}\n`);
   process.exitCode = 1;

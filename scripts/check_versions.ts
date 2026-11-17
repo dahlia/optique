@@ -47,10 +47,7 @@ for (const member of workspaceMembers) {
         );
         if (fix) {
           deno.version = version;
-          await writeFile(
-            denoJsonPath,
-            JSON.stringify(deno, null, 2) + "\n",
-          );
+          await writeFile(denoJsonPath, JSON.stringify(deno, null, 2) + "\n");
           console.error("Fixed version in %o", denoJsonPath);
         }
       }
@@ -78,10 +75,7 @@ for (const member of workspaceMembers) {
         );
         if (fix) {
           pkg.version = version;
-          await writeFile(
-            pkgJsonPath,
-            JSON.stringify(pkg, null, 2) + "\n",
-          );
+          await writeFile(pkgJsonPath, JSON.stringify(pkg, null, 2) + "\n");
           console.error("Fixed version in %o", pkgJsonPath);
         }
       }

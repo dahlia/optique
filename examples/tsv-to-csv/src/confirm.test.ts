@@ -21,12 +21,12 @@ describe("confirmOverwrite()", () => {
 
   it("declines any other answer", async () => {
     for (const answer of ["\n", "n\n", "no\n", "yep\n"]) {
-      assert.ok(!await ask(answer), JSON.stringify(answer));
+      assert.ok(!(await ask(answer)), JSON.stringify(answer));
     }
   });
 
   it("declines when input ends before an answer", async () => {
-    assert.ok(!await ask(null));
+    assert.ok(!(await ask(null)));
   });
 
   it("writes the question to the given output", async () => {

@@ -30,14 +30,16 @@ describe("deferred parse diagnostics", () => {
   it("does not call noMatch for discarded failures", () => {
     let calls = 0;
     const parser = object({
-      option: optional(option("--output", string(), {
-        errors: {
-          noMatch: () => {
-            calls++;
-            return message`No match.`;
+      option: optional(
+        option("--output", string(), {
+          errors: {
+            noMatch: () => {
+              calls++;
+              return message`No match.`;
+            },
           },
-        },
-      })),
+        }),
+      ),
       paths: multiple(argument(string())),
     });
     const args = Array.from({ length: 20 }, (_, i) => `src/file-${i}.ts`);
@@ -66,13 +68,15 @@ describe("deferred parse diagnostics", () => {
       buffer: ["--outpu"],
       state: parser.initialState,
       optionsTerminated: false,
-      usage: [{
-        type: "option",
-        get names() {
-          traversals++;
-          return ["--output"] as const;
+      usage: [
+        {
+          type: "option",
+          get names() {
+            traversals++;
+            return ["--output"] as const;
+          },
         },
-      }],
+      ],
     });
 
     assert.ok(!result.success);
@@ -183,10 +187,9 @@ describe("deferred parse diagnostics", () => {
 
     for (const parser of parsers) {
       assert.equal(parser.mode, "async");
-      const result = await parseAsync(
-        or(parser, argument(string())),
-        ["path.ts"],
-      );
+      const result = await parseAsync(or(parser, argument(string())), [
+        "path.ts",
+      ]);
       assert.ok(result.success);
     }
     assert.equal(calls, 0);
@@ -196,14 +199,17 @@ describe("deferred parse diagnostics", () => {
     let calls = 0;
     const parser = or(
       merge(
-        object({ a: option("-a", asyncString) }, {
-          errors: {
-            unexpectedInput: () => {
-              calls++;
-              return message`Unexpected input.`;
+        object(
+          { a: option("-a", asyncString) },
+          {
+            errors: {
+              unexpectedInput: () => {
+                calls++;
+                return message`Unexpected input.`;
+              },
             },
           },
-        }),
+        ),
         object({ b: optional(flag("-b")) }),
       ),
       argument(string()),
@@ -226,13 +232,15 @@ describe("deferred parse diagnostics", () => {
       buffer: ["path.ts"],
       state: parser.initialState,
       optionsTerminated: false,
-      usage: [{
-        type: "option",
-        get names() {
-          traversals++;
-          return ["--alpha"] as const;
+      usage: [
+        {
+          type: "option",
+          get names() {
+            traversals++;
+            return ["--alpha"] as const;
+          },
         },
-      }],
+      ],
     });
 
     assert.ok(!result.success);
@@ -255,10 +263,9 @@ describe("deferred parse diagnostics", () => {
       },
     );
 
-    const result = parseSync(
-      or(conditionalParser, argument(string())),
-      ["path.ts"],
-    );
+    const result = parseSync(or(conditionalParser, argument(string())), [
+      "path.ts",
+    ]);
 
     assert.ok(result.success);
     assert.equal(calls, 0);
@@ -281,10 +288,9 @@ describe("deferred parse diagnostics", () => {
     );
 
     assert.equal(conditionalParser.mode, "async");
-    const result = await parseAsync(
-      or(conditionalParser, argument(string())),
-      ["path.ts"],
-    );
+    const result = await parseAsync(or(conditionalParser, argument(string())), [
+      "path.ts",
+    ]);
     assert.ok(result.success);
     assert.equal(calls, 0);
   });
@@ -292,14 +298,16 @@ describe("deferred parse diagnostics", () => {
   it("defers discarded flag callbacks in an async object", async () => {
     let calls = 0;
     const parser = object({
-      verbose: optional(flag("--verbose", {
-        errors: {
-          noMatch: () => {
-            calls++;
-            return message`No match.`;
+      verbose: optional(
+        flag("--verbose", {
+          errors: {
+            noMatch: () => {
+              calls++;
+              return message`No match.`;
+            },
           },
-        },
-      })),
+        }),
+      ),
       paths: multiple(argument(asyncString)),
     });
 
@@ -333,22 +341,27 @@ describe("deferred parse diagnostics", () => {
   it("does not scan usage for a literal negatable flag error", () => {
     let traversals = 0;
     const literal = message`No match.`;
-    const parser = negatableFlag({
-      positive: "--color",
-      negative: "--no-color",
-    }, { errors: { noMatch: literal } });
+    const parser = negatableFlag(
+      {
+        positive: "--color",
+        negative: "--no-color",
+      },
+      { errors: { noMatch: literal } },
+    );
 
     const result = parser.parse({
       buffer: ["--colr"],
       state: parser.initialState,
       optionsTerminated: false,
-      usage: [{
-        type: "option",
-        get names() {
-          traversals++;
-          return ["--color"] as const;
+      usage: [
+        {
+          type: "option",
+          get names() {
+            traversals++;
+            return ["--color"] as const;
+          },
         },
-      }],
+      ],
     });
 
     assert.ok(!result.success);
@@ -364,8 +377,14 @@ describe("deferred parse diagnostics", () => {
       throw thrown;
     });
 
-    assert.throws(() => result.error, (error) => error === thrown);
-    assert.throws(() => result.error, (error) => error === thrown);
+    assert.throws(
+      () => result.error,
+      (error) => error === thrown,
+    );
+    assert.throws(
+      () => result.error,
+      (error) => error === thrown,
+    );
     assert.equal(calls, 1);
   });
 
@@ -404,9 +423,12 @@ describe("deferred parse diagnostics", () => {
     const parsers = [
       option("--output", { errors }),
       flag("--output", { errors }),
-      negatableFlag({ positive: "--output", negative: "--no-output" }, {
-        errors,
-      }),
+      negatableFlag(
+        { positive: "--output", negative: "--no-output" },
+        {
+          errors,
+        },
+      ),
     ];
 
     for (const parser of parsers) {

@@ -189,7 +189,9 @@ type CombineObjectModes<
   T extends { readonly [key: string | symbol]: Parser<Mode, unknown, unknown> },
 > = CombineModes<
   { [K in keyof T]: ExtractMode<T[K]> }[keyof T] extends infer M
-    ? M extends Mode ? readonly [M] : never
+    ? M extends Mode
+      ? readonly [M]
+      : never
     : never
 >;
 
@@ -205,11 +207,13 @@ function isNonCliBoundSourceState(
     readonly [unmatchedNonCliDependencySourceStateMarker]?: true;
   },
 ): state is { readonly hasCliValue: false } {
-  return parser[unmatchedNonCliDependencySourceStateMarker] === true &&
+  return (
+    parser[unmatchedNonCliDependencySourceStateMarker] === true &&
     state != null &&
     typeof state === "object" &&
     Object.hasOwn(state, "hasCliValue") &&
-    (state as { readonly hasCliValue?: unknown }).hasCliValue === false;
+    (state as { readonly hasCliValue?: unknown }).hasCliValue === false
+  );
 }
 
 function withDependencyRuntimeExec(
@@ -260,9 +264,10 @@ function withChildContext<TState>(
   parser?: Parser<Mode, unknown, unknown>,
   usage?: Usage,
 ): ParserContext<TState> {
-  const childState = parser == null
-    ? state
-    : getParseChildState(context.state, state, parser) as TState;
+  const childState =
+    parser == null
+      ? state
+      : (getParseChildState(context.state, state, parser) as TState);
   const child = withSharedChildContext(context, segment, childState, usage);
   return parser == null ? child : withParserOptionScope(child, parser);
 }
@@ -369,9 +374,12 @@ function expandEffectfulRuntimeNodes(
   const expanded: RuntimeNode[] = [];
   const visit = (node: RuntimeNode): void => {
     const meta = node.parser.dependencyMetadata;
-    const optedIntoCollection = (node.parser as {
-      readonly [sourceCollectionExpansionKey]?: boolean;
-    })[sourceCollectionExpansionKey] === true;
+    const optedIntoCollection =
+      (
+        node.parser as {
+          readonly [sourceCollectionExpansionKey]?: boolean;
+        }
+      )[sourceCollectionExpansionKey] === true;
     // A structural walk stays inside the enclosing scope's own subtree:
     // an alternative selected by an exclusive parser is a scope of its
     // own unless it opted into source collection, so its hook is left
@@ -384,9 +392,11 @@ function expandEffectfulRuntimeNodes(
       expanded.push(node);
       return;
     }
-    const schedulingNodes = (node.parser as {
-      readonly [effectfulSchedulingNodesKey]?: EffectfulSchedulingNodesFn;
-    })[effectfulSchedulingNodesKey];
+    const schedulingNodes = (
+      node.parser as {
+        readonly [effectfulSchedulingNodesKey]?: EffectfulSchedulingNodesFn;
+      }
+    )[effectfulSchedulingNodesKey];
     // A marked exclusive parser (an or() whose alternative is a
     // command() or conditional()) can carry composed source metadata
     // that merely delegates to its committed branch.  The branch is
@@ -394,8 +404,8 @@ function expandEffectfulRuntimeNodes(
     // over that metadata; a hook yielding no nodes (no committed
     // branch) falls back to the node itself.  Derived metadata still
     // pins the node: consumers must stay visible to demand detection.
-    const expandsThroughHook = schedulingNodes != null &&
-      meta?.derived == null && optedIntoCollection;
+    const expandsThroughHook =
+      schedulingNodes != null && meta?.derived == null && optedIntoCollection;
     if (
       !expandsThroughHook &&
       (meta?.source?.completeSource != null || meta?.derived != null)
@@ -417,14 +427,14 @@ function expandEffectfulRuntimeNodes(
       }
       return;
     }
-    const pairs = (node.parser as {
-      readonly [fieldParsersKey]?: ReadonlyArray<
-        readonly [string | symbol, Parser<Mode, unknown, unknown>]
-      >;
-    })[fieldParsersKey];
-    if (
-      pairs == null || node.state == null || typeof node.state !== "object"
-    ) {
+    const pairs = (
+      node.parser as {
+        readonly [fieldParsersKey]?: ReadonlyArray<
+          readonly [string | symbol, Parser<Mode, unknown, unknown>]
+        >;
+      }
+    )[fieldParsersKey];
+    if (pairs == null || node.state == null || typeof node.state !== "object") {
       expanded.push(node);
       return;
     }
@@ -496,9 +506,12 @@ function expandSourceCollectionNodes(
   let expanded: RuntimeNode[] | undefined;
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i];
-    const optedIn = (node.parser as {
-      readonly [sourceCollectionExpansionKey]?: boolean;
-    })[sourceCollectionExpansionKey] === true;
+    const optedIn =
+      (
+        node.parser as {
+          readonly [sourceCollectionExpansionKey]?: boolean;
+        }
+      )[sourceCollectionExpansionKey] === true;
     if (optedIn) {
       if (expanded == null) expanded = nodes.slice(0, i);
       expanded.push(...expandEffectfulRuntimeNodes([node]));
@@ -538,11 +551,9 @@ function nestedCommandLineSourceNodes(
   node: RuntimeNode,
 ): readonly RuntimeNode[] {
   const nested: RuntimeNode[] = [];
-  for (
-    const descendant of expandEffectfulRuntimeNodes([node], {
-      structuralOnly: true,
-    })
-  ) {
+  for (const descendant of expandEffectfulRuntimeNodes([node], {
+    structuralOnly: true,
+  })) {
     if (descendant === node) continue;
     if (descendant.parser.dependencyMetadata?.source == null) continue;
     // The walk stops at an exclusive parser that did not opt in, which
@@ -555,9 +566,11 @@ function nestedCommandLineSourceNodes(
       (exclusiveSourceScopeKey in descendant.parser ||
         descendant.parser.dependencyMetadata?.source?.exclusiveOccurrence ===
           true) &&
-      (descendant.parser as {
+      (
+        descendant.parser as {
           readonly [sourceCollectionExpansionKey]?: boolean;
-        })[sourceCollectionExpansionKey] !== true
+        }
+      )[sourceCollectionExpansionKey] !== true
     ) {
       continue;
     }
@@ -614,13 +627,17 @@ function hasCommandLineSourceInput(node: RuntimeNode): boolean {
     readonly [unmatchedNonCliDependencySourceStateMarker]?: true;
   };
   if (!isMatchedState(node.state, parser)) return false;
-  const innerState = Array.isArray(node.state) && node.state.length === 1
-    ? node.state[0]
-    : node.state;
+  const innerState =
+    Array.isArray(node.state) && node.state.length === 1
+      ? node.state[0]
+      : node.state;
   if (isEmptySourceState(innerState)) return false;
   if (parser[unmatchedNonCliDependencySourceStateMarker] !== true) return true;
-  return innerState != null && typeof innerState === "object" &&
-    (innerState as { readonly hasCliValue?: unknown }).hasCliValue === true;
+  return (
+    innerState != null &&
+    typeof innerState === "object" &&
+    (innerState as { readonly hasCliValue?: unknown }).hasCliValue === true
+  );
 }
 
 /**
@@ -632,9 +649,7 @@ function hasCommandLineSourceInput(node: RuntimeNode): boolean {
  */
 interface PreparedConditionalSelection {
   /** The discriminator's completion result. */
-  readonly discriminatorResult: import("./valueparser.ts").ValueParserResult<
-    unknown
-  >;
+  readonly discriminatorResult: import("./valueparser.ts").ValueParserResult<unknown>;
 
   /** The selected branch parser, if any branch applies. */
   readonly branchParser: Parser<Mode, unknown, unknown> | undefined;
@@ -686,10 +701,9 @@ function isGuaranteedSourceProvider(
   source: DependencySourceCapability,
 ): boolean {
   return (
-    source.completeSource != null && source.completesWhenMissing === true
-  ) || (
-    source.getMissingSourceValue != null &&
-    source.preservesSourceValue !== false
+    (source.completeSource != null && source.completesWhenMissing === true) ||
+    (source.getMissingSourceValue != null &&
+      source.preservesSourceValue !== false)
   );
 }
 
@@ -726,46 +740,55 @@ function collectStaticProvides(
     // scopes rather than stopping here.
     out.may.add(source.sourceId);
     if (
-      !exclusive && source.sourceId !== suppressId &&
+      !exclusive &&
+      source.sourceId !== suppressId &&
       isGuaranteedSourceProvider(source)
     ) {
       out.guaranteed.add(source.sourceId);
     }
     childSuppressId = source.sourceId;
   }
-  const routeGuaranteed = (parser as {
-    readonly [guaranteedStaticSourceIdsKey]?: ReadonlySet<symbol>;
-  })[guaranteedStaticSourceIdsKey];
+  const routeGuaranteed = (
+    parser as {
+      readonly [guaranteedStaticSourceIdsKey]?: ReadonlySet<symbol>;
+    }
+  )[guaranteedStaticSourceIdsKey];
   if (routeGuaranteed != null && !exclusive) {
     // A nested conditional() guarantees the IDs every selectable route
     // publishes, even though each branch edge below is exclusive.
     for (const id of routeGuaranteed) out.guaranteed.add(id);
   }
-  const pairs = (parser as {
-    readonly [fieldParsersKey]?: ReadonlyArray<
-      readonly [string | symbol, Parser<Mode, unknown, unknown>]
-    >;
-  })[fieldParsersKey];
+  const pairs = (
+    parser as {
+      readonly [fieldParsersKey]?: ReadonlyArray<
+        readonly [string | symbol, Parser<Mode, unknown, unknown>]
+      >;
+    }
+  )[fieldParsersKey];
   if (pairs != null) {
     for (const [, child] of pairs) {
       collectStaticProvides(child, out, exclusive, childSuppressId, seen);
     }
   }
-  const scope = (parser as {
-    readonly [staticSourceScopeKey]?: ReadonlyArray<
-      Parser<Mode, unknown, unknown>
-    >;
-  })[staticSourceScopeKey];
+  const scope = (
+    parser as {
+      readonly [staticSourceScopeKey]?: ReadonlyArray<
+        Parser<Mode, unknown, unknown>
+      >;
+    }
+  )[staticSourceScopeKey];
   if (scope != null) {
     for (const child of scope) {
       collectStaticProvides(child, out, exclusive, childSuppressId, seen);
     }
   }
-  const exclusiveScope = (parser as {
-    readonly [exclusiveSourceScopeKey]?: ReadonlyArray<
-      Parser<Mode, unknown, unknown>
-    >;
-  })[exclusiveSourceScopeKey];
+  const exclusiveScope = (
+    parser as {
+      readonly [exclusiveSourceScopeKey]?: ReadonlyArray<
+        Parser<Mode, unknown, unknown>
+      >;
+    }
+  )[exclusiveSourceScopeKey];
   if (exclusiveScope != null) {
     for (const child of exclusiveScope) {
       collectStaticProvides(child, out, true, childSuppressId, seen);
@@ -802,11 +825,13 @@ function collectStaticCompletionDependencies(
       });
     }
   }
-  const pairs = (parser as {
-    readonly [fieldParsersKey]?: ReadonlyArray<
-      readonly [string | symbol, Parser<Mode, unknown, unknown>]
-    >;
-  })[fieldParsersKey];
+  const pairs = (
+    parser as {
+      readonly [fieldParsersKey]?: ReadonlyArray<
+        readonly [string | symbol, Parser<Mode, unknown, unknown>]
+      >;
+    }
+  )[fieldParsersKey];
   if (pairs != null) {
     for (const [, child] of pairs) {
       collectStaticCompletionDependencies(
@@ -817,11 +842,13 @@ function collectStaticCompletionDependencies(
       );
     }
   }
-  const scope = (parser as {
-    readonly [staticSourceScopeKey]?: ReadonlyArray<
-      Parser<Mode, unknown, unknown>
-    >;
-  })[staticSourceScopeKey];
+  const scope = (
+    parser as {
+      readonly [staticSourceScopeKey]?: ReadonlyArray<
+        Parser<Mode, unknown, unknown>
+      >;
+    }
+  )[staticSourceScopeKey];
   if (scope != null) {
     for (const child of scope) {
       collectStaticCompletionDependencies(
@@ -834,11 +861,13 @@ function collectStaticCompletionDependencies(
   }
   // Completion consumers union across exclusive alternatives too: an
   // unselected consumer merely overestimates the ordering wait.
-  const exclusiveScope = (parser as {
-    readonly [exclusiveSourceScopeKey]?: ReadonlyArray<
-      Parser<Mode, unknown, unknown>
-    >;
-  })[exclusiveSourceScopeKey];
+  const exclusiveScope = (
+    parser as {
+      readonly [exclusiveSourceScopeKey]?: ReadonlyArray<
+        Parser<Mode, unknown, unknown>
+      >;
+    }
+  )[exclusiveSourceScopeKey];
   if (exclusiveScope != null) {
     for (const child of exclusiveScope) {
       collectStaticCompletionDependencies(
@@ -872,9 +901,7 @@ interface BranchDependencyEstimate {
  * promise-shaped extractions, so a bound value that validates
  * asynchronously still counts as active.
  */
-function collectActiveProvidesSync(
-  nodes: readonly RuntimeNode[],
-): Set<symbol> {
+function collectActiveProvidesSync(nodes: readonly RuntimeNode[]): Set<symbol> {
   const active = new Set<symbol>();
   for (const node of nodes) {
     const source = node.parser.dependencyMetadata?.source;
@@ -893,7 +920,8 @@ function collectActiveProvidesSync(
           // but never let its rejection surface as unhandled.
           void Promise.resolve(extracted).catch(() => {});
         } else if (
-          extracted?.success === true && extracted.value !== undefined
+          extracted?.success === true &&
+          extracted.value !== undefined
         ) {
           active.add(source.sourceId);
         }
@@ -905,8 +933,9 @@ function collectActiveProvidesSync(
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-  return typeof (value as { readonly then?: unknown } | null)?.then ===
-    "function";
+  return (
+    typeof (value as { readonly then?: unknown } | null)?.then === "function"
+  );
 }
 
 /**
@@ -1005,9 +1034,10 @@ async function computeActiveBarrierDependencies(
     if (completion != null) {
       // Mirrors the memoized synchronous rule: an occurrence whose own
       // state already extracts a value bypasses its completion.
-      const inactive = source?.extractSourceValue != null
-        ? extracted?.success === true
-        : hasInactiveCompletion(node);
+      const inactive =
+        source?.extractSourceValue != null
+          ? extracted?.success === true
+          : hasInactiveCompletion(node);
       if (!inactive) {
         for (const id of completion.dependencyIds) ordering.add(id);
         if (source != null) {
@@ -1037,11 +1067,14 @@ async function computeActiveBarrierDependencies(
 }
 
 function isDeferredCompletionResult(result: unknown): boolean {
-  return typeof result === "object" && result !== null &&
+  return (
+    typeof result === "object" &&
+    result !== null &&
     "success" in result &&
     (result as { readonly success: unknown }).success === true &&
     "deferred" in result &&
-    (result as { readonly deferred?: unknown }).deferred === true;
+    (result as { readonly deferred?: unknown }).deferred === true
+  );
 }
 
 /**
@@ -1085,7 +1118,8 @@ function firstPreCompletedFailure(
     // See settledPreCompletedKeys() for the wrapper unwrap rationale.
     const completion = isDependencySourceState(result) ? result.result : result;
     if (
-      typeof completion === "object" && completion !== null &&
+      typeof completion === "object" &&
+      completion !== null &&
       "success" in completion &&
       (completion as { readonly success: unknown }).success === false &&
       "error" in completion
@@ -1128,25 +1162,32 @@ async function scheduleEffectfulSourceCompletions(
   const collected = new Set<RuntimeNode>();
   const expandedNodes: RuntimeNode[] = [];
   for (const node of nodes) {
-    const optedIn = (node.parser as {
-      readonly [sourceCollectionExpansionKey]?: boolean;
-    })[sourceCollectionExpansionKey] === true;
+    const optedIn =
+      (
+        node.parser as {
+          readonly [sourceCollectionExpansionKey]?: boolean;
+        }
+      )[sourceCollectionExpansionKey] === true;
     const preExpanded = preExpandedBranchNodes.has(node);
     // A structural child's command-line occurrences took part in the
     // construct's explicit source collection, so they re-register in
     // declaration order here too; otherwise an effectful source
     // declared earlier would keep the value it published
     // (https://github.com/dahlia/optique/issues/958).
-    const nestedPaths = optedIn || preExpanded ? undefined : new Set(
-      nestedCommandLineSourceNodes(node).map((nested) =>
-        serializeSchedulingPath(nested.path)
-      ),
-    );
+    const nestedPaths =
+      optedIn || preExpanded
+        ? undefined
+        : new Set(
+            nestedCommandLineSourceNodes(node).map((nested) =>
+              serializeSchedulingPath(nested.path),
+            ),
+          );
     for (const expandedNode of expandEffectfulRuntimeNodes([node])) {
       expandedNodes.push(expandedNode);
       if (preExpanded) continue;
       if (
-        optedIn || expandedNode === node ||
+        optedIn ||
+        expandedNode === node ||
         nestedPaths?.has(serializeSchedulingPath(expandedNode.path)) === true
       ) {
         collected.add(expandedNode);
@@ -1201,12 +1242,8 @@ async function scheduleEffectfulSourceCompletions(
 
 function buildIndexedParserPairs<
   TParser extends Parser<Mode, unknown, unknown>,
->(
-  parsers: readonly TParser[],
-): readonly (readonly [string, TParser])[] {
-  return parsers.map(
-    (parser, index) => [String(index), parser] as const,
-  );
+>(parsers: readonly TParser[]): readonly (readonly [string, TParser])[] {
+  return parsers.map((parser, index) => [String(index), parser] as const);
 }
 
 function createAnnotatedArrayStateRecord(
@@ -1283,43 +1320,50 @@ function orderBeforePassThrough<TPair>(
 ): readonly TPair[] {
   const token = context.buffer[0];
   if (
-    passThroughParsers.size === 0 || context.optionsTerminated ||
-    token == null || token === "--" ||
+    passThroughParsers.size === 0 ||
+    context.optionsTerminated ||
+    token == null ||
+    token === "--" ||
     !/^[-/+]/.test(token)
-  ) return pairs;
+  )
+    return pairs;
 
-  const matches = new Map(pairs.map((pair) =>
-    [
-      pair,
-      getOptionMatch(getParser(pair), getState(pair), token),
-    ] as const
-  ));
+  const matches = new Map(
+    pairs.map(
+      (pair) =>
+        [pair, getOptionMatch(getParser(pair), getState(pair), token)] as const,
+    ),
+  );
   const normalizedOptions = new Map<TPair, number>();
-  const captures = new Map(pairs.flatMap((pair) => {
-    if (!passThroughParsers.has(getParser(pair))) return [];
-    const priority = getPassThroughPriority(
-      getParser(pair),
-      getState(pair),
-      token,
-    );
-    const match = matches.get(pair);
-    // A rejected high capture must not raise a matching option's priority,
-    // including when a lower capture still accepts this token.
-    if (match != null && (priority == null || match.priority >= priority)) {
-      const unfiltered = getPassThroughPriority(
+  const captures = new Map(
+    pairs.flatMap((pair) => {
+      if (!passThroughParsers.has(getParser(pair))) return [];
+      const priority = getPassThroughPriority(
         getParser(pair),
         getState(pair),
+        token,
       );
-      if (
-        priority == null || (unfiltered != null && unfiltered > match.priority)
-      ) {
-        normalizedOptions.set(pair, match.priority);
+      const match = matches.get(pair);
+      // A rejected high capture must not raise a matching option's priority,
+      // including when a lower capture still accepts this token.
+      if (match != null && (priority == null || match.priority >= priority)) {
+        const unfiltered = getPassThroughPriority(
+          getParser(pair),
+          getState(pair),
+        );
+        if (
+          priority == null ||
+          (unfiltered != null && unfiltered > match.priority)
+        ) {
+          normalizedOptions.set(pair, match.priority);
+        }
+        return [];
       }
-      return [];
-    }
-    return priority == null ? [] : [[pair, priority] as const];
-  }));
-  const matching = pairs.filter((pair) => !captures.has(pair))
+      return priority == null ? [] : [[pair, priority] as const];
+    }),
+  );
+  const matching = pairs
+    .filter((pair) => !captures.has(pair))
     .flatMap((pair) => {
       const match = matches.get(pair);
       return match == null ? [] : [match];
@@ -1330,47 +1374,49 @@ function orderBeforePassThrough<TPair>(
     // ordinary siblings in place even without a known-option group.
     let captureIndex = 0;
     return pairs.map((pair) =>
-      captures.has(pair) ? orderedCaptures[captureIndex++][0] : pair
+      captures.has(pair) ? orderedCaptures[captureIndex++][0] : pair,
     );
   }
   const matchingPriority = Math.max(...matching.map((match) => match.priority));
   // Preserve ordinary siblings' relative order. A container whose capture is
   // rejected competes among matching options at its own option priority.
-  const ordinary = pairs.filter((pair) =>
-    !captures.has(pair) && !normalizedOptions.has(pair)
+  const ordinary = pairs.filter(
+    (pair) => !captures.has(pair) && !normalizedOptions.has(pair),
   );
   const positions = new Map(pairs.map((pair, index) => [pair, index] as const));
-  for (
-    const [pair, priority] of [...normalizedOptions].sort((a, b) => b[1] - a[1])
-  ) {
+  for (const [pair, priority] of [...normalizedOptions].sort(
+    (a, b) => b[1] - a[1],
+  )) {
     let insertion = ordinary.findIndex((candidate) => {
       const match = matches.get(candidate);
-      return match != null && (match.priority < priority ||
-        (match.priority === priority &&
-          positions.get(pair)! < positions.get(candidate)!));
+      return (
+        match != null &&
+        (match.priority < priority ||
+          (match.priority === priority &&
+            positions.get(pair)! < positions.get(candidate)!))
+      );
     });
     if (insertion < 0) {
-      const lastMatch = ordinary.findLastIndex((candidate) =>
-        matches.get(candidate) != null
+      const lastMatch = ordinary.findLastIndex(
+        (candidate) => matches.get(candidate) != null,
       );
-      insertion = lastMatch >= 0
-        ? lastMatch + 1
-        : ordinary.findIndex((candidate) =>
-          positions.get(candidate)! > positions.get(pair)!
-        );
+      insertion =
+        lastMatch >= 0
+          ? lastMatch + 1
+          : ordinary.findIndex(
+              (candidate) => positions.get(candidate)! > positions.get(pair)!,
+            );
       if (insertion < 0) insertion = ordinary.length;
     }
     ordinary.splice(insertion, 0, pair);
   }
   const first = ordinary.findIndex((pair) => matches.get(pair) != null);
   const last = ordinary.findLastIndex((pair) => matches.get(pair) != null);
-  const before = orderedCaptures.filter(([, priority]) =>
-    priority > matchingPriority
-  )
+  const before = orderedCaptures
+    .filter(([, priority]) => priority > matchingPriority)
     .map(([pair]) => pair);
-  const after = orderedCaptures.filter(([, priority]) =>
-    priority <= matchingPriority
-  )
+  const after = orderedCaptures
+    .filter(([, priority]) => priority <= matchingPriority)
     .map(([pair]) => pair);
   return [
     ...ordinary.slice(0, first),
@@ -1493,7 +1539,7 @@ function unwrapCompleteResult(
 ): import("./valueparser.ts").ValueParserResult<unknown> {
   const unwrappedResult = isDependencySourceState(result)
     ? result.result
-    : result as import("./valueparser.ts").ValueParserResult<unknown>;
+    : (result as import("./valueparser.ts").ValueParserResult<unknown>);
   if (
     !unwrappedResult.success ||
     !containsAnnotationView(unwrappedResult.value)
@@ -1501,10 +1547,12 @@ function unwrapCompleteResult(
     return unwrappedResult;
   }
   const value = unwrapNestedAnnotationViews(unwrappedResult.value);
-  return value === unwrappedResult.value ? unwrappedResult : {
-    ...unwrappedResult,
-    value,
-  };
+  return value === unwrappedResult.value
+    ? unwrappedResult
+    : {
+        ...unwrappedResult,
+        value,
+      };
 }
 
 function reusePreCompletedPhase2Seed(
@@ -1584,10 +1632,7 @@ function appendFlattenedPhase2Seed(
     deferredKeys.set(baseIndex, seed.deferredKeys);
     return false;
   }
-  if (
-    seed.deferred &&
-    (seed.value == null || typeof seed.value !== "object")
-  ) {
+  if (seed.deferred && (seed.value == null || typeof seed.value !== "object")) {
     deferredKeys.set(baseIndex, null);
     return false;
   }
@@ -1613,10 +1658,7 @@ function combineTuplePhase2Seeds(
   if (first?.deferred) {
     if (first.deferredKeys) {
       deferredKeys.set(0, first.deferredKeys);
-    } else if (
-      first.value == null ||
-      typeof first.value !== "object"
-    ) {
+    } else if (first.value == null || typeof first.value !== "object") {
       deferredKeys.set(0, null);
     } else {
       hasDeferred = true;
@@ -1625,10 +1667,7 @@ function combineTuplePhase2Seeds(
   if (second?.deferred) {
     if (second.deferredKeys) {
       deferredKeys.set(1, second.deferredKeys);
-    } else if (
-      second.value == null ||
-      typeof second.value !== "object"
-    ) {
+    } else if (second.value == null || typeof second.value !== "object") {
       deferredKeys.set(1, null);
     } else {
       hasDeferred = true;
@@ -1638,11 +1677,11 @@ function combineTuplePhase2Seeds(
     value: [first?.value, second?.value] as const,
     ...(deferredKeys.size > 0 || hasDeferred
       ? {
-        deferred: true as const,
-        ...(deferredKeys.size > 0
-          ? { deferredKeys: deferredKeys as DeferredMap }
-          : {}),
-      }
+          deferred: true as const,
+          ...(deferredKeys.size > 0
+            ? { deferredKeys: deferredKeys as DeferredMap }
+            : {}),
+        }
       : {}),
   };
 }
@@ -1685,11 +1724,12 @@ function getAnnotatedFieldState(
   field: string | symbol,
   parser: Parser<Mode, unknown, unknown>,
 ): unknown {
-  const sourceState = parentState != null &&
-      typeof parentState === "object" &&
-      field in parentState
-    ? (parentState as Record<string | symbol, unknown>)[field]
-    : parser.initialState;
+  const sourceState =
+    parentState != null &&
+    typeof parentState === "object" &&
+    field in parentState
+      ? (parentState as Record<string | symbol, unknown>)[field]
+      : parser.initialState;
   return getAnnotatedChildState(parentState, sourceState, parser);
 }
 
@@ -1702,9 +1742,7 @@ function getObjectParseChildState<TState>(
 }
 
 function buildSuggestRuntimeNodesFromPairs(
-  pairs: ReadonlyArray<
-    readonly [PropertyKey, Parser<Mode, unknown, unknown>]
-  >,
+  pairs: ReadonlyArray<readonly [PropertyKey, Parser<Mode, unknown, unknown>]>,
   state: Record<PropertyKey, unknown>,
   parentPath?: readonly PropertyKey[],
 ): readonly RuntimeNode[] {
@@ -1842,7 +1880,8 @@ function applyHiddenToUsageTerm(
     };
   }
   if (
-    term.type === "argument" || term.type === "option" ||
+    term.type === "argument" ||
+    term.type === "option" ||
     term.type === "command" ||
     term.type === "passthrough"
   ) {
@@ -1868,8 +1907,10 @@ function applyHiddenToDocEntry(
 ): DocEntry | undefined {
   const mergedTerm = applyHiddenToUsageTerm(entry.term, hidden);
   if (
-    (mergedTerm.type === "argument" || mergedTerm.type === "option" ||
-      mergedTerm.type === "command" || mergedTerm.type === "passthrough") &&
+    (mergedTerm.type === "argument" ||
+      mergedTerm.type === "option" ||
+      mergedTerm.type === "command" ||
+      mergedTerm.type === "passthrough") &&
     isDocHidden(mergedTerm.hidden)
   ) {
     return undefined;
@@ -1884,15 +1925,15 @@ function sourceDocumentation(
   hidden?: HiddenVisibility,
 ): Pick<DocFragments, "environmentBindings" | "sourceOnly"> {
   if (isDocHidden(hidden)) return {};
-  const environmentBindings = children.flatMap((docs) =>
-    docs.environmentBindings ?? []
+  const environmentBindings = children.flatMap(
+    (docs) => docs.environmentBindings ?? [],
   );
   return {
     ...(environmentBindings.length > 0 && { environmentBindings }),
     ...(children.length > 0 &&
       children.every((docs) => docs.sourceOnly === true) && {
-      sourceOnly: true,
-    }),
+        sourceOnly: true,
+      }),
   };
 }
 
@@ -1937,7 +1978,8 @@ function isOptionRequiringValue(usage: Usage, token: string): boolean {
           return true;
         }
       } else if (
-        term.type === "optional" || term.type === "multiple" ||
+        term.type === "optional" ||
+        term.type === "multiple" ||
         term.type === "sequence"
       ) {
         if (traverse(term.terms)) return true;
@@ -2084,10 +2126,7 @@ function extractRequiredUsage(usage: Usage): Usage {
  * @param callerName The name of the calling function, used in error messages.
  * @throws {TypeError} If any element is not a valid {@link Parser}.
  */
-function assertParsers(
-  parsers: readonly unknown[],
-  callerName: string,
-): void {
+function assertParsers(parsers: readonly unknown[], callerName: string): void {
   for (let i = 0; i < parsers.length; i++) {
     const p = parsers[i];
     const r = p as Record<string, unknown>;
@@ -2096,7 +2135,8 @@ function assertParsers(
       (typeof p !== "object" && typeof p !== "function") ||
       !(r.mode === "sync" || r.mode === "async") ||
       !Array.isArray(r.usage) ||
-      typeof r.priority !== "number" || Number.isNaN(r.priority) ||
+      typeof r.priority !== "number" ||
+      Number.isNaN(r.priority) ||
       !("initialState" in p) ||
       typeof r.parse !== "function" ||
       typeof r.complete !== "function" ||
@@ -2143,12 +2183,9 @@ export class DuplicateOptionError extends Error {
   /** The fields declaring the option. */
   readonly sources: readonly (string | symbol)[];
 
-  constructor(
-    optionName: string,
-    sources: readonly (string | symbol)[],
-  ) {
+  constructor(optionName: string, sources: readonly (string | symbol)[]) {
     const sourceNames = sources.map((s) =>
-      typeof s === "symbol" ? s.description ?? s.toString() : s
+      typeof s === "symbol" ? (s.description ?? s.toString()) : s,
     );
     super(
       `Duplicate option name "${optionName}" found in fields: ` +
@@ -2169,12 +2206,9 @@ class DuplicateCommandNameError extends TypeError {
   readonly commandName: string;
   readonly sources: readonly (string | symbol)[];
 
-  constructor(
-    commandName: string,
-    sources: readonly (string | symbol)[],
-  ) {
+  constructor(commandName: string, sources: readonly (string | symbol)[]) {
     const sourceNames = sources.map((s) =>
-      typeof s === "symbol" ? s.description ?? s.toString() : s
+      typeof s === "symbol" ? (s.description ?? s.toString()) : s,
     );
     super(
       `Duplicate command name "${commandName}" found in parsers: ` +
@@ -2247,8 +2281,8 @@ function checkDuplicateReachableLeadingCommandNames(
   >,
 ): void {
   const commandNameSources = new Map<string, (string | symbol)[]>();
-  const sortedSources = [...parserSources].sort(([, parserA], [, parserB]) =>
-    parserB.priority - parserA.priority
+  const sortedSources = [...parserSources].sort(
+    ([, parserA], [, parserB]) => parserB.priority - parserA.priority,
   );
   const blockedNames = new Set<string>();
   let positionalBlocked = false;
@@ -2257,7 +2291,8 @@ function checkDuplicateReachableLeadingCommandNames(
     const priority = sortedSources[i][1].priority;
     const priorityGroup: typeof sortedSources = [];
     while (
-      i < sortedSources.length && sortedSources[i][1].priority === priority
+      i < sortedSources.length &&
+      sortedSources[i][1].priority === priority
     ) {
       priorityGroup.push(sortedSources[i]);
       i++;
@@ -2367,12 +2402,12 @@ function selectExclusiveChildren<M extends Mode>(
   }));
   return activeFirst
     ? children.sort((a, b) =>
-      active?.[0] === a.index
-        ? -1
-        : active?.[0] === b.index
-        ? 1
-        : a.index - b.index
-    )
+        active?.[0] === a.index
+          ? -1
+          : active?.[0] === b.index
+            ? 1
+            : a.index - b.index,
+      )
     : children;
 }
 
@@ -2420,10 +2455,10 @@ function createExclusiveState(
     parser,
     result,
   );
-  return annotateFreshArray(
-    parentState,
-    [index, annotatedResult],
-  ) as ExclusiveState;
+  return annotateFreshArray(parentState, [
+    index,
+    annotatedResult,
+  ]) as ExclusiveState;
 }
 
 /**
@@ -2436,16 +2471,25 @@ function isOptionsTerminatorOnlyResult<TState>(
   context: ParserContext<TState>,
   result: ParserResult<unknown>,
 ): result is ParserResult<unknown> & { success: true } {
-  return !context.optionsTerminated && context.buffer[0] === "--" &&
+  return (
+    !context.optionsTerminated &&
+    context.buffer[0] === "--" &&
     result.success &&
-    result.next.optionsTerminated && result.consumed.length === 1 &&
-    result.consumed[0] === "--";
+    result.next.optionsTerminated &&
+    result.consumed.length === 1 &&
+    result.consumed[0] === "--"
+  );
 }
 
 function isUnselectedBooleanOptionState(state: unknown): boolean {
-  return state != null && typeof state === "object" &&
-    "success" in state && state.success === true &&
-    "value" in state && state.value === false;
+  return (
+    state != null &&
+    typeof state === "object" &&
+    "success" in state &&
+    state.success === true &&
+    "value" in state &&
+    state.value === false
+  );
 }
 
 function preserveExclusiveStateAfterOptionsTerminator(
@@ -2454,9 +2498,10 @@ function preserveExclusiveStateAfterOptionsTerminator(
 ): ParserResult<ExclusiveState> & { success: true } {
   const childExec = mergeChildExec(context.exec, result.next.exec);
   // A global terminator advances the input without selecting a new branch.
-  const mergedExec = childExec == null
-    ? childExec
-    : mergeCommandDocPolicy(context.exec, context.exec, childExec);
+  const mergedExec =
+    childExec == null
+      ? childExec
+      : mergeCommandDocPolicy(context.exec, context.exec, childExec);
   return {
     success: true,
     next: {
@@ -2467,9 +2512,9 @@ function preserveExclusiveStateAfterOptionsTerminator(
       state: context.state,
       ...(mergedExec != null
         ? {
-          exec: mergedExec,
-          dependencyRegistry: mergedExec.dependencyRegistry,
-        }
+            exec: mergedExec,
+            dependencyRegistry: mergedExec.dependencyRegistry,
+          }
         : {}),
     },
     consumed: result.consumed,
@@ -2499,11 +2544,15 @@ function exclusiveUsage(
   scopes: readonly CommandUsageScope[],
 ): Usage {
   const acceptsEmpty = acceptsEmptyInput(facts);
-  return [{
-    type: "exclusive",
-    terms: parsers.map((p, index) => scopeCommandUsage(p.usage, scopes[index])),
-    ...(acceptsEmpty == null ? {} : { acceptsEmpty }),
-  }];
+  return [
+    {
+      type: "exclusive",
+      terms: parsers.map((p, index) =>
+        scopeCommandUsage(p.usage, scopes[index]),
+      ),
+      ...(acceptsEmpty == null ? {} : { acceptsEmpty }),
+    },
+  ];
 }
 
 /**
@@ -2544,9 +2593,7 @@ function createExclusiveComplete(
             exec,
           );
           // Complete only the unique candidate.
-          if (
-            candidate != null
-          ) {
+          if (candidate != null) {
             const p = syncParsers[candidate.index];
             const annotatedState = getAnnotatedChildState(
               state,
@@ -2606,10 +2653,7 @@ function createExclusiveComplete(
     return dispatchByMode(
       mode,
       () =>
-        syncParsers[i].complete(
-          result.next.state,
-          withChildExecPath(exec, i),
-        ),
+        syncParsers[i].complete(result.next.state, withChildExecPath(exec, i)),
       async () => {
         const completeResult = await parsers[i].complete(
           result.next.state,
@@ -2664,12 +2708,7 @@ function createExclusiveSuggest(
           if (parserResult.success) {
             const parser = syncParsers[index];
             const parserSuggestions = parser.suggest(
-              withChildContext(
-                context,
-                index,
-                parserResult.next.state,
-                parser,
-              ),
+              withChildContext(context, index, parserResult.next.state, parser),
               prefix,
             );
             suggestions.push(...parserSuggestions);
@@ -2694,9 +2733,7 @@ function createExclusiveSuggest(
               prefix,
             );
             if (parser.mode === "async") {
-              for await (
-                const s of parserSuggestions as AsyncIterable<Suggestion>
-              ) {
+              for await (const s of parserSuggestions as AsyncIterable<Suggestion>) {
                 suggestions.push(s);
               }
             } else {
@@ -2709,18 +2746,11 @@ function createExclusiveSuggest(
           if (parserResult.success) {
             const parser = parsers[index];
             const parserSuggestions = parser.suggest(
-              withChildContext(
-                context,
-                index,
-                parserResult.next.state,
-                parser,
-              ),
+              withChildContext(context, index, parserResult.next.state, parser),
               prefix,
             );
             if (parser.mode === "async") {
-              for await (
-                const s of parserSuggestions as AsyncIterable<Suggestion>
-              ) {
+              for await (const s of parserSuggestions as AsyncIterable<Suggestion>) {
                 suggestions.push(s);
               }
             } else {
@@ -2745,31 +2775,24 @@ function getExclusiveSuggestRuntimeNodes(
     return [];
   }
   const [index, parserResult] = activeState;
-  if (
-    !parserResult?.success ||
-    index < 0 ||
-    index >= parsers.length
-  ) {
+  if (!parserResult?.success || index < 0 || index >= parsers.length) {
     return [];
   }
   const parser = parsers[index];
-  return getParserSuggestRuntimeNodes(
-    parser,
-    parserResult.next.state,
-    [...path, index],
-  );
+  return getParserSuggestRuntimeNodes(parser, parserResult.next.state, [
+    ...path,
+    index,
+  ]);
 }
 
 function findExclusiveZeroInputCandidateSync(
   parsers: readonly Parser<"sync", unknown, unknown>[],
   state: ExclusiveState,
   exec?: ExecutionContext,
-):
-  | {
-    readonly index: number;
-    readonly parseResult: ParserResult<unknown> & { readonly success: true };
-  }
-  | null {
+): {
+  readonly index: number;
+  readonly parseResult: ParserResult<unknown> & { readonly success: true };
+} | null {
   const emptyCtx = {
     buffer: [] as string[],
     optionsTerminated: false,
@@ -2797,8 +2820,9 @@ function findExclusiveZeroInputCandidateSync(
     }
     if (candidateCount > 1) break;
   }
-  return candidateCount === 1 && candidateIndex >= 0 &&
-      candidateParseResult != null
+  return candidateCount === 1 &&
+    candidateIndex >= 0 &&
+    candidateParseResult != null
     ? { index: candidateIndex, parseResult: candidateParseResult }
     : null;
 }
@@ -2807,13 +2831,10 @@ async function findExclusiveZeroInputCandidateAsync(
   parsers: readonly Parser<Mode, unknown, unknown>[],
   state: ExclusiveState,
   exec?: ExecutionContext,
-): Promise<
-  | {
-    readonly index: number;
-    readonly parseResult: ParserResult<unknown> & { readonly success: true };
-  }
-  | null
-> {
+): Promise<{
+  readonly index: number;
+  readonly parseResult: ParserResult<unknown> & { readonly success: true };
+} | null> {
   const emptyCtx = {
     buffer: [] as string[],
     optionsTerminated: false,
@@ -2841,8 +2862,9 @@ async function findExclusiveZeroInputCandidateAsync(
     }
     if (candidateCount > 1) break;
   }
-  return candidateCount === 1 && candidateIndex >= 0 &&
-      candidateParseResult != null
+  return candidateCount === 1 &&
+    candidateIndex >= 0 &&
+    candidateParseResult != null
     ? { index: candidateIndex, parseResult: candidateParseResult }
     : null;
 }
@@ -2886,7 +2908,11 @@ function extractExclusivePhase2Seed(
     );
   }
   if (!activeState[1].success) {
-    return dispatchByMode(mode, () => null, () => Promise.resolve(null));
+    return dispatchByMode(
+      mode,
+      () => null,
+      () => Promise.resolve(null),
+    );
   }
   const [index, parserResult] = activeState;
   return completeOrExtractPhase2Seed(
@@ -2907,9 +2933,9 @@ function getNoMatchError(
 ): Message {
   const customNoMatch = options?.errors?.noMatch;
   return customNoMatch
-    ? (typeof customNoMatch === "function"
+    ? typeof customNoMatch === "function"
       ? customNoMatch(noMatchContext)
-      : customNoMatch)
+      : customNoMatch
     : generateNoMatchError(noMatchContext);
 }
 
@@ -2932,10 +2958,13 @@ function defineExclusiveSchedulingNodes(
   // prompted values.  Alternatives without the marker keep the
   // exclusive parser's existing collection scope.
   if (
-    parsers.some((parser) =>
-      (parser as {
-        readonly [sourceCollectionExpansionKey]?: boolean;
-      })[sourceCollectionExpansionKey] === true
+    parsers.some(
+      (parser) =>
+        (
+          parser as {
+            readonly [sourceCollectionExpansionKey]?: boolean;
+          }
+        )[sourceCollectionExpansionKey] === true,
     )
   ) {
     Object.defineProperty(exclusiveParser, sourceCollectionExpansionKey, {
@@ -2957,11 +2986,13 @@ function defineExclusiveSchedulingNodes(
       if (active == null) return [];
       const [index, result] = active;
       if (result?.success !== true) return [];
-      return [{
-        path: [...(parentPath ?? []), index],
-        parser: parsers[index],
-        state: result.next.state,
-      }];
+      return [
+        {
+          path: [...(parentPath ?? []), index],
+          parser: parsers[index],
+          state: result.next.state,
+        },
+      ];
     }) satisfies EffectfulSchedulingNodesFn,
     configurable: true,
     enumerable: false,
@@ -2971,8 +3002,8 @@ function defineExclusiveSchedulingNodes(
 function composeExclusiveDependencyMetadata(
   parsers: readonly Parser<Mode, unknown, unknown>[],
 ): ParserDependencyMetadata | undefined {
-  const sourceBranches = parsers.filter((parser) =>
-    parser.dependencyMetadata?.source != null
+  const sourceBranches = parsers.filter(
+    (parser) => parser.dependencyMetadata?.source != null,
   );
   if (sourceBranches.length < 1) return undefined;
   const sourceIds = new Set(
@@ -2986,9 +3017,11 @@ function composeExclusiveDependencyMetadata(
   // such as prompt() from originating an effectful completion for it.
   // Committed-branch extraction below remains safe either way, because
   // it only reads the selected branch's own source state.
-  const everyBranchPreserves = sourceBranches.length === parsers.length &&
-    sourceBranches.every((parser) =>
-      parser.dependencyMetadata?.source?.preservesSourceValue !== false
+  const everyBranchPreserves =
+    sourceBranches.length === parsers.length &&
+    sourceBranches.every(
+      (parser) =>
+        parser.dependencyMetadata?.source?.preservesSourceValue !== false,
     );
   return {
     source: {
@@ -3007,7 +3040,8 @@ function composeExclusiveDependencyMetadata(
       preservesSourceValue: everyBranchPreserves,
       extractSourceValue(state) {
         if (
-          !Array.isArray(state) || state.length !== 2 ||
+          !Array.isArray(state) ||
+          state.length !== 2 ||
           typeof state[0] !== "number"
         ) {
           return undefined;
@@ -3022,7 +3056,8 @@ function composeExclusiveDependencyMetadata(
         // Delegate to the committed branch only; an uncommitted state
         // offers nothing to complete effectfully.
         if (
-          !Array.isArray(state) || state.length !== 2 ||
+          !Array.isArray(state) ||
+          state.length !== 2 ||
           typeof state[0] !== "number"
         ) {
           return Promise.resolve(undefined);
@@ -3056,15 +3091,17 @@ type OrParserArity =
   | 14
   | 15;
 type OrArityLimitError = {
-  readonly __optiqueOrArityLimit:
-    "or() requires between 1 and 15 parser arguments. Nest or() to combine more.";
+  readonly __optiqueOrArityLimit: "or() requires between 1 and 15 parser arguments. Nest or() to combine more.";
 };
 type OrTailOptions = OrOptions & { readonly $valueType?: never };
-type IsTuple<T extends readonly unknown[]> = number extends T["length"] ? false
+type IsTuple<T extends readonly unknown[]> = number extends T["length"]
+  ? false
   : true;
 type OrArityGuard<TParsers extends readonly unknown[]> =
   IsTuple<TParsers> extends true
-    ? TParsers["length"] extends OrParserArity ? unknown : OrArityLimitError
+    ? TParsers["length"] extends OrParserArity
+      ? unknown
+      : OrArityLimitError
     : unknown;
 
 /**
@@ -3083,14 +3120,7 @@ type OrArityGuard<TParsers extends readonly unknown[]> =
  *         in order, returning the result of the first successful parser.
  * @since 0.3.0
  */
-export function or<
-  MA extends Mode,
-  MB extends Mode,
-  TA,
-  TB,
-  TStateA,
-  TStateB,
->(
+export function or<MA extends Mode, MB extends Mode, TA, TB, TStateA, TStateB>(
   a: Parser<MA, TA, TStateA>,
   b: Parser<MB, TB, TStateB>,
 ): FluentParser<
@@ -4048,9 +4078,7 @@ export function or<
   l: Parser<ML, TL, TStateL>,
   m: Parser<MM, TM, TStateM>,
 ): FluentParser<
-  CombineModes<
-    readonly [MA, MB, MC, MD, ME, MF, MG, MH, MI, MJ, MK, ML, MM]
-  >,
+  CombineModes<readonly [MA, MB, MC, MD, ME, MF, MG, MH, MI, MJ, MK, ML, MM]>,
   TA | TB | TC | TD | TE | TF | TG | TH | TI | TJ | TK | TL | TM,
   | undefined
   | [0, ParserResult<TStateA>]
@@ -4344,23 +4372,7 @@ export function or<
   o: Parser<MO, TO, TStateO>,
 ): FluentParser<
   CombineModes<
-    readonly [
-      MA,
-      MB,
-      MC,
-      MD,
-      ME,
-      MF,
-      MG,
-      MH,
-      MI,
-      MJ,
-      MK,
-      ML,
-      MM,
-      MN,
-      MO,
-    ]
+    readonly [MA, MB, MC, MD, ME, MF, MG, MH, MI, MJ, MK, ML, MM, MN, MO]
   >,
   TA | TB | TC | TD | TE | TF | TG | TH | TI | TJ | TK | TL | TM | TN | TO,
   | undefined
@@ -4398,14 +4410,7 @@ export function or<
  * @throws {TypeError} If no parser arguments are provided.
  * @since 0.5.0
  */
-export function or<
-  MA extends Mode,
-  MB extends Mode,
-  TA,
-  TB,
-  TStateA,
-  TStateB,
->(
+export function or<MA extends Mode, MB extends Mode, TA, TB, TStateA, TStateB>(
   a: Parser<MA, TA, TStateA>,
   b: Parser<MB, TB, TStateB>,
   options: OrOptions,
@@ -4472,9 +4477,8 @@ export function or<
 export function or<
   const TParsers extends readonly Parser<Mode, unknown, unknown>[],
 >(
-  ...rest:
-    & [...parsers: TParsers, options: OrTailOptions]
-    & OrArityGuard<TParsers>
+  ...rest: [...parsers: TParsers, options: OrTailOptions] &
+    OrArityGuard<TParsers>
 ): FluentParser<
   CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
   InferValue<TParsers[number]>,
@@ -4508,7 +4512,8 @@ export function or(
   let options: OrOptions | undefined;
 
   if (
-    args.length > 0 && args[args.length - 1] &&
+    args.length > 0 &&
+    args[args.length - 1] &&
     typeof args[args.length - 1] === "object" &&
     !("$valueType" in args[args.length - 1])
   ) {
@@ -4556,12 +4561,10 @@ export function or(
       if (noMatch != null && typeof noMatch !== "function") {
         return { success: false, consumed: 0, error: noMatch };
       }
-      return createDeferredFailure(
-        0,
-        () =>
-          noMatch != null
-            ? noMatch(noMatchContext)
-            : generateNoMatchError(noMatchContext),
+      return createDeferredFailure(0, () =>
+        noMatch != null
+          ? noMatch(noMatchContext)
+          : generateNoMatchError(noMatchContext),
       );
     }
     if (unexpectedInput != null && typeof unexpectedInput !== "function") {
@@ -4579,9 +4582,7 @@ export function or(
   };
 
   // Sync parse implementation
-  const parseSync = (
-    context: ParserContext<OrState>,
-  ): ParseResult => {
+  const parseSync = (context: ParserContext<OrState>): ParseResult => {
     let error = getInitialError(context);
     const activeState = normalizeExclusiveState(context.state);
     const orderedParsers = selectExclusiveChildren(
@@ -4633,7 +4634,8 @@ export function or(
       }
       if (isOptionsTerminatorOnlyResult(context, result)) {
         if (
-          activeState?.[0] === i && activeState[1].success &&
+          activeState?.[0] === i &&
+          activeState[1].success &&
           activeState[1].consumed.length > 0 &&
           result.next.buffer.length < 1
         ) {
@@ -4648,7 +4650,8 @@ export function or(
         // When multiple provisional branches match, discard all to
         // stay order-independent.
         if (result.provisional) {
-          const activeBranchLocked = activeState != null &&
+          const activeBranchLocked =
+            activeState != null &&
             activeState[1].success &&
             activeState[1].consumed.length > 0;
           // When the active branch yields a provisional result, it
@@ -4684,10 +4687,7 @@ export function or(
           // conflict is possible and the empty consumed array would
           // crash values() in the error path.
           if (activeState[1].consumed.length === 0) {
-            const mergedExec = mergeChildExec(
-              context.exec,
-              result.next.exec,
-            );
+            const mergedExec = mergeChildExec(context.exec, result.next.exec);
             return {
               success: true,
               next: {
@@ -4695,17 +4695,12 @@ export function or(
                 ...getPassThroughFailureHint(result.next),
                 buffer: result.next.buffer,
                 optionsTerminated: result.next.optionsTerminated,
-                state: createExclusiveState(
-                  context.state,
-                  i,
-                  parser,
-                  result,
-                ),
+                state: createExclusiveState(context.state, i, parser, result),
                 ...(mergedExec != null
                   ? {
-                    exec: mergedExec,
-                    dependencyRegistry: mergedExec.dependencyRegistry,
-                  }
+                      exec: mergedExec,
+                      dependencyRegistry: mergedExec.dependencyRegistry,
+                    }
                   : {}),
               },
               consumed: result.consumed,
@@ -4725,18 +4720,19 @@ export function or(
           });
           // If the new branch can consume exactly the same input,
           // this is a shared option - allow branch switch.
-          const canConsumeShared = checkResult.success &&
+          const canConsumeShared =
+            checkResult.success &&
             checkResult.consumed.length === previouslyConsumed.length &&
-            checkResult.consumed.every((c, idx) =>
-              c === previouslyConsumed[idx]
+            checkResult.consumed.every(
+              (c, idx) => c === previouslyConsumed[idx],
             );
           if (!canConsumeShared) {
             return {
               success: false,
               consumed: context.buffer.length - result.next.buffer.length,
-              error: message`${values(activeState[1].consumed)} and ${
-                values(result.consumed)
-              } cannot be used together.`,
+              error: message`${values(activeState[1].consumed)} and ${values(
+                result.consumed,
+              )} cannot be used together.`,
             };
           }
           // Branch switch allowed - re-parse current input with state from
@@ -4751,9 +4747,9 @@ export function or(
                 ...context,
                 ...(replayExec != null
                   ? {
-                    exec: replayExec,
-                    dependencyRegistry: replayExec.dependencyRegistry,
-                  }
+                      exec: replayExec,
+                      dependencyRegistry: replayExec.dependencyRegistry,
+                    }
                   : {}),
               },
               i,
@@ -4775,23 +4771,15 @@ export function or(
               ...getPassThroughFailureHint(replayedResult.next),
               buffer: replayedResult.next.buffer,
               optionsTerminated: replayedResult.next.optionsTerminated,
-              state: createExclusiveState(
-                context.state,
-                i,
-                parser,
-                {
-                  ...replayedResult,
-                  consumed: [
-                    ...previouslyConsumed,
-                    ...replayedResult.consumed,
-                  ],
-                },
-              ),
+              state: createExclusiveState(context.state, i, parser, {
+                ...replayedResult,
+                consumed: [...previouslyConsumed, ...replayedResult.consumed],
+              }),
               ...(mergedExec != null
                 ? {
-                  exec: mergedExec,
-                  dependencyRegistry: mergedExec.dependencyRegistry,
-                }
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
                 : {}),
             },
             consumed: replayedResult.consumed,
@@ -4808,18 +4796,20 @@ export function or(
             state: createExclusiveState(context.state, i, parser, result),
             ...(mergedExec != null
               ? {
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           },
           consumed: result.consumed,
         };
       } else if (
-        result.success && result.consumed.length === 0 &&
+        result.success &&
+        result.consumed.length === 0 &&
         !result.provisional &&
         // Only branches that can never match input tokens qualify.
-        parser.leadingNames.size === 0 && !parser.acceptingAnyToken
+        parser.leadingNames.size === 0 &&
+        !parser.acceptingAnyToken
       ) {
         if (zeroConsumedBranch === null) {
           zeroConsumedBranch = { index: i, parser, result };
@@ -4835,8 +4825,10 @@ export function or(
     // causing the top-level parse loop to stall and emit a generic
     // "Unexpected option" error instead of the construct's own error.
     if (
-      zeroConsumedBranch !== null && zeroConsumedCount === 1 &&
-      error.consumed === 0 && context.buffer.length === 0
+      zeroConsumedBranch !== null &&
+      zeroConsumedCount === 1 &&
+      error.consumed === 0 &&
+      context.buffer.length === 0
     ) {
       // Persist the branch state so wrappers like multiple() can
       // see the state change.  Only propagate provisional from the
@@ -4863,9 +4855,9 @@ export function or(
           ),
           ...(mergedExec != null
             ? {
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
             : {}),
         },
         consumed: [],
@@ -4875,7 +4867,8 @@ export function or(
     // branch consumed tokens.  This lets speculative results from
     // conditional() take effect only when no better alternative exists.
     if (provisionalConsuming !== null) {
-      const activeIsLockedDifferent = activeState != null &&
+      const activeIsLockedDifferent =
+        activeState != null &&
         activeState[1].success &&
         activeState[1].consumed.length > 0 &&
         activeState[0] !== provisionalConsuming.index;
@@ -4901,9 +4894,9 @@ export function or(
             ),
             ...(mergedExec != null
               ? {
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           },
           consumed: provisionalConsuming.result.consumed,
@@ -4931,7 +4924,8 @@ export function or(
           ),
           buffer: previouslyConsumed,
         });
-        const canConsumeShared = checkResult.success &&
+        const canConsumeShared =
+          checkResult.success &&
           checkResult.consumed.length === previouslyConsumed.length &&
           checkResult.consumed.every((c, idx) => c === previouslyConsumed[idx]);
         if (canConsumeShared && checkResult.success) {
@@ -4945,9 +4939,9 @@ export function or(
                 ...context,
                 ...(replayExec != null
                   ? {
-                    exec: replayExec,
-                    dependencyRegistry: replayExec.dependencyRegistry,
-                  }
+                      exec: replayExec,
+                      dependencyRegistry: replayExec.dependencyRegistry,
+                    }
                   : {}),
               },
               provisionalConsuming.index,
@@ -4989,17 +4983,14 @@ export function or(
                   // would treat the branch as definitive—blocking the
                   // intended fallthrough to definitive alternatives.
                   provisional: true as const,
-                  consumed: [
-                    ...previouslyConsumed,
-                    ...replayedResult.consumed,
-                  ],
+                  consumed: [...previouslyConsumed, ...replayedResult.consumed],
                 },
               ),
               ...(mergedExec != null
                 ? {
-                  exec: mergedExec,
-                  dependencyRegistry: mergedExec.dependencyRegistry,
-                }
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
                 : {}),
             },
             consumed: replayedResult.consumed,
@@ -5065,7 +5056,8 @@ export function or(
       }
       if (isOptionsTerminatorOnlyResult(context, result)) {
         if (
-          activeState?.[0] === i && activeState[1].success &&
+          activeState?.[0] === i &&
+          activeState[1].success &&
           activeState[1].consumed.length > 0 &&
           result.next.buffer.length < 1
         ) {
@@ -5077,7 +5069,8 @@ export function or(
       if (result.success && result.consumed.length > 0) {
         // Provisional consuming results are deferred (see sync counterpart).
         if (result.provisional) {
-          const activeBranchLocked = activeState != null &&
+          const activeBranchLocked =
+            activeState != null &&
             activeState[1].success &&
             activeState[1].consumed.length > 0;
           // Active-branch provisionals win over competing provisionals
@@ -5105,10 +5098,7 @@ export function or(
           // If the active branch consumed nothing (zero-consumed
           // fallback), allow the switch freely (see sync counterpart).
           if (activeState[1].consumed.length === 0) {
-            const mergedExec = mergeChildExec(
-              context.exec,
-              result.next.exec,
-            );
+            const mergedExec = mergeChildExec(context.exec, result.next.exec);
             return {
               success: true,
               next: {
@@ -5116,17 +5106,12 @@ export function or(
                 ...getPassThroughFailureHint(result.next),
                 buffer: result.next.buffer,
                 optionsTerminated: result.next.optionsTerminated,
-                state: createExclusiveState(
-                  context.state,
-                  i,
-                  parser,
-                  result,
-                ),
+                state: createExclusiveState(context.state, i, parser, result),
                 ...(mergedExec != null
                   ? {
-                    exec: mergedExec,
-                    dependencyRegistry: mergedExec.dependencyRegistry,
-                  }
+                      exec: mergedExec,
+                      dependencyRegistry: mergedExec.dependencyRegistry,
+                    }
                   : {}),
               },
               consumed: result.consumed,
@@ -5147,18 +5132,19 @@ export function or(
           const checkResult = await checkResultOrPromise;
           // If the new branch can consume exactly the same input,
           // this is a shared option - allow branch switch.
-          const canConsumeShared = checkResult.success &&
+          const canConsumeShared =
+            checkResult.success &&
             checkResult.consumed.length === previouslyConsumed.length &&
-            checkResult.consumed.every((c, idx) =>
-              c === previouslyConsumed[idx]
+            checkResult.consumed.every(
+              (c, idx) => c === previouslyConsumed[idx],
             );
           if (!canConsumeShared) {
             return {
               success: false,
               consumed: context.buffer.length - result.next.buffer.length,
-              error: message`${values(activeState[1].consumed)} and ${
-                values(result.consumed)
-              } cannot be used together.`,
+              error: message`${values(activeState[1].consumed)} and ${values(
+                result.consumed,
+              )} cannot be used together.`,
             };
           }
           // Branch switch allowed - re-parse current input with state from
@@ -5173,9 +5159,9 @@ export function or(
                 ...context,
                 ...(replayExec != null
                   ? {
-                    exec: replayExec,
-                    dependencyRegistry: replayExec.dependencyRegistry,
-                  }
+                      exec: replayExec,
+                      dependencyRegistry: replayExec.dependencyRegistry,
+                    }
                   : {}),
               },
               i,
@@ -5198,23 +5184,15 @@ export function or(
               ...getPassThroughFailureHint(replayedResult.next),
               buffer: replayedResult.next.buffer,
               optionsTerminated: replayedResult.next.optionsTerminated,
-              state: createExclusiveState(
-                context.state,
-                i,
-                parser,
-                {
-                  ...replayedResult,
-                  consumed: [
-                    ...previouslyConsumed,
-                    ...replayedResult.consumed,
-                  ],
-                },
-              ),
+              state: createExclusiveState(context.state, i, parser, {
+                ...replayedResult,
+                consumed: [...previouslyConsumed, ...replayedResult.consumed],
+              }),
               ...(mergedExec != null
                 ? {
-                  exec: mergedExec,
-                  dependencyRegistry: mergedExec.dependencyRegistry,
-                }
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
                 : {}),
             },
             consumed: replayedResult.consumed,
@@ -5231,18 +5209,20 @@ export function or(
             state: createExclusiveState(context.state, i, parser, result),
             ...(mergedExec != null
               ? {
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           },
           consumed: result.consumed,
         };
       } else if (
-        result.success && result.consumed.length === 0 &&
+        result.success &&
+        result.consumed.length === 0 &&
         !result.provisional &&
         // Only branches with no leading names qualify (see sync).
-        parser.leadingNames.size === 0 && !parser.acceptingAnyToken
+        parser.leadingNames.size === 0 &&
+        !parser.acceptingAnyToken
       ) {
         if (zeroConsumedBranch === null) {
           zeroConsumedBranch = { index: i, parser, result };
@@ -5254,8 +5234,10 @@ export function or(
     }
     // Accept non-consuming branch when unambiguous (see sync counterpart).
     if (
-      zeroConsumedBranch !== null && zeroConsumedCount === 1 &&
-      error.consumed === 0 && context.buffer.length === 0
+      zeroConsumedBranch !== null &&
+      zeroConsumedCount === 1 &&
+      error.consumed === 0 &&
+      context.buffer.length === 0
     ) {
       // Persist branch state (see sync counterpart for rationale).
       const mergedExec = mergeChildExec(
@@ -5277,9 +5259,9 @@ export function or(
           ),
           ...(mergedExec != null
             ? {
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
             : {}),
         },
         consumed: [],
@@ -5287,7 +5269,8 @@ export function or(
     }
     // Fall back to provisional consuming result (see sync counterpart).
     if (provisionalConsuming !== null) {
-      const activeIsLockedDifferent = activeState != null &&
+      const activeIsLockedDifferent =
+        activeState != null &&
         activeState[1].success &&
         activeState[1].consumed.length > 0 &&
         activeState[0] !== provisionalConsuming.index;
@@ -5313,9 +5296,9 @@ export function or(
             ),
             ...(mergedExec != null
               ? {
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           },
           consumed: provisionalConsuming.result.consumed,
@@ -5343,7 +5326,8 @@ export function or(
           ),
           buffer: previouslyConsumed,
         });
-        const canConsumeShared = checkResult.success &&
+        const canConsumeShared =
+          checkResult.success &&
           checkResult.consumed.length === previouslyConsumed.length &&
           checkResult.consumed.every((c, idx) => c === previouslyConsumed[idx]);
         if (canConsumeShared && checkResult.success) {
@@ -5357,9 +5341,9 @@ export function or(
                 ...context,
                 ...(replayExec != null
                   ? {
-                    exec: replayExec,
-                    dependencyRegistry: replayExec.dependencyRegistry,
-                  }
+                      exec: replayExec,
+                      dependencyRegistry: replayExec.dependencyRegistry,
+                    }
                   : {}),
               },
               provisionalConsuming.index,
@@ -5391,17 +5375,14 @@ export function or(
                   ...replayedResult,
                   // Force `provisional: true` (see sync counterpart).
                   provisional: true as const,
-                  consumed: [
-                    ...previouslyConsumed,
-                    ...replayedResult.consumed,
-                  ],
+                  consumed: [...previouslyConsumed, ...replayedResult.consumed],
                 },
               ),
               ...(mergedExec != null
                 ? {
-                  exec: mergedExec,
-                  dependencyRegistry: mergedExec.dependencyRegistry,
-                }
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
                 : {}),
             },
             consumed: replayedResult.consumed,
@@ -5434,11 +5415,12 @@ export function or(
       if (activeState != null) {
         const [index, result] = activeState;
         const parser = parsers[index];
-        return result.success && parser?.canSkip?.(result.next.state, exec) ===
-            true;
+        return (
+          result.success && parser?.canSkip?.(result.next.state, exec) === true
+        );
       }
-      return parsers.some((parser) =>
-        parser.canSkip?.(parser.initialState, exec) === true
+      return parsers.some(
+        (parser) => parser.canSkip?.(parser.initialState, exec) === true,
       );
     },
     complete: createExclusiveComplete(
@@ -5482,7 +5464,7 @@ export function or(
       if (state.kind === "unavailable" || state.state == null) {
         // When state is unavailable or null, show all parser options
         fragments = parsers.flatMap((p) =>
-          collect(p.getDocFragments({ kind: "unavailable" }, undefined))
+          collect(p.getDocFragments({ kind: "unavailable" }, undefined)),
         );
       } else {
         // When state is available and has a value, show only the selected parser
@@ -5511,13 +5493,16 @@ export function or(
       if (state.kind === "unavailable" || state.state == null) {
         fragments = deduplicateDocFragments(fragments);
       }
-      return withCommandDocMetadata({
-        ...sourceDocumentation(children),
-        brief,
-        description,
-        footer,
-        fragments,
-      }, commandMetadata);
+      return withCommandDocMetadata(
+        {
+          ...sourceDocumentation(children),
+          brief,
+          description,
+          footer,
+          fragments,
+        },
+        commandMetadata,
+      );
     },
   };
   const singleDependencyMetadata = composeExclusiveDependencyMetadata(parsers);
@@ -5534,23 +5519,26 @@ export function or(
   // reasoning applies to validateValue (#414): a fallback value may
   // belong to any branch, so revalidating through a single arbitrary
   // branch would reject values that another branch would accept.
-  defineReachableChildren(
-    singleResult,
-    parsers,
-    (state) => selectExclusiveChildren(parsers, state, true),
+  defineReachableChildren(singleResult, parsers, (state) =>
+    selectExclusiveChildren(parsers, state, true),
   );
   return captureDocParser(
-    fluent(withEmptyInputFacts(
-      scopeParser(
-        singleResult as Parser<
-          Mode,
-          unknown,
-          [number, ParserResult<unknown>] | undefined
-        >,
-        combinedOptionScope(parsers, parsers.map((_, index) => index)),
+    fluent(
+      withEmptyInputFacts(
+        scopeParser(
+          singleResult as Parser<
+            Mode,
+            unknown,
+            [number, ParserResult<unknown>] | undefined
+          >,
+          combinedOptionScope(
+            parsers,
+            parsers.map((_, index) => index),
+          ),
+        ),
+        emptyInputFacts,
       ),
-      emptyInputFacts,
-    )),
+    ),
     { kind: "or", children: parsers },
   );
 }
@@ -5638,15 +5626,14 @@ type LongestMatchParserArity =
   | 14
   | 15;
 type LongestMatchArityLimitError = {
-  readonly __optiqueLongestMatchArityLimit:
-    "longestMatch() requires between 1 and 15 parser arguments. Nest longestMatch() to combine more.";
+  readonly __optiqueLongestMatchArityLimit: "longestMatch() requires between 1 and 15 parser arguments. Nest longestMatch() to combine more.";
 };
 type LongestMatchTailOptions = LongestMatchOptions & {
   readonly $valueType?: never;
 };
 type TupleKeys<T extends readonly unknown[]> = Exclude<
   keyof T,
-  keyof readonly unknown[]
+  keyof (readonly unknown[])
 >;
 type LongestMatchTupleState<
   TParsers extends readonly Parser<Mode, unknown, unknown>[],
@@ -5658,18 +5645,20 @@ type LongestMatchTupleState<
   >
     ? K extends `${infer TIndex extends number}`
       ? [TIndex, ParserResult<TState>]
-    : never
+      : never
     : never;
 }[TupleKeys<TParsers>];
 type LongestMatchState<
   TParsers extends readonly Parser<Mode, unknown, unknown>[],
-> = IsTuple<TParsers> extends true
-  ? undefined | LongestMatchTupleState<TParsers>
-  : undefined | [number, ParserResult<unknown>];
+> =
+  IsTuple<TParsers> extends true
+    ? undefined | LongestMatchTupleState<TParsers>
+    : undefined | [number, ParserResult<unknown>];
 type LongestMatchArityGuard<TParsers extends readonly unknown[]> =
   IsTuple<TParsers> extends true
-    ? TParsers["length"] extends LongestMatchParserArity ? unknown
-    : LongestMatchArityLimitError
+    ? TParsers["length"] extends LongestMatchParserArity
+      ? unknown
+      : LongestMatchArityLimitError
     : unknown;
 
 /**
@@ -5710,9 +5699,8 @@ export function longestMatch<
 export function longestMatch<
   const TParsers extends readonly Parser<"sync", unknown, unknown>[],
 >(
-  ...rest:
-    & [...parsers: TParsers, options: LongestMatchTailOptions]
-    & LongestMatchArityGuard<TParsers>
+  ...rest: [...parsers: TParsers, options: LongestMatchTailOptions] &
+    LongestMatchArityGuard<TParsers>
 ): FluentParser<
   "sync",
   InferValue<TParsers[number]>,
@@ -5732,9 +5720,8 @@ export function longestMatch<
 export function longestMatch<
   const TParsers extends readonly Parser<Mode, unknown, unknown>[],
 >(
-  ...rest:
-    & [...parsers: TParsers, options: LongestMatchTailOptions]
-    & LongestMatchArityGuard<TParsers>
+  ...rest: [...parsers: TParsers, options: LongestMatchTailOptions] &
+    LongestMatchArityGuard<TParsers>
 ): FluentParser<
   CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
   InferValue<TParsers[number]>,
@@ -5798,9 +5785,8 @@ export function longestMatch<
   TState,
   const TParsers extends readonly Parser<M, TValue, TState>[],
 >(
-  ...rest:
-    & [...parsers: TParsers, options: LongestMatchTailOptions]
-    & LongestMatchArityGuard<TParsers>
+  ...rest: [...parsers: TParsers, options: LongestMatchTailOptions] &
+    LongestMatchArityGuard<TParsers>
 ): FluentParser<M, TValue, unknown>;
 /**
  * @since 0.5.0
@@ -5819,7 +5805,8 @@ function createLongestMatch(
   let options: InternalLongestMatchOptions | undefined;
 
   if (
-    args.length > 0 && args[args.length - 1] &&
+    args.length > 0 &&
+    args[args.length - 1] &&
     typeof args[args.length - 1] === "object" &&
     !("$valueType" in args[args.length - 1])
   ) {
@@ -5880,12 +5867,10 @@ function createLongestMatch(
       if (noMatch != null && typeof noMatch !== "function") {
         return { success: false, consumed: 0, error: noMatch };
       }
-      return createDeferredFailure(
-        0,
-        () =>
-          noMatch != null
-            ? noMatch(noMatchContext)
-            : generateNoMatchError(noMatchContext),
+      return createDeferredFailure(0, () =>
+        noMatch != null
+          ? noMatch(noMatchContext)
+          : generateNoMatchError(noMatchContext),
       );
     }
     if (unexpectedInput != null && typeof unexpectedInput !== "function") {
@@ -5908,24 +5893,26 @@ function createLongestMatch(
     optionsTerminatorResult?: SuccessfulResult,
     consumingFailure?: ConsumingFailure,
   ): ParseResult => {
-    const selectedResult: SuccessfulResult = optionsTerminatorResult == null
-      ? match.result
-      : {
-        ...match.result,
-        next: {
-          ...match.result.next,
-          ...getPassThroughFailureHint(optionsTerminatorResult.next),
-          buffer: optionsTerminatorResult.next.buffer,
-          optionsTerminated: true,
-        },
-        consumed: [
-          ...optionsTerminatorResult.consumed,
-          ...match.result.consumed,
-        ],
-      };
-    const next = selectedResult.consumed.length === 0
-      ? withReturnedConsumingFailure(selectedResult.next, consumingFailure)
-      : selectedResult.next;
+    const selectedResult: SuccessfulResult =
+      optionsTerminatorResult == null
+        ? match.result
+        : {
+            ...match.result,
+            next: {
+              ...match.result.next,
+              ...getPassThroughFailureHint(optionsTerminatorResult.next),
+              buffer: optionsTerminatorResult.next.buffer,
+              optionsTerminated: true,
+            },
+            consumed: [
+              ...optionsTerminatorResult.consumed,
+              ...match.result.consumed,
+            ],
+          };
+    const next =
+      selectedResult.consumed.length === 0
+        ? withReturnedConsumingFailure(selectedResult.next, consumingFailure)
+        : selectedResult.next;
     const parser = parsers[match.index];
     const mergedExec = mergeChildExec(context.exec, next.exec);
     return {
@@ -5943,9 +5930,9 @@ function createLongestMatch(
         ),
         ...(mergedExec != null
           ? {
-            exec: mergedExec,
-            dependencyRegistry: mergedExec.dependencyRegistry,
-          }
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
           : {}),
       },
       consumed: selectedResult.consumed,
@@ -5966,7 +5953,8 @@ function createLongestMatch(
 
     const activeState = normalizeExclusiveState(context.state);
     if (
-      activeState != null && activeState[1].success &&
+      activeState != null &&
+      activeState[1].success &&
       activeState[1].consumed.length > 0
     ) {
       return preserveExclusiveStateAfterOptionsTerminator(
@@ -5975,11 +5963,11 @@ function createLongestMatch(
       );
     }
 
-    let selected:
-      | { readonly match: BranchMatch; readonly fromTerminator: boolean }
-      | null = bestMatch == null
-        ? null
-        : { match: bestMatch, fromTerminator: false };
+    let selected: {
+      readonly match: BranchMatch;
+      readonly fromTerminator: boolean;
+    } | null =
+      bestMatch == null ? null : { match: bestMatch, fromTerminator: false };
     for (const match of optionsTerminatorMatches) {
       if (
         !match.selectedAfterTerminator &&
@@ -5988,8 +5976,8 @@ function createLongestMatch(
       ) {
         continue;
       }
-      const selectedIsProvisional = selected != null &&
-        !!selected.match.result.provisional;
+      const selectedIsProvisional =
+        selected != null && !!selected.match.result.provisional;
       const matchIsProvisional = !!match.result.provisional;
       if (
         selected == null ||
@@ -6030,12 +6018,11 @@ function createLongestMatch(
     let consumingFailure: ConsumingFailure | undefined;
 
     // Try all parsers and find the one with longest match
-    for (
-      const { parser, index: i, state: childState } of selectExclusiveChildren(
-        syncParsers,
-        context.state,
-      )
-    ) {
+    for (const {
+      parser,
+      index: i,
+      state: childState,
+    } of selectExclusiveChildren(syncParsers, context.state)) {
       const childContext = withChildContext(
         forkOptionScope(
           commandDocBranchContext(
@@ -6077,12 +6064,16 @@ function createLongestMatch(
         // Prefer non-provisional results over provisional ones at the
         // same consumed length, so speculative conditional() branches
         // don't shadow definitive matches at equal length.
-        const bestIsProvisional = bestMatch != null &&
-          bestMatch.result.success && !!bestMatch.result.provisional;
+        const bestIsProvisional =
+          bestMatch != null &&
+          bestMatch.result.success &&
+          !!bestMatch.result.provisional;
         if (
-          bestMatch === null || consumed > bestMatch.consumed ||
+          bestMatch === null ||
+          consumed > bestMatch.consumed ||
           (consumed === bestMatch.consumed &&
-            bestIsProvisional && !result.provisional)
+            bestIsProvisional &&
+            !result.provisional)
         ) {
           bestMatch = { index: i, result, consumed };
         }
@@ -6138,12 +6129,11 @@ function createLongestMatch(
     let consumingFailure: ConsumingFailure | undefined;
 
     // Try all parsers and find the one with longest match
-    for (
-      const { parser, index: i, state: childState } of selectExclusiveChildren(
-        parsers,
-        context.state,
-      )
-    ) {
+    for (const {
+      parser,
+      index: i,
+      state: childState,
+    } of selectExclusiveChildren(parsers, context.state)) {
       const childContext = withChildContext(
         forkOptionScope(
           commandDocBranchContext(
@@ -6186,12 +6176,16 @@ function createLongestMatch(
         // Prefer non-provisional results over provisional ones at the
         // same consumed length, so speculative conditional() branches
         // don't shadow definitive matches at equal length.
-        const bestIsProvisional = bestMatch != null &&
-          bestMatch.result.success && !!bestMatch.result.provisional;
+        const bestIsProvisional =
+          bestMatch != null &&
+          bestMatch.result.success &&
+          !!bestMatch.result.provisional;
         if (
-          bestMatch === null || consumed > bestMatch.consumed ||
+          bestMatch === null ||
+          consumed > bestMatch.consumed ||
           (consumed === bestMatch.consumed &&
-            bestIsProvisional && !result.provisional)
+            bestIsProvisional &&
+            !result.provisional)
         ) {
           bestMatch = { index: i, result, consumed };
         }
@@ -6286,15 +6280,16 @@ function createLongestMatch(
       if (state.kind === "unavailable" || state.state == null) {
         // When state is unavailable or null, show all parser options
         fragments = parsers.flatMap((p) =>
-          collect(p.getDocFragments({ kind: "unavailable" }))
+          collect(p.getDocFragments({ kind: "unavailable" })),
         );
         shouldDeduplicate = true;
       } else {
         const [i, result] = state.state;
         if (result.success) {
-          const docResult = parsers[i].getDocFragments(
-            { kind: "available", state: result.next.state },
-          );
+          const docResult = parsers[i].getDocFragments({
+            kind: "available",
+            state: result.next.state,
+          });
           commandMetadata = scopeCommandDocMetadata(
             getCommandDocMetadata(docResult),
             commandUsageScopes[i],
@@ -6306,21 +6301,24 @@ function createLongestMatch(
           shouldDeduplicate = false;
         } else {
           fragments = parsers.flatMap((p) =>
-            collect(p.getDocFragments({ kind: "unavailable" }))
+            collect(p.getDocFragments({ kind: "unavailable" })),
           );
           shouldDeduplicate = true;
         }
       }
 
-      return withCommandDocMetadata({
-        ...sourceDocumentation(children),
-        brief,
-        description,
-        fragments: shouldDeduplicate
-          ? deduplicateDocFragments(fragments)
-          : fragments,
-        footer,
-      }, commandMetadata);
+      return withCommandDocMetadata(
+        {
+          ...sourceDocumentation(children),
+          brief,
+          description,
+          fragments: shouldDeduplicate
+            ? deduplicateDocFragments(fragments)
+            : fragments,
+          footer,
+        },
+        commandMetadata,
+      );
     },
   };
   const multiDependencyMetadata = composeExclusiveDependencyMetadata(parsers);
@@ -6335,22 +6333,25 @@ function createLongestMatch(
   // branch is unknown at default time—normalizing through the wrong
   // branch would produce values that differ from what parse() returns.
   // The same reasoning applies to validateValue (#414).
-  defineReachableChildren(
-    multiResult,
-    parsers,
-    (state) => selectExclusiveChildren(parsers, state, false),
+  defineReachableChildren(multiResult, parsers, (state) =>
+    selectExclusiveChildren(parsers, state, false),
   );
-  return fluent(withEmptyInputFacts(
-    scopeParser(
-      multiResult as Parser<
-        Mode,
-        unknown,
-        [number, ParserResult<unknown>] | undefined
-      >,
-      combinedOptionScope(parsers, parsers.map((_, index) => index)),
+  return fluent(
+    withEmptyInputFacts(
+      scopeParser(
+        multiResult as Parser<
+          Mode,
+          unknown,
+          [number, ParserResult<unknown>] | undefined
+        >,
+        combinedOptionScope(
+          parsers,
+          parsers.map((_, index) => index),
+        ),
+      ),
+      emptyInputFacts,
     ),
-    emptyInputFacts,
-  ));
+  );
 }
 
 /**
@@ -6453,12 +6454,10 @@ function createObjectLikeInitialError(
     if (endOfInput != null && typeof endOfInput !== "function") {
       return { success: false, consumed: 0, error: endOfInput };
     }
-    return createDeferredFailure(
-      0,
-      () =>
-        endOfInput != null
-          ? endOfInput(noMatchContext)
-          : generateNoMatchError(noMatchContext),
+    return createDeferredFailure(0, () =>
+      endOfInput != null
+        ? endOfInput(noMatchContext)
+        : generateNoMatchError(noMatchContext),
     );
   }
   if (unexpectedInput != null && typeof unexpectedInput !== "function") {
@@ -6535,12 +6534,12 @@ function* suggestObjectSync<
     dependencyRegistry: runtime.registry,
     ...(context.exec != null
       ? {
-        exec: {
-          ...context.exec,
-          dependencyRuntime: runtime,
-          dependencyRegistry: runtime.registry,
-        },
-      }
+          exec: {
+            ...context.exec,
+            dependencyRuntime: runtime,
+            dependencyRegistry: runtime.registry,
+          },
+        }
       : {}),
   };
 
@@ -6585,12 +6584,7 @@ function* suggestObjectSync<
     );
 
     const fieldSuggestions = parser.suggest(
-      withChildContext(
-        contextWithRegistry,
-        field,
-        annotatedFieldState,
-        parser,
-      ),
+      withChildContext(contextWithRegistry, field, annotatedFieldState, parser),
       prefix,
     );
 
@@ -6657,12 +6651,12 @@ async function* suggestObjectAsync<
     dependencyRegistry: runtime.registry,
     ...(context.exec != null
       ? {
-        exec: {
-          ...context.exec,
-          dependencyRuntime: runtime,
-          dependencyRegistry: runtime.registry,
-        },
-      }
+          exec: {
+            ...context.exec,
+            dependencyRuntime: runtime,
+            dependencyRegistry: runtime.registry,
+          },
+        }
       : {}),
   };
 
@@ -6707,12 +6701,7 @@ async function* suggestObjectAsync<
     );
 
     const fieldSuggestions = parser.suggest(
-      withChildContext(
-        contextWithRegistry,
-        field,
-        annotatedFieldState,
-        parser,
-      ),
+      withChildContext(contextWithRegistry, field, annotatedFieldState, parser),
       prefix,
     );
 
@@ -6744,8 +6733,8 @@ function registerCompletedDependency(
   // value produced by an effectful completion (a prompt that actually
   // executed) follows the last-occurrence-wins rule instead, matching
   // how repeated command-line source occurrences overwrite earlier ones.
-  const effectful = exec?.effectfulCompletionSession?.effectfulSources
-    .has(sourceId) === true;
+  const effectful =
+    exec?.effectfulCompletionSession?.effectfulSources.has(sourceId) === true;
   if (effectful || !registry.has(sourceId)) {
     registry.set(sourceId, completed.result.value);
   }
@@ -6764,25 +6753,30 @@ function* pendingDependencyDefaults(
     readonly [string | symbol, Parser<Mode, unknown, unknown>]
   >,
   registry?: DependencyRegistryLike,
-): Generator<
-  { readonly parser: Parser<Mode, unknown, unknown>; readonly state: unknown }
-> {
+): Generator<{
+  readonly parser: Parser<Mode, unknown, unknown>;
+  readonly state: unknown;
+}> {
   for (const [field, fieldParser] of parserPairs) {
-    const sourceId = fieldParser.dependencyMetadata?.source?.sourceId ??
+    const sourceId =
+      fieldParser.dependencyMetadata?.source?.sourceId ??
       (isWrappedDependencySource(fieldParser)
         ? fieldParser[wrappedDependencySourceMarker][dependencyId]
         : isPendingDependencySourceState(fieldParser.initialState)
-        ? (fieldParser.initialState as { [dependencyId]: symbol })[dependencyId]
-        : undefined);
+          ? (fieldParser.initialState as { [dependencyId]: symbol })[
+              dependencyId
+            ]
+          : undefined);
     if (sourceId != null && registry?.has(sourceId)) {
       continue;
     }
 
-    const fieldState = context.state != null &&
-        typeof context.state === "object" &&
-        field in context.state
-      ? (context.state as Record<string | symbol, unknown>)[field]
-      : undefined;
+    const fieldState =
+      context.state != null &&
+      typeof context.state === "object" &&
+      field in context.state
+        ? (context.state as Record<string | symbol, unknown>)[field]
+        : undefined;
 
     const annotatedFieldState = getAnnotatedFieldState(
       context.state,
@@ -6863,20 +6857,19 @@ function completeDependencySourceDefaults(
   runtime: ReturnType<typeof createDependencyRuntimeContext>,
   exec?: ExecutionContext,
 ): void {
-  for (
-    const { parser, state } of pendingDependencyDefaults(
-      context,
-      parserPairs,
-      runtime.registry,
-    )
-  ) {
+  for (const { parser, state } of pendingDependencyDefaults(
+    context,
+    parserPairs,
+    runtime.registry,
+  )) {
     const completed = parser.complete(state, exec);
     const depState = wrapAsDependencySourceState(completed, parser);
     if (depState) registerCompletedDependency(depState, runtime.registry);
   }
-  const stateRecord = context.state != null && typeof context.state === "object"
-    ? context.state as Record<PropertyKey, unknown>
-    : {};
+  const stateRecord =
+    context.state != null && typeof context.state === "object"
+      ? (context.state as Record<PropertyKey, unknown>)
+      : {};
   resolveDerivedSourceValues(
     expandSourceCollectionNodes(
       buildRuntimeNodesFromPairs(parserPairs, stateRecord, exec?.path),
@@ -6906,7 +6899,8 @@ function wrapAsDependencySourceState(
   if (metadataSource?.preservesSourceValue === false) {
     return undefined;
   }
-  const hasDep = metadataSource != null ||
+  const hasDep =
+    metadataSource != null ||
     isWrappedDependencySource(parser) ||
     isPendingDependencySourceState(parser.initialState);
   // Deferred results carry placeholder stand-ins for values that an
@@ -6915,11 +6909,15 @@ function wrapAsDependencySourceState(
   if (isDeferredCompletionResult(completed)) return undefined;
   if (
     hasDep &&
-    typeof completed === "object" && completed !== null &&
-    "success" in completed && completed.success &&
-    "value" in completed && completed.value !== undefined
+    typeof completed === "object" &&
+    completed !== null &&
+    "success" in completed &&
+    completed.success &&
+    "value" in completed &&
+    completed.value !== undefined
   ) {
-    const depId = metadataSource?.sourceId ??
+    const depId =
+      metadataSource?.sourceId ??
       (isWrappedDependencySource(parser)
         ? parser[wrappedDependencySourceMarker][dependencyId]
         : (parser.initialState as { [dependencyId]: symbol })[dependencyId]);
@@ -6947,20 +6945,19 @@ async function completeDependencySourceDefaultsAsync(
   runtime: ReturnType<typeof createDependencyRuntimeContext>,
   exec?: ExecutionContext,
 ): Promise<void> {
-  for (
-    const { parser, state } of pendingDependencyDefaults(
-      context,
-      parserPairs,
-      runtime.registry,
-    )
-  ) {
+  for (const { parser, state } of pendingDependencyDefaults(
+    context,
+    parserPairs,
+    runtime.registry,
+  )) {
     const completed = await parser.complete(state, exec);
     const depState = wrapAsDependencySourceState(completed, parser);
     if (depState) registerCompletedDependency(depState, runtime.registry);
   }
-  const stateRecord = context.state != null && typeof context.state === "object"
-    ? context.state as Record<PropertyKey, unknown>
-    : {};
+  const stateRecord =
+    context.state != null && typeof context.state === "object"
+      ? (context.state as Record<PropertyKey, unknown>)
+      : {};
   await resolveDerivedSourceValuesAsync(
     expandSourceCollectionNodes(
       buildRuntimeNodesFromPairs(parserPairs, stateRecord, exec?.path),
@@ -7289,9 +7286,9 @@ async function preCompleteAndRegisterDependenciesAsync(
       exec?.effectfulCompletionSession?.policy === "demand-only" &&
       typeof fieldParser.shouldDeferCompletion === "function" &&
       fieldParser.shouldDeferCompletion(
-          annotatedFieldState,
-          withChildExecPath(exec, field),
-        ) === true
+        annotatedFieldState,
+        withChildExecPath(exec, field),
+      ) === true
     ) {
       continue;
     }
@@ -7408,11 +7405,13 @@ export function object<
 ): FluentParser<
   CombineObjectModes<T>,
   {
-    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends infer U
+      ? U
       : never;
   },
   {
-    readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U2) ? U2
+    readonly [K in keyof T]: T[K]["$stateType"][number] extends infer U2
+      ? U2
       : never;
   }
 >;
@@ -7439,11 +7438,13 @@ export function object<
 ): FluentParser<
   CombineObjectModes<T>,
   {
-    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends infer U
+      ? U
       : never;
   },
   {
-    readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U2) ? U2
+    readonly [K in keyof T]: T[K]["$stateType"][number] extends infer U2
+      ? U2
       : never;
   }
 >;
@@ -7470,11 +7471,13 @@ export function object<
 ): FluentParser<
   CombineObjectModes<T>,
   {
-    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends infer U
+      ? U
       : never;
   },
   {
-    readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U2) ? U2
+    readonly [K in keyof T]: T[K]["$stateType"][number] extends infer U2
+      ? U2
       : never;
   }
 >;
@@ -7505,11 +7508,13 @@ export function object<
 ): FluentParser<
   CombineObjectModes<T>,
   {
-    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends infer U
+      ? U
       : never;
   },
   {
-    readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U2) ? U2
+    readonly [K in keyof T]: T[K]["$stateType"][number] extends infer U2
+      ? U2
       : never;
   }
 >;
@@ -7527,9 +7532,8 @@ export function object<
   { readonly [K in keyof T]: unknown },
   { readonly [K in keyof T]: unknown }
 > {
-  const label: string | undefined = typeof labelOrParsers === "string"
-    ? labelOrParsers
-    : undefined;
+  const label: string | undefined =
+    typeof labelOrParsers === "string" ? labelOrParsers : undefined;
   if (label != null) validateLabel(label);
 
   let parsers: T;
@@ -7545,16 +7549,16 @@ export function object<
     options = (maybeParsersOrOptions as ObjectOptions) ?? {};
   }
   const parserKeys = Reflect.ownKeys(parsers) as (keyof T)[];
-  const parserPairs = parserKeys.map((k) =>
-    [k, parsers[k]] as [keyof T, Parser<Mode, unknown, unknown>]
+  const parserPairs = parserKeys.map(
+    (k) => [k, parsers[k]] as [keyof T, Parser<Mode, unknown, unknown>],
   );
-  parserPairs.sort(([_, parserA], [__, parserB]) =>
-    parserB.priority - parserA.priority
+  parserPairs.sort(
+    ([_, parserA], [__, parserB]) => parserB.priority - parserA.priority,
   );
   const passThroughParsers = new Set(
-    parserPairs.map(([, parser]) => parser).filter((parser) =>
-      hasPassThroughUsage(parser.usage)
-    ),
+    parserPairs
+      .map(([, parser]) => parser)
+      .filter((parser) => hasPassThroughUsage(parser.usage)),
   );
   const createInitialState = (): Record<string | symbol, unknown> => {
     const state: Record<string | symbol, unknown> = {};
@@ -7576,33 +7580,38 @@ export function object<
       parser: Parser<Mode, unknown, unknown>,
     ): unknown => {
       const fieldKey = field as string | symbol;
-      const cache = parentState != null && typeof parentState === "object"
-        ? (() => {
-          const annotatorCaches = inheritedFieldStateCache.get(parentState) ??
-            (() => {
-              const nextCaches = new WeakMap<
-                typeof getAnnotatedChildState,
-                Map<string | symbol, unknown>
-              >();
-              inheritedFieldStateCache.set(parentState, nextCaches);
-              return nextCaches;
-            })();
-          return annotatorCaches.get(annotateChildState) ??
-            (() => {
-              const stateCache = new Map<string | symbol, unknown>();
-              annotatorCaches.set(annotateChildState, stateCache);
-              return stateCache;
-            })();
-        })()
-        : undefined;
+      const cache =
+        parentState != null && typeof parentState === "object"
+          ? (() => {
+              const annotatorCaches =
+                inheritedFieldStateCache.get(parentState) ??
+                (() => {
+                  const nextCaches = new WeakMap<
+                    typeof getAnnotatedChildState,
+                    Map<string | symbol, unknown>
+                  >();
+                  inheritedFieldStateCache.set(parentState, nextCaches);
+                  return nextCaches;
+                })();
+              return (
+                annotatorCaches.get(annotateChildState) ??
+                (() => {
+                  const stateCache = new Map<string | symbol, unknown>();
+                  annotatorCaches.set(annotateChildState, stateCache);
+                  return stateCache;
+                })()
+              );
+            })()
+          : undefined;
       if (cache?.has(fieldKey)) {
         return cache.get(fieldKey);
       }
-      const sourceState = parentState != null &&
-          typeof parentState === "object" &&
-          fieldKey in parentState
-        ? (parentState as Record<string | symbol, unknown>)[fieldKey]
-        : parser.initialState;
+      const sourceState =
+        parentState != null &&
+        typeof parentState === "object" &&
+        fieldKey in parentState
+          ? (parentState as Record<string | symbol, unknown>)[fieldKey]
+          : parser.initialState;
       const inheritedState = annotateChildState(
         parentState,
         sourceState,
@@ -7616,14 +7625,14 @@ export function object<
   // Check for duplicate option names at construction time unless explicitly allowed
   if (!options.allowDuplicates) {
     checkDuplicateOptionNames(
-      parserPairs.map(([field, parser]) =>
-        [field as string | symbol, parser.usage] as const
+      parserPairs.map(
+        ([field, parser]) => [field as string | symbol, parser.usage] as const,
       ),
     );
   }
   checkDuplicateReachableLeadingCommandNames(
-    parserPairs.map(([field, parser]) =>
-      [field as string | symbol, parser] as const
+    parserPairs.map(
+      ([field, parser]) => [field as string | symbol, parser] as const,
     ),
   );
 
@@ -7633,9 +7642,7 @@ export function object<
   );
 
   // Compute combined mode: if any parser is async, the result is async
-  const combinedMode: Mode = parserKeys.some(
-      (k) => parsers[k].mode === "async",
-    )
+  const combinedMode: Mode = parserKeys.some((k) => parsers[k].mode === "async")
     ? "async"
     : "sync";
 
@@ -7644,11 +7651,7 @@ export function object<
   const getInitialError = (
     context: ParserContext<{ readonly [K in keyof T]: unknown }>,
   ): DeferredFailure =>
-    createObjectLikeInitialError(
-      context,
-      noMatchContext,
-      options.errors,
-    );
+    createObjectLikeInitialError(context, noMatchContext, options.errors);
 
   type ObjectState = { readonly [K in keyof T]: unknown };
   const adaptFieldLaneResult = (
@@ -7668,14 +7671,17 @@ export function object<
     }
     adoptOptionScope(context, result.next);
     const mergedExec = mergeChildExec(context.exec, result.next.exec);
-    const nextState = result.next.state === fieldState ? context.state : {
-      ...(context.state as Record<string | symbol, unknown>),
-      [field as string | symbol]: getAnnotatedChildState(
-        context.state,
-        result.next.state,
-        parser,
-      ),
-    } as ObjectState;
+    const nextState =
+      result.next.state === fieldState
+        ? context.state
+        : ({
+            ...(context.state as Record<string | symbol, unknown>),
+            [field as string | symbol]: getAnnotatedChildState(
+              context.state,
+              result.next.state,
+              parser,
+            ),
+          } as ObjectState);
     return {
       success: true,
       next: {
@@ -7686,18 +7692,18 @@ export function object<
         state: nextState,
         ...(mergedExec != null
           ? {
-            trace: mergedExec.trace,
-            exec: mergedExec,
-            dependencyRegistry: mergedExec.dependencyRegistry,
-          }
+              trace: mergedExec.trace,
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
           : {}),
       },
       consumed: result.consumed,
     };
   };
   const objectZeroConsumptionGroup = {};
-  const objectParseLanes: readonly ParseLane<ObjectState>[] = parserPairs
-    .map(([field, parser]) => ({
+  const objectParseLanes: readonly ParseLane<ObjectState>[] = parserPairs.map(
+    ([field, parser]) => ({
       priority: parser.priority,
       zeroConsumptionGroup: objectZeroConsumptionGroup,
       settlesZeroConsumption: false,
@@ -7746,7 +7752,8 @@ export function object<
           },
         );
       },
-    }));
+    }),
+  );
 
   // Sync parse implementation
   const parseSync = (
@@ -7771,15 +7778,13 @@ export function object<
         getObjectParseChildState,
       );
 
-      for (
-        const [field, parser] of orderBeforePassThrough(
-          parserPairs,
-          currentContext,
-          ([, parser]) => parser,
-          ([field, parser]) => getFieldState(field, parser),
-          passThroughParsers,
-        )
-      ) {
+      for (const [field, parser] of orderBeforePassThrough(
+        parserPairs,
+        currentContext,
+        ([, parser]) => parser,
+        ([field, parser]) => getFieldState(field, parser),
+        passThroughParsers,
+      )) {
         const result = (parser as Parser<"sync", unknown, unknown>).parse(
           withPassThroughFailure(
             withChildContext(
@@ -7818,10 +7823,10 @@ export function object<
             } as { readonly [K in keyof T]: unknown },
             ...(mergedExec != null
               ? {
-                trace: mergedExec.trace,
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  trace: mergedExec.trace,
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           };
           allConsumed.push(...result.consumed);
@@ -7880,10 +7885,7 @@ export function object<
       for (const [field, parser] of parserPairs) {
         if (consumedFields.has(field as string | symbol)) continue;
         const typedParser = parser as Parser<"sync", unknown, unknown>;
-        if (
-          parser.leadingNames.size > 0 ||
-          typedParser.acceptingAnyToken
-        ) {
+        if (parser.leadingNames.size > 0 || typedParser.acceptingAnyToken) {
           continue;
         }
         const fieldState = getFieldState(field, parser);
@@ -7904,7 +7906,8 @@ export function object<
           ),
         );
         if (
-          result.success && result.consumed.length === 0 &&
+          result.success &&
+          result.consumed.length === 0 &&
           result.next.state !== fieldState
         ) {
           adoptOptionScope(currentContext, result.next);
@@ -7924,10 +7927,10 @@ export function object<
             } as { readonly [K in keyof T]: unknown },
             ...(mergedExec != null
               ? {
-                trace: mergedExec.trace,
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  trace: mergedExec.trace,
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           };
         }
@@ -7954,16 +7957,17 @@ export function object<
       const probeExec = currentContext.exec
         ? { ...currentContext.exec, phase: "parse" as const }
         : {
-          usage: [] as never[],
-          path: [] as PropertyKey[],
-          trace: undefined,
-          phase: "parse" as const,
-        };
+            usage: [] as never[],
+            path: [] as PropertyKey[],
+            trace: undefined,
+            phase: "parse" as const,
+          };
       let probeError: { consumed: number; error: Message } | undefined;
       for (const [field, parser] of parserPairs) {
         const fieldState = getFieldState(field, parser);
-        const completeResult = (parser as Parser<"sync", unknown, unknown>)
-          .complete(fieldState, withChildExecPath(probeExec, field));
+        const completeResult = (
+          parser as Parser<"sync", unknown, unknown>
+        ).complete(fieldState, withChildExecPath(probeExec, field));
         if (!completeResult.success) {
           allCanComplete = false;
           probeError = { consumed: 0, error: completeResult.error };
@@ -8019,15 +8023,13 @@ export function object<
         getObjectParseChildState,
       );
 
-      for (
-        const [field, parser] of orderBeforePassThrough(
-          parserPairs,
-          currentContext,
-          ([, parser]) => parser,
-          ([field, parser]) => getFieldState(field, parser),
-          passThroughParsers,
-        )
-      ) {
+      for (const [field, parser] of orderBeforePassThrough(
+        parserPairs,
+        currentContext,
+        ([, parser]) => parser,
+        ([field, parser]) => getFieldState(field, parser),
+        passThroughParsers,
+      )) {
         const resultOrPromise = parser.parse(
           withPassThroughFailure(
             withChildContext(
@@ -8067,10 +8069,10 @@ export function object<
             } as { readonly [K in keyof T]: unknown },
             ...(mergedExec != null
               ? {
-                trace: mergedExec.trace,
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  trace: mergedExec.trace,
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           };
           allConsumed.push(...result.consumed);
@@ -8119,10 +8121,7 @@ export function object<
       );
       for (const [field, parser] of parserPairs) {
         if (consumedFields.has(field as string | symbol)) continue;
-        if (
-          parser.leadingNames.size > 0 ||
-          parser.acceptingAnyToken
-        ) {
+        if (parser.leadingNames.size > 0 || parser.acceptingAnyToken) {
           continue;
         }
         const fieldState = getFieldState(field, parser);
@@ -8144,7 +8143,8 @@ export function object<
         );
         const result = await resultOrPromise;
         if (
-          result.success && result.consumed.length === 0 &&
+          result.success &&
+          result.consumed.length === 0 &&
           result.next.state !== fieldState
         ) {
           adoptOptionScope(currentContext, result.next);
@@ -8164,10 +8164,10 @@ export function object<
             } as { readonly [K in keyof T]: unknown },
             ...(mergedExec != null
               ? {
-                trace: mergedExec.trace,
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  trace: mergedExec.trace,
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           };
         }
@@ -8195,11 +8195,11 @@ export function object<
       const probeExec = currentContext.exec
         ? { ...currentContext.exec, phase: "parse" as const }
         : {
-          usage: [] as never[],
-          path: [] as PropertyKey[],
-          trace: undefined,
-          phase: "parse" as const,
-        };
+            usage: [] as never[],
+            path: [] as PropertyKey[],
+            trace: undefined,
+            phase: "parse" as const,
+          };
       let probeError: { consumed: number; error: Message } | undefined;
       for (const [field, parser] of parserPairs) {
         const fieldState = getFieldState(field, parser);
@@ -8246,7 +8246,7 @@ export function object<
     priority: Math.max(...parserKeys.map((k) => parsers[k].priority)),
     usage: applyHiddenToUsage(
       parserPairs.flatMap(([field, p]) =>
-        scopeCommandUsage(p.usage, commandUsageScopes.get(field)!)
+        scopeCommandUsage(p.usage, commandUsageScopes.get(field)!),
       ),
       options.hidden,
     ),
@@ -8259,26 +8259,26 @@ export function object<
       const getFieldState = createFieldStateGetter(state);
       return parserKeys.every((field) => {
         const parser = parsers[field];
-        return parser.canSkip?.(
-          getFieldState(field, parser),
-          withChildExecPath(exec, field as string | symbol),
-        ) === true;
+        return (
+          parser.canSkip?.(
+            getFieldState(field, parser),
+            withChildExecPath(exec, field as string | symbol),
+          ) === true
+        );
       });
     },
     get initialState(): {
-      readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U3)
+      readonly [K in keyof T]: T[K]["$stateType"][number] extends infer U3
         ? U3
         : never;
     } {
       return createInitialState() as {
-        readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U3)
+        readonly [K in keyof T]: T[K]["$stateType"][number] extends infer U3
           ? U3
           : never;
       };
     },
-    parse(
-      context: ParserContext<{ readonly [K in keyof T]: unknown }>,
-    ) {
+    parse(context: ParserContext<{ readonly [K in keyof T]: unknown }>) {
       return dispatchByMode(
         combinedMode,
         () => parseSync(context),
@@ -8289,9 +8289,10 @@ export function object<
       state: { readonly [K in keyof T]: unknown },
       path: readonly PropertyKey[],
     ) {
-      const stateRecord = state != null && typeof state === "object"
-        ? state as Record<PropertyKey, unknown>
-        : objectParser.initialState as Record<PropertyKey, unknown>;
+      const stateRecord =
+        state != null && typeof state === "object"
+          ? (state as Record<PropertyKey, unknown>)
+          : (objectParser.initialState as Record<PropertyKey, unknown>);
       return buildSuggestRuntimeNodesFromPairs(parserPairs, stateRecord, path);
     },
     complete(
@@ -8312,7 +8313,8 @@ export function object<
           // resolveStateWithRuntime (Phase 2) then collects matched
           // DependencySourceState from the raw state tree, which may
           // overwrite defaults with actual CLI values—that is correct.
-          const runtime = exec?.dependencyRuntime ??
+          const runtime =
+            exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec: ExecutionContext = {
             ...exec,
@@ -8389,9 +8391,7 @@ export function object<
               unknown
             >;
 
-            let valueResult: import("./valueparser.ts").ValueParserResult<
-              unknown
-            >;
+            let valueResult: import("./valueparser.ts").ValueParserResult<unknown>;
             const preCompletedResult = preCompleted.get(fieldKey);
             if (preCompletedResult !== undefined) {
               // Reuse the Phase 1b result to preserve consistency with
@@ -8432,18 +8432,19 @@ export function object<
             value: result,
             ...(isDeferred
               ? {
-                deferred: true as const,
-                ...(deferredKeys.size > 0
-                  ? { deferredKeys: deferredKeys as DeferredMap }
-                  : {}),
-              }
+                  deferred: true as const,
+                  ...(deferredKeys.size > 0
+                    ? { deferredKeys: deferredKeys as DeferredMap }
+                    : {}),
+                }
               : {}),
           };
         },
         async () => {
           // Phase 1: Build dependency runtime and pre-complete dependency
           // source parsers (single evaluation point for lazy defaults).
-          const runtime = exec?.dependencyRuntime ??
+          const runtime =
+            exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec: ExecutionContext = {
             ...exec,
@@ -8495,20 +8496,17 @@ export function object<
           // Deferred Phase 1 results stay schedulable so a demand-only
           // prompt can still complete once demand is discovered here.
           const effectfulFailure = await scheduleEffectfulSourceCompletions(
-            filterSchedulableRuntimeNodes(
-              allRuntimeNodes,
-              preCompleted,
-            ),
+            filterSchedulableRuntimeNodes(allRuntimeNodes, preCompleted),
             annotatedState,
             runtime,
             childExec,
             preCompleted,
           );
           if (effectfulFailure != null) return effectfulFailure;
-          const resolvedFieldStates = await resolveStateWithRuntimeAsync(
+          const resolvedFieldStates = (await resolveStateWithRuntimeAsync(
             annotatedState,
             runtime,
-          ) as Record<string | symbol, unknown>;
+          )) as Record<string | symbol, unknown>;
 
           // Phase 3: Complete each field using resolved state.
           // For pre-completed dependency sources, reuse the Phase 1b result.
@@ -8558,9 +8556,9 @@ export function object<
             if (
               typeof fieldParser.shouldDeferCompletion === "function" &&
               fieldParser.shouldDeferCompletion(
-                  resolvedFieldStates[fieldKey],
-                  withChildExecPath(phase3Exec, fieldKey),
-                ) === true
+                resolvedFieldStates[fieldKey],
+                withChildExecPath(phase3Exec, fieldKey),
+              ) === true
             ) {
               deferredFields.push(field);
             } else {
@@ -8603,11 +8601,11 @@ export function object<
             value: result,
             ...(isDeferred
               ? {
-                deferred: true as const,
-                ...(deferredKeys.size > 0
-                  ? { deferredKeys: deferredKeys as DeferredMap }
-                  : {}),
-              }
+                  deferred: true as const,
+                  ...(deferredKeys.size > 0
+                    ? { deferredKeys: deferredKeys as DeferredMap }
+                    : {}),
+                }
               : {}),
           };
         },
@@ -8620,7 +8618,8 @@ export function object<
       return dispatchByMode(
         combinedMode,
         () => {
-          const runtime = exec?.dependencyRuntime ??
+          const runtime =
+            exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec = withDependencyRuntimeExec(
             objectParser.usage,
@@ -8690,28 +8689,26 @@ export function object<
             >;
             const childExec = withChildExecPath(phase3Exec, fieldKey);
             const preCompletedResult = preCompleted.get(fieldKey);
-            const seed = preCompletedResult !== undefined
-              ? reusePreCompletedPhase2Seed(
-                fieldParser,
-                resolvedFieldStates[fieldKey],
-                preCompletedResult,
-                childExec,
-              )
-              : completeOrExtractPhase2Seed(
-                fieldParser,
-                resolvedFieldStates[fieldKey],
-                childExec,
-              );
+            const seed =
+              preCompletedResult !== undefined
+                ? reusePreCompletedPhase2Seed(
+                    fieldParser,
+                    resolvedFieldStates[fieldKey],
+                    preCompletedResult,
+                    childExec,
+                  )
+                : completeOrExtractPhase2Seed(
+                    fieldParser,
+                    resolvedFieldStates[fieldKey],
+                    childExec,
+                  );
             if (seed == null) continue;
             hasAnySeed = true;
             (result as Record<string | symbol, unknown>)[fieldKey] = seed.value;
             if (seed.deferred) {
               if (seed.deferredKeys) {
                 deferredKeys.set(fieldKey, seed.deferredKeys);
-              } else if (
-                seed.value == null ||
-                typeof seed.value !== "object"
-              ) {
+              } else if (seed.value == null || typeof seed.value !== "object") {
                 deferredKeys.set(fieldKey, null);
               } else {
                 hasDeferred = true;
@@ -8724,16 +8721,17 @@ export function object<
             value: result,
             ...(deferredKeys.size > 0 || hasDeferred
               ? {
-                deferred: true as const,
-                ...(deferredKeys.size > 0
-                  ? { deferredKeys: deferredKeys as DeferredMap }
-                  : {}),
-              }
+                  deferred: true as const,
+                  ...(deferredKeys.size > 0
+                    ? { deferredKeys: deferredKeys as DeferredMap }
+                    : {}),
+                }
               : {}),
           };
         },
         async () => {
-          const runtime = exec?.dependencyRuntime ??
+          const runtime =
+            exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec = withDependencyRuntimeExec(
             objectParser.usage,
@@ -8787,20 +8785,17 @@ export function object<
           // demand-only prompt can still complete once demand is
           // discovered here.
           const effectfulFailure = await scheduleEffectfulSourceCompletions(
-            filterSchedulableRuntimeNodes(
-              allRuntimeNodes,
-              preCompleted,
-            ),
+            filterSchedulableRuntimeNodes(allRuntimeNodes, preCompleted),
             annotatedState,
             runtime,
             childExec,
             preCompleted,
           );
           if (effectfulFailure != null) return null;
-          const resolvedFieldStates = await resolveStateWithRuntimeAsync(
+          const resolvedFieldStates = (await resolveStateWithRuntimeAsync(
             annotatedState,
             runtime,
-          ) as Record<string | symbol, unknown>;
+          )) as Record<string | symbol, unknown>;
 
           const result = {} as {
             [K in keyof T]: T[K]["$valueType"][number];
@@ -8813,28 +8808,26 @@ export function object<
             const fieldParser = parsers[field];
             const childExec = withChildExecPath(phase3Exec, fieldKey);
             const preCompletedResult = preCompleted.get(fieldKey);
-            const seed = preCompletedResult !== undefined
-              ? await reusePreCompletedPhase2SeedAsync(
-                fieldParser,
-                resolvedFieldStates[fieldKey],
-                preCompletedResult,
-                childExec,
-              )
-              : await completeOrExtractPhase2Seed(
-                fieldParser,
-                resolvedFieldStates[fieldKey],
-                childExec,
-              );
+            const seed =
+              preCompletedResult !== undefined
+                ? await reusePreCompletedPhase2SeedAsync(
+                    fieldParser,
+                    resolvedFieldStates[fieldKey],
+                    preCompletedResult,
+                    childExec,
+                  )
+                : await completeOrExtractPhase2Seed(
+                    fieldParser,
+                    resolvedFieldStates[fieldKey],
+                    childExec,
+                  );
             if (seed == null) continue;
             hasAnySeed = true;
             (result as Record<string | symbol, unknown>)[fieldKey] = seed.value;
             if (seed.deferred) {
               if (seed.deferredKeys) {
                 deferredKeys.set(fieldKey, seed.deferredKeys);
-              } else if (
-                seed.value == null ||
-                typeof seed.value !== "object"
-              ) {
+              } else if (seed.value == null || typeof seed.value !== "object") {
                 deferredKeys.set(fieldKey, null);
               } else {
                 hasDeferred = true;
@@ -8847,11 +8840,11 @@ export function object<
             value: result,
             ...(deferredKeys.size > 0 || hasDeferred
               ? {
-                deferred: true as const,
-                ...(deferredKeys.size > 0
-                  ? { deferredKeys: deferredKeys as DeferredMap }
-                  : {}),
-              }
+                  deferred: true as const,
+                  ...(deferredKeys.size > 0
+                    ? { deferredKeys: deferredKeys as DeferredMap }
+                    : {}),
+                }
               : {}),
           };
         },
@@ -8896,9 +8889,10 @@ export function object<
       };
       let commandMetadata: CommandDocMetadata | undefined;
       const fragments = parserPairs.flatMap(([field, p]) => {
-        const fieldState: DocState<unknown> = state.kind === "unavailable"
-          ? { kind: "unavailable" }
-          : { kind: "available", state: state.state[field] };
+        const fieldState: DocState<unknown> =
+          state.kind === "unavailable"
+            ? { kind: "unavailable" }
+            : { kind: "available", state: state.state[field] };
         const docs = p.getDocFragments(fieldState, defaultValue?.[field]);
         // Only selected commands supply page metadata.  Primitive descriptions
         // belong to their entries.  First-defined values follow the same
@@ -8915,8 +8909,8 @@ export function object<
         fragments,
         options.hidden,
       );
-      const entries: DocEntry[] = hiddenAwareFragments.filter((d) =>
-        d.type === "entry"
+      const entries: DocEntry[] = hiddenAwareFragments.filter(
+        (d) => d.type === "entry",
       );
       const sections: DocSection[] = [];
       for (const fragment of hiddenAwareFragments) {
@@ -8929,11 +8923,14 @@ export function object<
       }
       const section: DocSection = { title: label, entries };
       sections.push(section);
-      return withCommandDocMetadata({
-        ...sourceDocumentation(children, options.hidden),
-        ...commandMetadata,
-        fragments: sections.map((s) => ({ ...s, type: "section" })),
-      }, commandMetadata);
+      return withCommandDocMetadata(
+        {
+          ...sourceDocumentation(children, options.hidden),
+          ...commandMetadata,
+          fragments: sections.map((s) => ({ ...s, type: "section" })),
+        },
+        commandMetadata,
+      );
     },
     // Type assertion needed because TypeScript cannot verify the combined mode
     // of multiple parsers at compile time. Runtime behavior is correct via mode dispatch.
@@ -9001,26 +8998,28 @@ export function object<
     },
   );
   return captureDocParser(
-    fluent(withEmptyInputFacts(
-      scopeParser(
-        objectParser,
-        combinedOptionScope(
-          parserPairs.map(([, p]) => p),
-          parserPairs.map(([field]) => field),
+    fluent(
+      withEmptyInputFacts(
+        scopeParser(
+          objectParser,
+          combinedOptionScope(
+            parserPairs.map(([, p]) => p),
+            parserPairs.map(([field]) => field),
+          ),
+          undefined,
+          true,
         ),
-        undefined,
-        true,
+        combinedMode === "sync"
+          ? objectFacts(
+              parserPairs.map(([, p]) => ({
+                facts: getEmptyInputFacts(p),
+                matchesTokens: p.leadingNames.size > 0 || p.acceptingAnyToken,
+              })),
+              parserPairs.map(([field]) => field),
+            )
+          : {},
       ),
-      combinedMode === "sync"
-        ? objectFacts(
-          parserPairs.map(([, p]) => ({
-            facts: getEmptyInputFacts(p),
-            matchesTokens: p.leadingNames.size > 0 || p.acceptingAnyToken,
-          })),
-          parserPairs.map(([field]) => field),
-        )
-        : {},
-    )),
+    ),
     {
       kind: "object",
       children: parserPairs.map((pair) => pair[1]),
@@ -9076,11 +9075,13 @@ interface SeqLeadingCandidates {
 }
 
 function isParserLike(value: unknown): value is Parser<Mode, unknown, unknown> {
-  return value != null &&
+  return (
+    value != null &&
     (typeof value === "object" || typeof value === "function") &&
     "parse" in value &&
     "$valueType" in value &&
-    "$stateType" in value;
+    "$stateType" in value
+  );
 }
 
 function tokenMatchesLeadingName(
@@ -9091,18 +9092,21 @@ function tokenMatchesLeadingName(
   for (const name of candidates.optionNames) {
     if (
       token === name ||
-      name.startsWith("-") && !name.startsWith("--") &&
-        name.length > 2 && !/^-[^-]$/u.test(name) &&
-        token.startsWith(`${name}=`)
-    ) return true;
+      (name.startsWith("-") &&
+        !name.startsWith("--") &&
+        name.length > 2 &&
+        !/^-[^-]$/u.test(name) &&
+        token.startsWith(`${name}=`))
+    )
+      return true;
   }
   for (const name of candidates.joinedOptionNames) {
     if (
-      /^-[^-]$/u.test(name) && token.startsWith(name) ||
-      name.startsWith("/") && token.startsWith(`${name}:`) ||
-      (name.startsWith("--") ||
-          name.startsWith("-") && name.length > 2 && !/^-[^-]$/u.test(name)) &&
-        token.startsWith(`${name}=`)
+      (/^-[^-]$/u.test(name) && token.startsWith(name)) ||
+      (name.startsWith("/") && token.startsWith(`${name}:`)) ||
+      ((name.startsWith("--") ||
+        (name.startsWith("-") && name.length > 2 && !/^-[^-]$/u.test(name))) &&
+        token.startsWith(`${name}=`))
     ) {
       return true;
     }
@@ -9119,10 +9123,12 @@ function parserCanSkipAt(
   exec: ExecutionContext | undefined,
   index: number,
 ): boolean {
-  return parser.canSkip?.(
-    getAnnotatedChildState(undefined, state, parser),
-    withChildExecPath(exec, index),
-  ) === true;
+  return (
+    parser.canSkip?.(
+      getAnnotatedChildState(undefined, state, parser),
+      withChildExecPath(exec, index),
+    ) === true
+  );
 }
 
 function collectLeadingJoinedOptionNames(
@@ -9207,9 +9213,8 @@ function sequenceLeadingCandidates(
   }
   return {
     optionNames: optionNames.size === 0 ? EMPTY_LEADING_NAMES : optionNames,
-    joinedOptionNames: joinedOptionNames.size === 0
-      ? EMPTY_LEADING_NAMES
-      : joinedOptionNames,
+    joinedOptionNames:
+      joinedOptionNames.size === 0 ? EMPTY_LEADING_NAMES : joinedOptionNames,
     commandNames: commandNames.size === 0 ? EMPTY_LEADING_NAMES : commandNames,
   };
 }
@@ -9394,7 +9399,8 @@ function collectRetainedLeadingCandidatesAtState(
   state: unknown,
 ): SeqLeadingCandidates {
   if (
-    terms.length === 1 && terms[0].type === "optional" &&
+    terms.length === 1 &&
+    terms[0].type === "optional" &&
     Array.isArray(state)
   ) {
     return collectRetainedLeadingCandidates(terms[0].terms);
@@ -9419,11 +9425,7 @@ function getSeqChildState(
   index: number,
   parser: Parser<Mode, unknown, unknown>,
 ): unknown {
-  return getAnnotatedChildState(
-    seqState,
-    seqState.states[index],
-    parser,
-  );
+  return getAnnotatedChildState(seqState, seqState.states[index], parser);
 }
 
 function updateSeqChildState(
@@ -9437,7 +9439,7 @@ function updateSeqChildState(
     sourceState.states.map((state, stateIndex) =>
       stateIndex === index
         ? getAnnotatedChildState(sourceState.states, childState, parser)
-        : state
+        : state,
     ),
   );
 }
@@ -9514,9 +9516,9 @@ function updateSeqContextFromChildResult(
     state: createSeqState(currentContext.state, nextIndex, states),
     ...(mergedExec != null
       ? {
-        exec: mergedExec,
-        dependencyRegistry: mergedExec.dependencyRegistry,
-      }
+          exec: mergedExec,
+          dependencyRegistry: mergedExec.dependencyRegistry,
+        }
       : {}),
   };
 }
@@ -9643,7 +9645,8 @@ function createSeqComplete(
       combinedMode,
       () => {
         const stateArray = annotateFreshArray(state, state.states) as unknown[];
-        const runtime = exec?.dependencyRuntime ??
+        const runtime =
+          exec?.dependencyRuntime ??
           createDependencyRuntimeContext(exec?.dependencyRegistry);
         const childExec: ExecutionContext = {
           ...exec,
@@ -9681,21 +9684,22 @@ function createSeqComplete(
         for (let i = 0; i < syncParsers.length; i++) {
           const elementParser = syncParsers[i];
           const preCompletedResult = preCompleted.get(String(i));
-          const valueResult = preCompletedResult !== undefined
-            ? unwrapCompleteResult(preCompletedResult)
-            : unwrapCompleteResult(
-              elementParser.complete(
-                prepareStateForCompletion(
-                  getAnnotatedChildState(
-                    stateArray,
-                    resolvedArray[i],
-                    elementParser,
+          const valueResult =
+            preCompletedResult !== undefined
+              ? unwrapCompleteResult(preCompletedResult)
+              : unwrapCompleteResult(
+                  elementParser.complete(
+                    prepareStateForCompletion(
+                      getAnnotatedChildState(
+                        stateArray,
+                        resolvedArray[i],
+                        elementParser,
+                      ),
+                      elementParser,
+                    ),
+                    withChildExecPath(phase3Exec, i),
                   ),
-                  elementParser,
-                ),
-                withChildExecPath(phase3Exec, i),
-              ),
-            );
+                );
           if (!valueResult.success) {
             return { success: false as const, error: valueResult.error };
           }
@@ -9718,17 +9722,18 @@ function createSeqComplete(
           value: result,
           ...(deferredKeys.size > 0 || hasDeferred
             ? {
-              deferred: true as const,
-              ...(deferredKeys.size > 0
-                ? { deferredKeys: deferredKeys as DeferredMap }
-                : {}),
-            }
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
             : {}),
         };
       },
       async () => {
         const stateArray = annotateFreshArray(state, state.states) as unknown[];
-        const runtime = exec?.dependencyRuntime ??
+        const runtime =
+          exec?.dependencyRuntime ??
           createDependencyRuntimeContext(exec?.dependencyRegistry);
         const childExec: ExecutionContext = {
           ...exec,
@@ -9760,10 +9765,7 @@ function createSeqComplete(
         // Deferred Phase 1 results stay schedulable so a demand-only
         // prompt can still complete once demand is discovered here.
         const effectfulFailure = await scheduleEffectfulSourceCompletions(
-          filterSchedulableRuntimeNodes(
-            allRuntimeNodes,
-            preCompleted,
-          ),
+          filterSchedulableRuntimeNodes(allRuntimeNodes, preCompleted),
           stateArray,
           runtime,
           childExec,
@@ -9775,31 +9777,32 @@ function createSeqComplete(
           preCompletedByParser: undefined,
           republishCachedCompletions: undefined,
         } as ExecutionContext;
-        const resolvedArray = await resolveStateWithRuntimeAsync(
+        const resolvedArray = (await resolveStateWithRuntimeAsync(
           stateArray,
           runtime,
-        ) as unknown[];
+        )) as unknown[];
         const result: unknown[] = [];
         const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
         let hasDeferred = false;
         for (let i = 0; i < parsers.length; i++) {
           const elementParser = parsers[i];
           const preCompletedResult = preCompleted.get(String(i));
-          const valueResult = preCompletedResult !== undefined
-            ? unwrapCompleteResult(preCompletedResult)
-            : unwrapCompleteResult(
-              await elementParser.complete(
-                prepareStateForCompletion(
-                  getAnnotatedChildState(
-                    stateArray,
-                    resolvedArray[i],
-                    elementParser,
+          const valueResult =
+            preCompletedResult !== undefined
+              ? unwrapCompleteResult(preCompletedResult)
+              : unwrapCompleteResult(
+                  await elementParser.complete(
+                    prepareStateForCompletion(
+                      getAnnotatedChildState(
+                        stateArray,
+                        resolvedArray[i],
+                        elementParser,
+                      ),
+                      elementParser,
+                    ),
+                    withChildExecPath(phase3Exec, i),
                   ),
-                  elementParser,
-                ),
-                withChildExecPath(phase3Exec, i),
-              ),
-            );
+                );
           if (!valueResult.success) {
             return { success: false as const, error: valueResult.error };
           }
@@ -9822,11 +9825,11 @@ function createSeqComplete(
           value: result,
           ...(deferredKeys.size > 0 || hasDeferred
             ? {
-              deferred: true as const,
-              ...(deferredKeys.size > 0
-                ? { deferredKeys: deferredKeys as DeferredMap }
-                : {}),
-            }
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
             : {}),
         };
       },
@@ -9876,20 +9879,21 @@ function suggestTupleSync(
     dependencyRegistry: runtime.registry,
     ...(advancedContext.exec != null
       ? {
-        exec: {
-          ...advancedContext.exec,
-          dependencyRuntime: runtime,
-          dependencyRegistry: runtime.registry,
-        },
-      }
+          exec: {
+            ...advancedContext.exec,
+            dependencyRuntime: runtime,
+            dependencyRegistry: runtime.registry,
+          },
+        }
       : {}),
   };
 
   for (let i = 0; i < parsers.length; i++) {
     const parser = parsers[i];
-    const parserState = stateArray && Array.isArray(stateArray)
-      ? stateArray[i]
-      : parser.initialState;
+    const parserState =
+      stateArray && Array.isArray(stateArray)
+        ? stateArray[i]
+        : parser.initialState;
 
     const parserSuggestions = parser.suggest(
       withChildContext(contextWithRegistry, i, parserState, parser),
@@ -9908,10 +9912,7 @@ async function* suggestTupleAsync(
   parsers: readonly Parser<Mode, unknown, unknown>[],
 ): AsyncGenerator<Suggestion> {
   const suggestions: Suggestion[] = [];
-  const advanced = await advanceTupleSuggestContextAsync(
-    context,
-    parsers,
-  );
+  const advanced = await advanceTupleSuggestContextAsync(context, parsers);
   const advancedContext = advanced.context;
   const stateArray = advancedContext.state as unknown[] | undefined;
   const runtime = createDependencyRuntimeContext(
@@ -9951,20 +9952,21 @@ async function* suggestTupleAsync(
     dependencyRegistry: runtime.registry,
     ...(advancedContext.exec != null
       ? {
-        exec: {
-          ...advancedContext.exec,
-          dependencyRuntime: runtime,
-          dependencyRegistry: runtime.registry,
-        },
-      }
+          exec: {
+            ...advancedContext.exec,
+            dependencyRuntime: runtime,
+            dependencyRegistry: runtime.registry,
+          },
+        }
       : {}),
   };
 
   for (let i = 0; i < parsers.length; i++) {
     const parser = parsers[i];
-    const parserState = stateArray && Array.isArray(stateArray)
-      ? stateArray[i]
-      : parser.initialState;
+    const parserState =
+      stateArray && Array.isArray(stateArray)
+        ? stateArray[i]
+        : parser.initialState;
 
     const parserSuggestions = parser.suggest(
       withChildContext(contextWithRegistry, i, parserState, parser),
@@ -9996,7 +9998,8 @@ function advanceTupleSuggestContextSync(
   const matchedParsers = new Set<number>();
 
   while (
-    currentContext.buffer.length > 0 && matchedParsers.size < parsers.length
+    currentContext.buffer.length > 0 &&
+    matchedParsers.size < parsers.length
   ) {
     let foundMatch = false;
     let failedParserIndexes: number[] = [];
@@ -10020,11 +10023,11 @@ function advanceTupleSuggestContextSync(
           stateArray.map((state, idx) =>
             idx === index
               ? getAnnotatedChildState(
-                currentContext.state,
-                result.next.state,
-                parser,
-              )
-              : state
+                  currentContext.state,
+                  result.next.state,
+                  parser,
+                )
+              : state,
           ),
         );
         const mergedExec = mergeChildExec(
@@ -10039,9 +10042,9 @@ function advanceTupleSuggestContextSync(
           state: newStateArray as readonly unknown[],
           ...(mergedExec != null
             ? {
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
             : {}),
         };
         matchedParsers.add(index);
@@ -10069,11 +10072,11 @@ function advanceTupleSuggestContextSync(
             stateArray.map((state, idx) =>
               idx === index
                 ? getAnnotatedChildState(
-                  currentContext.state,
-                  result.next.state,
-                  parser,
-                )
-                : state
+                    currentContext.state,
+                    result.next.state,
+                    parser,
+                  )
+                : state,
             ),
           );
           const mergedExec = mergeChildExec(
@@ -10085,9 +10088,9 @@ function advanceTupleSuggestContextSync(
             state: newStateArray as readonly unknown[],
             ...(mergedExec != null
               ? {
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           };
           matchedParsers.add(index);
@@ -10123,7 +10126,8 @@ async function advanceTupleSuggestContextAsync(
   const matchedParsers = new Set<number>();
 
   while (
-    currentContext.buffer.length > 0 && matchedParsers.size < parsers.length
+    currentContext.buffer.length > 0 &&
+    matchedParsers.size < parsers.length
   ) {
     let foundMatch = false;
     let failedParserIndexes: number[] = [];
@@ -10147,11 +10151,11 @@ async function advanceTupleSuggestContextAsync(
           stateArray.map((state, idx) =>
             idx === index
               ? getAnnotatedChildState(
-                currentContext.state,
-                result.next.state,
-                parser,
-              )
-              : state
+                  currentContext.state,
+                  result.next.state,
+                  parser,
+                )
+              : state,
           ),
         );
         const mergedExec = mergeChildExec(
@@ -10166,9 +10170,9 @@ async function advanceTupleSuggestContextAsync(
           state: newStateArray as readonly unknown[],
           ...(mergedExec != null
             ? {
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
             : {}),
         };
         matchedParsers.add(index);
@@ -10196,11 +10200,11 @@ async function advanceTupleSuggestContextAsync(
             stateArray.map((state, idx) =>
               idx === index
                 ? getAnnotatedChildState(
-                  currentContext.state,
-                  result.next.state,
-                  parser,
-                )
-                : state
+                    currentContext.state,
+                    result.next.state,
+                    parser,
+                  )
+                : state,
             ),
           );
           const mergedExec = mergeChildExec(
@@ -10212,9 +10216,9 @@ async function advanceTupleSuggestContextAsync(
             state: newStateArray as readonly unknown[],
             ...(mergedExec != null
               ? {
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           };
           matchedParsers.add(index);
@@ -10256,9 +10260,10 @@ function markFailedTupleSuggestSources(
     const parser = parsers[index];
     if (parser == null) continue;
 
-    const parserState = stateArray && Array.isArray(stateArray)
-      ? stateArray[index]
-      : parser.initialState;
+    const parserState =
+      stateArray && Array.isArray(stateArray)
+        ? stateArray[index]
+        : parser.initialState;
     const nodes = getParserSuggestRuntimeNodes(
       parser,
       getAnnotatedChildState(stateArray, parserState, parser),
@@ -10294,9 +10299,10 @@ async function markFailedTupleSuggestSourcesAsync(
     const parser = parsers[index];
     if (parser == null) continue;
 
-    const parserState = stateArray && Array.isArray(stateArray)
-      ? stateArray[index]
-      : parser.initialState;
+    const parserState =
+      stateArray && Array.isArray(stateArray)
+        ? stateArray[index]
+        : parser.initialState;
     const nodes = getParserSuggestRuntimeNodes(
       parser,
       getAnnotatedChildState(stateArray, parserState, parser),
@@ -10338,11 +10344,13 @@ export function tuple<
 ): FluentParser<
   CombineTupleModes<T>,
   {
-    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends infer U
+      ? U
       : never;
   },
   {
-    readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U2) ? U2
+    readonly [K in keyof T]: T[K]["$stateType"][number] extends infer U2
+      ? U2
       : never;
   }
 >;
@@ -10371,11 +10379,13 @@ export function tuple<
 ): FluentParser<
   CombineTupleModes<T>,
   {
-    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends infer U
+      ? U
       : never;
   },
   {
-    readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U2) ? U2
+    readonly [K in keyof T]: T[K]["$stateType"][number] extends infer U2
+      ? U2
       : never;
   }
 >;
@@ -10391,9 +10401,8 @@ export function tuple<
   { readonly [K in keyof T]: unknown },
   { readonly [K in keyof T]: unknown }
 > {
-  const label: string | undefined = typeof labelOrParsers === "string"
-    ? labelOrParsers
-    : undefined;
+  const label: string | undefined =
+    typeof labelOrParsers === "string" ? labelOrParsers : undefined;
   if (label != null) validateLabel(label);
 
   let parsers: T;
@@ -10432,9 +10441,7 @@ export function tuple<
   type ParseResult = ParserResult<TupleState>;
 
   // Sync parse implementation
-  const parseSync = (
-    context: ParserContext<TupleState>,
-  ): ParseResult => {
+  const parseSync = (context: ParserContext<TupleState>): ParseResult => {
     let currentContext = context;
     const allConsumed: string[] = [];
     const matchedParsers = new Set<number>();
@@ -10457,17 +10464,21 @@ export function tuple<
       const remainingParsers = orderBeforePassThrough(
         syncParsers
           .map((parser, index) => [parser, index] as [typeof parser, number])
-          .filter(([parser, index]) =>
-            !matchedParsers.has(index) ||
-            (getOptionMatch(parser, stateArray[index], currentContext.buffer[0])
-                  ?.continuesCommand === true ||
+          .filter(
+            ([parser, index]) =>
+              !matchedParsers.has(index) ||
+              getOptionMatch(
+                parser,
+                stateArray[index],
+                currentContext.buffer[0],
+              )?.continuesCommand === true ||
               (passThroughParsers.size > 0 &&
                 !currentContext.optionsTerminated &&
                 getOptionMatch(
-                    parser,
-                    stateArray[index],
-                    currentContext.buffer[0],
-                  ) != null))
+                  parser,
+                  stateArray[index],
+                  currentContext.buffer[0],
+                ) != null),
           )
           .sort(([parserA], [parserB]) => parserB.priority - parserA.priority),
         currentContext,
@@ -10496,11 +10507,11 @@ export function tuple<
             stateArray.map((s: unknown, idx: number) =>
               idx === index
                 ? getAnnotatedChildState(
-                  currentContext.state,
-                  result.next.state,
-                  parser,
-                )
-                : s
+                    currentContext.state,
+                    result.next.state,
+                    parser,
+                  )
+                : s,
             ),
           );
           const mergedExec = mergeChildExec(
@@ -10515,9 +10526,9 @@ export function tuple<
             state: newStateArray as TupleState,
             ...(mergedExec != null
               ? {
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           };
 
@@ -10588,11 +10599,11 @@ export function tuple<
               stateArray.map((s: unknown, idx: number) =>
                 idx === index
                   ? getAnnotatedChildState(
-                    currentContext.state,
-                    result.next.state,
-                    parser,
-                  )
-                  : s
+                      currentContext.state,
+                      result.next.state,
+                      parser,
+                    )
+                  : s,
               ),
             );
             const mergedExec = mergeChildExec(
@@ -10604,9 +10615,9 @@ export function tuple<
               state: newStateArray as TupleState,
               ...(mergedExec != null
                 ? {
-                  exec: mergedExec,
-                  dependencyRegistry: mergedExec.dependencyRegistry,
-                }
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
                 : {}),
             };
 
@@ -10663,17 +10674,21 @@ export function tuple<
       const remainingParsers = orderBeforePassThrough(
         parsers
           .map((parser, index) => [parser, index] as [typeof parser, number])
-          .filter(([parser, index]) =>
-            !matchedParsers.has(index) ||
-            (getOptionMatch(parser, stateArray[index], currentContext.buffer[0])
-                  ?.continuesCommand === true ||
+          .filter(
+            ([parser, index]) =>
+              !matchedParsers.has(index) ||
+              getOptionMatch(
+                parser,
+                stateArray[index],
+                currentContext.buffer[0],
+              )?.continuesCommand === true ||
               (passThroughParsers.size > 0 &&
                 !currentContext.optionsTerminated &&
                 getOptionMatch(
-                    parser,
-                    stateArray[index],
-                    currentContext.buffer[0],
-                  ) != null))
+                  parser,
+                  stateArray[index],
+                  currentContext.buffer[0],
+                ) != null),
           )
           .sort(([parserA], [parserB]) => parserB.priority - parserA.priority),
         currentContext,
@@ -10703,11 +10718,11 @@ export function tuple<
             stateArray.map((s: unknown, idx: number) =>
               idx === index
                 ? getAnnotatedChildState(
-                  currentContext.state,
-                  result.next.state,
-                  parser,
-                )
-                : s
+                    currentContext.state,
+                    result.next.state,
+                    parser,
+                  )
+                : s,
             ),
           );
           const mergedExec = mergeChildExec(
@@ -10722,9 +10737,9 @@ export function tuple<
             state: newStateArray as TupleState,
             ...(mergedExec != null
               ? {
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           };
 
@@ -10796,11 +10811,11 @@ export function tuple<
               stateArray.map((s: unknown, idx: number) =>
                 idx === index
                   ? getAnnotatedChildState(
-                    currentContext.state,
-                    result.next.state,
-                    parser,
-                  )
-                  : s
+                      currentContext.state,
+                      result.next.state,
+                      parser,
+                    )
+                  : s,
               ),
             );
             const mergedExec = mergeChildExec(
@@ -10812,9 +10827,9 @@ export function tuple<
               state: newStateArray as TupleState,
               ...(mergedExec != null
                 ? {
-                  exec: mergedExec,
-                  dependencyRegistry: mergedExec.dependencyRegistry,
-                }
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
                 : {}),
             };
 
@@ -10852,10 +10867,7 @@ export function tuple<
     $stateType: [],
     [fieldParsersKey]: parsers.map(
       (parser, index) =>
-        [String(index), parser] as [
-          string,
-          Parser<Mode, unknown, unknown>,
-        ],
+        [String(index), parser] as [string, Parser<Mode, unknown, unknown>],
     ),
     usage: parsers
       .map((p, i) => ({ p, i }))
@@ -10863,21 +10875,21 @@ export function tuple<
       .flatMap(({ p, i }) => scopeCommandUsage(p.usage, commandUsageScopes[i])),
     leadingNames: sharedBufferLeadingNames(parsers),
     acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
-    priority: parsers.length > 0
-      ? Math.max(...parsers.map((p) => p.priority))
-      : 0,
+    priority:
+      parsers.length > 0 ? Math.max(...parsers.map((p) => p.priority)) : 0,
     initialState: parsers.map((parser) => parser.initialState) as {
-      readonly [K in keyof T]: T[K]["$stateType"][number] extends (infer U3)
+      readonly [K in keyof T]: T[K]["$stateType"][number] extends infer U3
         ? U3
         : never;
     },
     canSkip(state: TupleState, exec?: ExecutionContext) {
       const stateArray = state as readonly unknown[];
-      return parsers.every((parser, index) =>
-        parser.canSkip?.(
-          getAnnotatedChildState(stateArray, stateArray[index], parser),
-          withChildExecPath(exec, index),
-        ) === true
+      return parsers.every(
+        (parser, index) =>
+          parser.canSkip?.(
+            getAnnotatedChildState(stateArray, stateArray[index], parser),
+            withChildExecPath(exec, index),
+          ) === true,
       );
     },
     parse(context: ParserContext<TupleState>) {
@@ -10894,7 +10906,8 @@ export function tuple<
           const stateArray = state as unknown[];
 
           // Phase 1: Build dependency runtime and collect/fill source values.
-          const runtime = exec?.dependencyRuntime ??
+          const runtime =
+            exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec: ExecutionContext = {
             ...exec,
@@ -10939,9 +10952,7 @@ export function tuple<
           for (let i = 0; i < syncParsers.length; i++) {
             const elementParser = syncParsers[i];
 
-            let valueResult: import("./valueparser.ts").ValueParserResult<
-              unknown
-            >;
+            let valueResult: import("./valueparser.ts").ValueParserResult<unknown>;
             const preCompletedResult = preCompleted.get(String(i));
             if (preCompletedResult !== undefined) {
               valueResult = unwrapCompleteResult(preCompletedResult);
@@ -10982,11 +10993,11 @@ export function tuple<
             value: result as { [K in keyof T]: T[K]["$valueType"][number] },
             ...(isDeferred
               ? {
-                deferred: true as const,
-                ...(deferredKeys.size > 0
-                  ? { deferredKeys: deferredKeys as DeferredMap }
-                  : {}),
-              }
+                  deferred: true as const,
+                  ...(deferredKeys.size > 0
+                    ? { deferredKeys: deferredKeys as DeferredMap }
+                    : {}),
+                }
               : {}),
           };
         },
@@ -10995,7 +11006,8 @@ export function tuple<
 
           // Phase 1: Build dependency runtime and pre-complete dependency
           // source parsers (single evaluation point for lazy defaults).
-          const runtime = exec?.dependencyRuntime ??
+          const runtime =
+            exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec: ExecutionContext = {
             ...exec,
@@ -11027,10 +11039,7 @@ export function tuple<
           // Deferred Phase 1 results stay schedulable so a demand-only
           // prompt can still complete once demand is discovered here.
           const effectfulFailure = await scheduleEffectfulSourceCompletions(
-            filterSchedulableRuntimeNodes(
-              allRuntimeNodes,
-              preCompleted,
-            ),
+            filterSchedulableRuntimeNodes(allRuntimeNodes, preCompleted),
             stateArray,
             runtime,
             childExec,
@@ -11044,10 +11053,10 @@ export function tuple<
           } as ExecutionContext;
 
           // Phase 2: Resolve all DeferredParseState in the state array.
-          const resolvedArray = await resolveStateWithRuntimeAsync(
+          const resolvedArray = (await resolveStateWithRuntimeAsync(
             stateArray,
             runtime,
-          ) as unknown[];
+          )) as unknown[];
 
           // Phase 3: Complete each element using resolved state.
           // For pre-completed elements, reuse the Phase 1b result.
@@ -11057,9 +11066,7 @@ export function tuple<
           for (let i = 0; i < parsers.length; i++) {
             const elementParser = parsers[i];
 
-            let valueResult: import("./valueparser.ts").ValueParserResult<
-              unknown
-            >;
+            let valueResult: import("./valueparser.ts").ValueParserResult<unknown>;
             const preCompletedResult = preCompleted.get(String(i));
             if (preCompletedResult !== undefined) {
               valueResult = unwrapCompleteResult(preCompletedResult);
@@ -11100,11 +11107,11 @@ export function tuple<
             value: result as { [K in keyof T]: T[K]["$valueType"][number] },
             ...(isDeferred
               ? {
-                deferred: true as const,
-                ...(deferredKeys.size > 0
-                  ? { deferredKeys: deferredKeys as DeferredMap }
-                  : {}),
-              }
+                  deferred: true as const,
+                  ...(deferredKeys.size > 0
+                    ? { deferredKeys: deferredKeys as DeferredMap }
+                    : {}),
+                }
               : {}),
           };
         },
@@ -11115,7 +11122,8 @@ export function tuple<
         combinedMode,
         () => {
           const stateArray = state as unknown[];
-          const runtime = exec?.dependencyRuntime ??
+          const runtime =
+            exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec = withDependencyRuntimeExec(
             tupleParser.usage,
@@ -11157,28 +11165,26 @@ export function tuple<
             const elementParser = syncParsers[i];
             const childExec = withChildExecPath(phase3Exec, i);
             const preCompletedResult = preCompleted.get(String(i));
-            const seed = preCompletedResult !== undefined
-              ? reusePreCompletedPhase2Seed(
-                elementParser,
-                prepareStateForCompletion(resolvedArray[i], elementParser),
-                preCompletedResult,
-                childExec,
-              )
-              : completeOrExtractPhase2Seed(
-                elementParser,
-                prepareStateForCompletion(resolvedArray[i], elementParser),
-                childExec,
-              );
+            const seed =
+              preCompletedResult !== undefined
+                ? reusePreCompletedPhase2Seed(
+                    elementParser,
+                    prepareStateForCompletion(resolvedArray[i], elementParser),
+                    preCompletedResult,
+                    childExec,
+                  )
+                : completeOrExtractPhase2Seed(
+                    elementParser,
+                    prepareStateForCompletion(resolvedArray[i], elementParser),
+                    childExec,
+                  );
             if (seed == null) continue;
             hasAnySeed = true;
             result[i] = seed.value;
             if (seed.deferred) {
               if (seed.deferredKeys) {
                 deferredKeys.set(i, seed.deferredKeys);
-              } else if (
-                seed.value == null ||
-                typeof seed.value !== "object"
-              ) {
+              } else if (seed.value == null || typeof seed.value !== "object") {
                 deferredKeys.set(i, null);
               } else {
                 hasDeferred = true;
@@ -11191,17 +11197,18 @@ export function tuple<
             value: result as { [K in keyof T]: T[K]["$valueType"][number] },
             ...(deferredKeys.size > 0 || hasDeferred
               ? {
-                deferred: true as const,
-                ...(deferredKeys.size > 0
-                  ? { deferredKeys: deferredKeys as DeferredMap }
-                  : {}),
-              }
+                  deferred: true as const,
+                  ...(deferredKeys.size > 0
+                    ? { deferredKeys: deferredKeys as DeferredMap }
+                    : {}),
+                }
               : {}),
           };
         },
         async () => {
           const stateArray = state as unknown[];
-          const runtime = exec?.dependencyRuntime ??
+          const runtime =
+            exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec = withDependencyRuntimeExec(
             tupleParser.usage,
@@ -11237,10 +11244,7 @@ export function tuple<
           // demand-only prompt can still complete once demand is
           // discovered here.
           const effectfulFailure = await scheduleEffectfulSourceCompletions(
-            filterSchedulableRuntimeNodes(
-              allRuntimeNodes,
-              preCompleted,
-            ),
+            filterSchedulableRuntimeNodes(allRuntimeNodes, preCompleted),
             stateArray,
             runtime,
             childExec,
@@ -11252,10 +11256,10 @@ export function tuple<
             preCompletedByParser: undefined,
             republishCachedCompletions: undefined,
           } as ExecutionContext;
-          const resolvedArray = await resolveStateWithRuntimeAsync(
+          const resolvedArray = (await resolveStateWithRuntimeAsync(
             stateArray,
             runtime,
-          ) as unknown[];
+          )) as unknown[];
 
           const result: unknown[] = [];
           const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
@@ -11265,28 +11269,26 @@ export function tuple<
             const elementParser = parsers[i];
             const childExec = withChildExecPath(phase3Exec, i);
             const preCompletedResult = preCompleted.get(String(i));
-            const seed = preCompletedResult !== undefined
-              ? await reusePreCompletedPhase2SeedAsync(
-                elementParser,
-                prepareStateForCompletion(resolvedArray[i], elementParser),
-                preCompletedResult,
-                childExec,
-              )
-              : await completeOrExtractPhase2Seed(
-                elementParser,
-                prepareStateForCompletion(resolvedArray[i], elementParser),
-                childExec,
-              );
+            const seed =
+              preCompletedResult !== undefined
+                ? await reusePreCompletedPhase2SeedAsync(
+                    elementParser,
+                    prepareStateForCompletion(resolvedArray[i], elementParser),
+                    preCompletedResult,
+                    childExec,
+                  )
+                : await completeOrExtractPhase2Seed(
+                    elementParser,
+                    prepareStateForCompletion(resolvedArray[i], elementParser),
+                    childExec,
+                  );
             if (seed == null) continue;
             hasAnySeed = true;
             result[i] = seed.value;
             if (seed.deferred) {
               if (seed.deferredKeys) {
                 deferredKeys.set(i, seed.deferredKeys);
-              } else if (
-                seed.value == null ||
-                typeof seed.value !== "object"
-              ) {
+              } else if (seed.value == null || typeof seed.value !== "object") {
                 deferredKeys.set(i, null);
               } else {
                 hasDeferred = true;
@@ -11299,30 +11301,24 @@ export function tuple<
             value: result as { [K in keyof T]: T[K]["$valueType"][number] },
             ...(deferredKeys.size > 0 || hasDeferred
               ? {
-                deferred: true as const,
-                ...(deferredKeys.size > 0
-                  ? { deferredKeys: deferredKeys as DeferredMap }
-                  : {}),
-              }
+                  deferred: true as const,
+                  ...(deferredKeys.size > 0
+                    ? { deferredKeys: deferredKeys as DeferredMap }
+                    : {}),
+                }
               : {}),
           };
         },
       );
     },
-    suggest(
-      context: ParserContext<TupleState>,
-      prefix: string,
-    ) {
+    suggest(context: ParserContext<TupleState>, prefix: string) {
       return dispatchIterableByMode(
         combinedMode,
         () => suggestTupleSync(context, prefix, syncParsers),
         () => suggestTupleAsync(context, prefix, parsers),
       );
     },
-    getDocFragments(
-      state: DocState<TupleState>,
-      defaultValue?: TupleState,
-    ) {
+    getDocFragments(state: DocState<TupleState>, defaultValue?: TupleState) {
       const children: DocFragments[] = [];
       const collect = (docs: DocFragments): readonly DocFragment[] => {
         children.push(docs);
@@ -11330,12 +11326,13 @@ export function tuple<
       };
       let commandMetadata: CommandDocMetadata | undefined;
       const fragments = syncParsers.flatMap((p, i) => {
-        const indexState: DocState<unknown> = state.kind === "unavailable"
-          ? { kind: "unavailable" }
-          : {
-            kind: "available",
-            state: (state.state as readonly unknown[])[i],
-          };
+        const indexState: DocState<unknown> =
+          state.kind === "unavailable"
+            ? { kind: "unavailable" }
+            : {
+                kind: "available",
+                state: (state.state as readonly unknown[])[i],
+              };
         const docs = p.getDocFragments(indexState, defaultValue?.[i]);
         commandMetadata = collectCommandDocMetadata(
           commandMetadata,
@@ -11357,16 +11354,18 @@ export function tuple<
       }
       const section: DocSection = { title: label, entries };
       sections.push(section);
-      return withCommandDocMetadata({
-        ...sourceDocumentation(children),
-        ...commandMetadata,
-        fragments: sections.map((s) => ({ ...s, type: "section" })),
-      }, commandMetadata);
+      return withCommandDocMetadata(
+        {
+          ...sourceDocumentation(children),
+          ...commandMetadata,
+          fragments: sections.map((s) => ({ ...s, type: "section" })),
+        },
+        commandMetadata,
+      );
     },
     [Symbol.for("Deno.customInspect")]() {
-      const parsersStr = parsers.length === 1
-        ? `[1 parser]`
-        : `[${parsers.length} parsers]`;
+      const parsersStr =
+        parsers.length === 1 ? `[1 parser]` : `[${parsers.length} parsers]`;
       return label
         ? `tuple(${JSON.stringify(label)}, ${parsersStr})`
         : `tuple(${parsersStr})`;
@@ -11417,30 +11416,29 @@ export function tuple<
   }
 
   defineInheritedAnnotationParser(tupleParser);
-  defineReachableChildren(
-    tupleParser,
-    parsers,
-    (state) =>
-      parsers.map((parser, index) => ({
-        parser,
-        state: getParseChildState(state, state[index], parser),
-      })),
+  defineReachableChildren(tupleParser, parsers, (state) =>
+    parsers.map((parser, index) => ({
+      parser,
+      state: getParseChildState(state, state[index], parser),
+    })),
   );
-  return fluent(withEmptyInputFacts(
-    scopeParser(
-      tupleParser,
-      combinedOptionScope(
-        parsers,
-        parsers.map((_, index) => index),
+  return fluent(
+    withEmptyInputFacts(
+      scopeParser(
+        tupleParser,
+        combinedOptionScope(
+          parsers,
+          parsers.map((_, index) => index),
+        ),
+      ),
+      tupleFacts(
+        parsers.map((p) => ({
+          facts: getEmptyInputFacts(p),
+          matchesTokens: p.leadingNames.size > 0 || p.acceptingAnyToken,
+        })),
       ),
     ),
-    tupleFacts(
-      parsers.map((p) => ({
-        facts: getEmptyInputFacts(p),
-        matchesTokens: p.leadingNames.size > 0 || p.acceptingAnyToken,
-      })),
-    ),
-  ));
+  );
 }
 
 /**
@@ -11456,14 +11454,13 @@ export function tuple<
  * @returns A parser that produces a readonly tuple of child values.
  * @since 1.1.0
  */
-export function seq<
-  const T extends readonly Parser<Mode, unknown, unknown>[],
->(
+export function seq<const T extends readonly Parser<Mode, unknown, unknown>[]>(
   ...parsers: T
 ): FluentParser<
   CombineTupleModes<T>,
   {
-    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends infer U
+      ? U
       : never;
   },
   SeqState
@@ -11480,15 +11477,14 @@ export function seq<
  *         control characters.
  * @since 1.1.0
  */
-export function seq<
-  const T extends readonly Parser<Mode, unknown, unknown>[],
->(
+export function seq<const T extends readonly Parser<Mode, unknown, unknown>[]>(
   label: string,
   ...parsers: T
 ): FluentParser<
   CombineTupleModes<T>,
   {
-    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends infer U
+      ? U
       : never;
   },
   SeqState
@@ -11503,14 +11499,13 @@ export function seq<
  * @returns A parser that produces a readonly tuple of child values.
  * @since 1.1.0
  */
-export function seq<
-  const T extends readonly Parser<Mode, unknown, unknown>[],
->(
+export function seq<const T extends readonly Parser<Mode, unknown, unknown>[]>(
   ...args: readonly [...T, SeqTailOptions]
 ): FluentParser<
   CombineTupleModes<T>,
   {
-    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends infer U
+      ? U
       : never;
   },
   SeqState
@@ -11528,23 +11523,20 @@ export function seq<
  *         control characters.
  * @since 1.1.0
  */
-export function seq<
-  const T extends readonly Parser<Mode, unknown, unknown>[],
->(
+export function seq<const T extends readonly Parser<Mode, unknown, unknown>[]>(
   label: string,
   ...args: readonly [...T, SeqTailOptions]
 ): FluentParser<
   CombineTupleModes<T>,
   {
-    readonly [K in keyof T]: T[K]["$valueType"][number] extends (infer U) ? U
+    readonly [K in keyof T]: T[K]["$valueType"][number] extends infer U
+      ? U
       : never;
   },
   SeqState
 >;
 
-export function seq<
-  const T extends readonly Parser<Mode, unknown, unknown>[],
->(
+export function seq<const T extends readonly Parser<Mode, unknown, unknown>[]>(
   ...rawArgs: readonly unknown[]
 ): FluentParser<Mode, readonly unknown[], SeqState> {
   const label = typeof rawArgs[0] === "string" ? rawArgs[0] : undefined;
@@ -11553,7 +11545,7 @@ export function seq<
   const args = label == null ? rawArgs : rawArgs.slice(1);
   const lastArg = args.at(-1);
   const hasOptions = lastArg != null && !isParserLike(lastArg);
-  const options: SeqOptions = hasOptions ? lastArg as SeqOptions : {};
+  const options: SeqOptions = hasOptions ? (lastArg as SeqOptions) : {};
   const parsers = (hasOptions ? args.slice(0, -1) : args) as readonly Parser<
     Mode,
     unknown,
@@ -11581,10 +11573,7 @@ export function seq<
     result: ParseFailure,
     consumed: readonly string[],
   ): ParseFailure =>
-    withConsumedDepth(
-      result,
-      consumed.length + result.consumed,
-    );
+    withConsumedDepth(result, consumed.length + result.consumed);
 
   const reachableSeqScope = (context: ParserContext<SeqState>) => {
     let end = Math.min(context.state.index + 1, parsers.length);
@@ -11597,7 +11586,8 @@ export function seq<
           context.buffer[0],
           leadingCandidatesAfter(parsers, end),
         )
-      ) break;
+      )
+        break;
       if (
         !parserCanSkipAt(
           child,
@@ -11605,7 +11595,8 @@ export function seq<
           context.exec,
           index,
         )
-      ) break;
+      )
+        break;
       end++;
     }
     return combinedOptionScope(
@@ -11617,9 +11608,10 @@ export function seq<
   const seqScope = selectableOptionScope(
     (selections, arities, context, path = []) => {
       const initialContext: ParserContext<SeqState> = {
-        state: context == null
-          ? initialState
-          : inheritAnnotations(context.state, initialState),
+        state:
+          context == null
+            ? initialState
+            : inheritAnnotations(context.state, initialState),
         buffer: context?.buffer ?? [],
         usage: context?.usage ?? [],
         optionsTerminated: context?.optionsTerminated ?? false,
@@ -11641,10 +11633,7 @@ export function seq<
     while (currentContext.state.index < syncParsers.length) {
       const index = currentContext.state.index;
       const parser = syncParsers[index];
-      seqScope.select(
-        currentContext,
-        reachableSeqScope(currentContext),
-      );
+      seqScope.select(currentContext, reachableSeqScope(currentContext));
       const parserState = getSeqChildState(currentContext.state, index, parser);
 
       if (currentContext.buffer.length < 1) break;
@@ -11705,9 +11694,9 @@ export function seq<
         state: createSeqState(currentContext.state, nextIndex, states),
         ...(mergedExec != null
           ? {
-            exec: mergedExec,
-            dependencyRegistry: mergedExec.dependencyRegistry,
-          }
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
           : {}),
       };
       allConsumed.push(...result.consumed);
@@ -11729,10 +11718,7 @@ export function seq<
     while (currentContext.state.index < parsers.length) {
       const index = currentContext.state.index;
       const parser = parsers[index];
-      seqScope.select(
-        currentContext,
-        reachableSeqScope(currentContext),
-      );
+      seqScope.select(currentContext, reachableSeqScope(currentContext));
       const parserState = getSeqChildState(currentContext.state, index, parser);
 
       if (currentContext.buffer.length < 1) break;
@@ -11793,9 +11779,9 @@ export function seq<
         state: createSeqState(currentContext.state, nextIndex, states),
         ...(mergedExec != null
           ? {
-            exec: mergedExec,
-            dependencyRegistry: mergedExec.dependencyRegistry,
-          }
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
           : {}),
       };
       allConsumed.push(...result.consumed);
@@ -11816,17 +11802,16 @@ export function seq<
     $stateType: [],
     [fieldParsersKey]: parsers.map(
       (parser, index) =>
-        [String(index), parser] as [
-          string,
-          Parser<Mode, unknown, unknown>,
-        ],
+        [String(index), parser] as [string, Parser<Mode, unknown, unknown>],
     ),
-    usage: [{
-      type: "sequence" as const,
-      terms: parsers.flatMap((parser, index) =>
-        scopeCommandUsage(parser.usage, commandUsageScopes[index])
-      ),
-    }],
+    usage: [
+      {
+        type: "sequence" as const,
+        terms: parsers.flatMap((parser, index) =>
+          scopeCommandUsage(parser.usage, commandUsageScopes[index]),
+        ),
+      },
+    ],
     leadingNames,
     acceptingAnyToken: sequenceAcceptingAnyToken(parsers),
     priority: sequencePriority(parsers),
@@ -11862,7 +11847,8 @@ export function seq<
         combinedMode,
         () => {
           const stateArray = state.states as unknown[];
-          const runtime = exec?.dependencyRuntime ??
+          const runtime =
+            exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec = withDependencyRuntimeExec(
             seqParser.usage,
@@ -11904,28 +11890,26 @@ export function seq<
             const elementParser = syncParsers[i];
             const childExec = withChildExecPath(phase3Exec, i);
             const preCompletedResult = preCompleted.get(String(i));
-            const seed = preCompletedResult !== undefined
-              ? reusePreCompletedPhase2Seed(
-                elementParser,
-                prepareStateForCompletion(resolvedArray[i], elementParser),
-                preCompletedResult,
-                childExec,
-              )
-              : completeOrExtractPhase2Seed(
-                elementParser,
-                prepareStateForCompletion(resolvedArray[i], elementParser),
-                childExec,
-              );
+            const seed =
+              preCompletedResult !== undefined
+                ? reusePreCompletedPhase2Seed(
+                    elementParser,
+                    prepareStateForCompletion(resolvedArray[i], elementParser),
+                    preCompletedResult,
+                    childExec,
+                  )
+                : completeOrExtractPhase2Seed(
+                    elementParser,
+                    prepareStateForCompletion(resolvedArray[i], elementParser),
+                    childExec,
+                  );
             if (seed == null) continue;
             hasAnySeed = true;
             result[i] = seed.value;
             if (seed.deferred) {
               if (seed.deferredKeys) {
                 deferredKeys.set(i, seed.deferredKeys);
-              } else if (
-                seed.value == null ||
-                typeof seed.value !== "object"
-              ) {
+              } else if (seed.value == null || typeof seed.value !== "object") {
                 deferredKeys.set(i, null);
               } else {
                 hasDeferred = true;
@@ -11938,17 +11922,18 @@ export function seq<
             value: result as { [K in keyof T]: T[K]["$valueType"][number] },
             ...(deferredKeys.size > 0 || hasDeferred
               ? {
-                deferred: true as const,
-                ...(deferredKeys.size > 0
-                  ? { deferredKeys: deferredKeys as DeferredMap }
-                  : {}),
-              }
+                  deferred: true as const,
+                  ...(deferredKeys.size > 0
+                    ? { deferredKeys: deferredKeys as DeferredMap }
+                    : {}),
+                }
               : {}),
           };
         },
         async () => {
           const stateArray = state.states as unknown[];
-          const runtime = exec?.dependencyRuntime ??
+          const runtime =
+            exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec = withDependencyRuntimeExec(
             seqParser.usage,
@@ -11984,10 +11969,7 @@ export function seq<
           // demand-only prompt can still complete once demand is
           // discovered here.
           const effectfulFailure = await scheduleEffectfulSourceCompletions(
-            filterSchedulableRuntimeNodes(
-              allRuntimeNodes,
-              preCompleted,
-            ),
+            filterSchedulableRuntimeNodes(allRuntimeNodes, preCompleted),
             stateArray,
             runtime,
             childExec,
@@ -11999,10 +11981,10 @@ export function seq<
             preCompletedByParser: undefined,
             republishCachedCompletions: undefined,
           } as ExecutionContext;
-          const resolvedArray = await resolveStateWithRuntimeAsync(
+          const resolvedArray = (await resolveStateWithRuntimeAsync(
             stateArray,
             runtime,
-          ) as unknown[];
+          )) as unknown[];
 
           const result: unknown[] = [];
           const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
@@ -12012,28 +11994,26 @@ export function seq<
             const elementParser = parsers[i];
             const childExec = withChildExecPath(phase3Exec, i);
             const preCompletedResult = preCompleted.get(String(i));
-            const seed = preCompletedResult !== undefined
-              ? await reusePreCompletedPhase2SeedAsync(
-                elementParser,
-                prepareStateForCompletion(resolvedArray[i], elementParser),
-                preCompletedResult,
-                childExec,
-              )
-              : await completeOrExtractPhase2Seed(
-                elementParser,
-                prepareStateForCompletion(resolvedArray[i], elementParser),
-                childExec,
-              );
+            const seed =
+              preCompletedResult !== undefined
+                ? await reusePreCompletedPhase2SeedAsync(
+                    elementParser,
+                    prepareStateForCompletion(resolvedArray[i], elementParser),
+                    preCompletedResult,
+                    childExec,
+                  )
+                : await completeOrExtractPhase2Seed(
+                    elementParser,
+                    prepareStateForCompletion(resolvedArray[i], elementParser),
+                    childExec,
+                  );
             if (seed == null) continue;
             hasAnySeed = true;
             result[i] = seed.value;
             if (seed.deferred) {
               if (seed.deferredKeys) {
                 deferredKeys.set(i, seed.deferredKeys);
-              } else if (
-                seed.value == null ||
-                typeof seed.value !== "object"
-              ) {
+              } else if (seed.value == null || typeof seed.value !== "object") {
                 deferredKeys.set(i, null);
               } else {
                 hasDeferred = true;
@@ -12046,11 +12026,11 @@ export function seq<
             value: result as { [K in keyof T]: T[K]["$valueType"][number] },
             ...(deferredKeys.size > 0 || hasDeferred
               ? {
-                deferred: true as const,
-                ...(deferredKeys.size > 0
-                  ? { deferredKeys: deferredKeys as DeferredMap }
-                  : {}),
-              }
+                  deferred: true as const,
+                  ...(deferredKeys.size > 0
+                    ? { deferredKeys: deferredKeys as DeferredMap }
+                    : {}),
+                }
               : {}),
           };
         },
@@ -12096,12 +12076,12 @@ export function seq<
             dependencyRegistry: runtime.registry,
             ...(advancedContext.exec != null
               ? {
-                exec: {
-                  ...advancedContext.exec,
-                  dependencyRuntime: runtime,
-                  dependencyRegistry: runtime.registry,
-                },
-              }
+                  exec: {
+                    ...advancedContext.exec,
+                    dependencyRuntime: runtime,
+                    dependencyRegistry: runtime.registry,
+                  },
+                }
               : {}),
           };
           for (let i = state.index; i < syncParsers.length; i++) {
@@ -12161,12 +12141,12 @@ export function seq<
             dependencyRegistry: runtime.registry,
             ...(advancedContext.exec != null
               ? {
-                exec: {
-                  ...advancedContext.exec,
-                  dependencyRuntime: runtime,
-                  dependencyRegistry: runtime.registry,
-                },
-              }
+                  exec: {
+                    ...advancedContext.exec,
+                    dependencyRuntime: runtime,
+                    dependencyRegistry: runtime.registry,
+                  },
+                }
               : {}),
           };
           for (let i = state.index; i < parsers.length; i++) {
@@ -12177,15 +12157,11 @@ export function seq<
               prefix,
             );
             if (parser.mode === "async") {
-              for await (
-                const suggestion of parserSuggestions as AsyncIterable<
-                  Suggestion
-                >
-              ) {
+              for await (const suggestion of parserSuggestions as AsyncIterable<Suggestion>) {
                 suggestions.push(suggestion);
               }
             } else {
-              suggestions.push(...parserSuggestions as Iterable<Suggestion>);
+              suggestions.push(...(parserSuggestions as Iterable<Suggestion>));
             }
             if (
               parser.canSkip?.(
@@ -12211,12 +12187,13 @@ export function seq<
       };
       let commandMetadata: CommandDocMetadata | undefined;
       const fragments = syncParsers.flatMap((parser, index) => {
-        const indexState: DocState<unknown> = state.kind === "unavailable"
-          ? { kind: "unavailable" }
-          : {
-            kind: "available",
-            state: state.state.states[index],
-          };
+        const indexState: DocState<unknown> =
+          state.kind === "unavailable"
+            ? { kind: "unavailable" }
+            : {
+                kind: "available",
+                state: state.state.states[index],
+              };
         const docs = parser.getDocFragments(indexState, defaultValue?.[index]);
         commandMetadata = collectCommandDocMetadata(
           commandMetadata,
@@ -12237,16 +12214,18 @@ export function seq<
         }
       }
       sections.push({ title: label, entries });
-      return withCommandDocMetadata({
-        ...sourceDocumentation(children),
-        ...commandMetadata,
-        fragments: sections.map((s) => ({ ...s, type: "section" })),
-      }, commandMetadata);
+      return withCommandDocMetadata(
+        {
+          ...sourceDocumentation(children),
+          ...commandMetadata,
+          fragments: sections.map((s) => ({ ...s, type: "section" })),
+        },
+        commandMetadata,
+      );
     },
     [Symbol.for("Deno.customInspect")]() {
-      const parsersStr = parsers.length === 1
-        ? "1 parser"
-        : `${parsers.length} parsers`;
+      const parsersStr =
+        parsers.length === 1 ? "1 parser" : `${parsers.length} parsers`;
       return label == null
         ? `seq(${parsersStr})`
         : `seq(${JSON.stringify(label)}, ${parsersStr})`;
@@ -12296,12 +12275,16 @@ export function seq<
 
   defineInheritedAnnotationParser(seqParser);
   return captureDocParser(
-    fluent(scopeParser(seqParser, seqScope.source, (context) => {
-      seqScope.select(
-        context,
-        reachableSeqScope(context),
-      );
-    }, true)),
+    fluent(
+      scopeParser(
+        seqParser,
+        seqScope.source,
+        (context) => {
+          seqScope.select(context, reachableSeqScope(context));
+        },
+        true,
+      ),
+    ),
     { kind: "seq", children: parsers, label },
   );
 }
@@ -12310,18 +12293,22 @@ export function seq<
  * Helper type to check if all members of a union are object-like.
  * This allows merge() to work with parsers like withDefault() that produce union types.
  */
-type AllObjectLike<T> = T extends readonly unknown[] ? never
-  : T extends Record<string | symbol, unknown> ? T
-  : never;
+type AllObjectLike<T> = T extends readonly unknown[]
+  ? never
+  : T extends Record<string | symbol, unknown>
+    ? T
+    : never;
 
 /**
  * Helper type to extract object-like types from parser value types,
  * including union types where all members are objects.
  */
-type ExtractObjectTypes<P> = P extends Parser<Mode, infer V, unknown>
-  ? [AllObjectLike<V>] extends [never] ? never
-  : V
-  : never;
+type ExtractObjectTypes<P> =
+  P extends Parser<Mode, infer V, unknown>
+    ? [AllObjectLike<V>] extends [never]
+      ? never
+      : V
+    : never;
 
 /**
  * Options for the {@link merge} parser.
@@ -12362,14 +12349,14 @@ type MergeParserArity =
   | 14
   | 15;
 type MergeArityLimitError = {
-  readonly __optiqueMergeArityLimit:
-    "merge() requires between 1 and 15 parser arguments. Nest merge() to combine more.";
+  readonly __optiqueMergeArityLimit: "merge() requires between 1 and 15 parser arguments. Nest merge() to combine more.";
 };
 type MergeTailOptions = MergeOptions & { readonly $valueType?: never };
 type MergeArityGuard<TParsers extends readonly unknown[]> =
   IsTuple<TParsers> extends true
-    ? TParsers["length"] extends MergeParserArity ? unknown
-    : MergeArityLimitError
+    ? TParsers["length"] extends MergeParserArity
+      ? unknown
+      : MergeArityLimitError
     : unknown;
 type MergeParsers = readonly Parser<Mode, unknown, unknown>[];
 type EnsureMergeParsers<TParsers extends MergeParsers> = {
@@ -12377,15 +12364,17 @@ type EnsureMergeParsers<TParsers extends MergeParsers> = {
     ? never
     : TParsers[K];
 };
-type IntersectMergeValues<TParsers extends MergeParsers> = TParsers extends
-  readonly [
+type IntersectMergeValues<TParsers extends MergeParsers> =
+  TParsers extends readonly [
     infer THead extends Parser<Mode, unknown, unknown>,
     ...infer TRest extends MergeParsers,
-  ] ? ExtractObjectTypes<THead> & IntersectMergeValues<TRest>
-  : unknown;
-type MergeValues<TParsers extends MergeParsers> = IsTuple<TParsers> extends true
-  ? IntersectMergeValues<TParsers>
-  : Record<string | symbol, unknown>;
+  ]
+    ? ExtractObjectTypes<THead> & IntersectMergeValues<TRest>
+    : unknown;
+type MergeValues<TParsers extends MergeParsers> =
+  IsTuple<TParsers> extends true
+    ? IntersectMergeValues<TParsers>
+    : Record<string | symbol, unknown>;
 type MergeReturnType<TParsers extends MergeParsers> = FluentParser<
   CombineModes<{ readonly [K in keyof TParsers]: ExtractMode<TParsers[K]> }>,
   MergeValues<TParsers>,
@@ -12405,9 +12394,11 @@ type MergeReturnType<TParsers extends MergeParsers> = FluentParser<
  * @since 0.7.0
  */
 export function merge<const TParsers extends MergeParsers>(
-  ...rest:
-    & [...parsers: EnsureMergeParsers<TParsers>, options: MergeTailOptions]
-    & MergeArityGuard<TParsers>
+  ...rest: [
+    ...parsers: EnsureMergeParsers<TParsers>,
+    options: MergeTailOptions,
+  ] &
+    MergeArityGuard<TParsers>
 ): MergeReturnType<TParsers>;
 
 /**
@@ -12447,9 +12438,11 @@ export function merge<const TParsers extends MergeParsers>(
  */
 export function merge<const TParsers extends MergeParsers>(
   label: string,
-  ...rest:
-    & [...parsers: EnsureMergeParsers<TParsers>, options: MergeTailOptions]
-    & MergeArityGuard<TParsers>
+  ...rest: [
+    ...parsers: EnsureMergeParsers<TParsers>,
+    options: MergeTailOptions,
+  ] &
+    MergeArityGuard<TParsers>
 ): MergeReturnType<TParsers>;
 
 /**
@@ -12481,10 +12474,11 @@ export function merge(
 
   // Check if last argument is options
   const lastArg = args[args.length - 1];
-  const hasOptions = lastArg != null &&
+  const hasOptions =
+    lastArg != null &&
     typeof lastArg === "object" &&
     !("$valueType" in lastArg);
-  const options: MergeOptions = hasOptions ? lastArg as MergeOptions : {};
+  const options: MergeOptions = hasOptions ? (lastArg as MergeOptions) : {};
 
   // Extract parsers (excluding label and options)
   const startIndex = typeof args[0] === "string" ? 1 : 0;
@@ -12522,22 +12516,23 @@ export function merge(
 
   // Sync parsers for sync operations
   const syncWithIndex = syncRawParsers.map((p, i) => [p, i] as const);
-  const syncSorted = syncWithIndex.toSorted(([a], [b]) =>
-    b.priority - a.priority
+  const syncSorted = syncWithIndex.toSorted(
+    ([a], [b]) => b.priority - a.priority,
   );
   const syncParsers = syncSorted.map(([p]) => p);
 
   // Check for duplicate option names at construction time unless explicitly allowed
   if (!options.allowDuplicates) {
     checkDuplicateOptionNames(
-      sorted.map(([parser, originalIndex]) =>
-        [String(originalIndex), parser.usage] as const
+      sorted.map(
+        ([parser, originalIndex]) =>
+          [String(originalIndex), parser.usage] as const,
       ),
     );
   }
   checkDuplicateReachableLeadingCommandNames(
-    sorted.map(([parser, originalIndex]) =>
-      [String(originalIndex), parser] as const
+    sorted.map(
+      ([parser, originalIndex]) => [String(originalIndex), parser] as const,
     ),
   );
 
@@ -12546,9 +12541,8 @@ export function merge(
   // Collect field parser pairs from all children so that nested merge()
   // can pre-complete dependency source fields at the outer level.
   const mergedFieldParsers = collectChildFieldParsers(parsers);
-  const duplicateOutputFieldNames = collectDuplicateFieldNames(
-    mergedFieldParsers,
-  );
+  const duplicateOutputFieldNames =
+    collectDuplicateFieldNames(mergedFieldParsers);
   // Effectful source completions (e.g., prompts) run in declaration
   // order, while parsing and completion iterate the priority-sorted
   // parsers—so scheduling iterates the original declaration order but
@@ -12604,11 +12598,13 @@ export function merge(
         }
         return;
       }
-      const pairs = (parser as {
-        readonly [fieldParsersKey]: ReadonlyArray<
-          readonly [string | symbol, Parser<Mode, unknown, unknown>]
-        >;
-      })[fieldParsersKey];
+      const pairs = (
+        parser as {
+          readonly [fieldParsersKey]: ReadonlyArray<
+            readonly [string | symbol, Parser<Mode, unknown, unknown>]
+          >;
+        }
+      )[fieldParsersKey];
       const unambiguousPairs = pairs.filter(
         ([field]) => !duplicateOutputFieldNames.has(field),
       );
@@ -12640,7 +12636,7 @@ export function merge(
     parser.initialState != null &&
     typeof parser.initialState === "object" &&
     Object.keys(parser.initialState).some((field) =>
-      duplicateOutputFieldNames.has(field)
+      duplicateOutputFieldNames.has(field),
     );
 
   const initialState: Record<string | symbol, unknown> = {};
@@ -12652,9 +12648,7 @@ export function merge(
       // extractParserState will forward these keys when extracting state
       // for this (inner) merge.
       initialState[parserStateKey(i)] = undefined;
-    } else if (
-      parser.initialState && typeof parser.initialState === "object"
-    ) {
+    } else if (parser.initialState && typeof parser.initialState === "object") {
       for (const field in parser.initialState) {
         initialState[field] = parser.initialState[field];
       }
@@ -12673,20 +12667,16 @@ export function merge(
       // For parsers with undefined initialState (like or()),
       // check if they have accumulated state during parsing
       const key = parserStateKey(index);
-      if (
-        state && typeof state === "object" &&
-        key in state
-      ) {
+      if (state && typeof state === "object" && key in state) {
         return state[key];
       }
       return undefined;
-    } else if (
-      parser.initialState && typeof parser.initialState === "object"
-    ) {
+    } else if (parser.initialState && typeof parser.initialState === "object") {
       const localStateKey = localObjectStateKey(index);
       if (
         shouldPreserveLocalChildState(parser) &&
-        state && typeof state === "object" &&
+        state &&
+        typeof state === "object" &&
         localStateKey in state
       ) {
         return state[localStateKey];
@@ -12695,9 +12685,8 @@ export function merge(
       if (state && typeof state === "object") {
         const extractedState: MergeState = {};
         for (const field in parser.initialState) {
-          extractedState[field] = field in state
-            ? state[field]
-            : parser.initialState[field];
+          extractedState[field] =
+            field in state ? state[field] : parser.initialState[field];
         }
         return extractedState;
       }
@@ -12724,9 +12713,7 @@ export function merge(
       // store their state separately to avoid conflicts with object merging.
       const key = parserStateKey(index);
       if (result.success) {
-        if (
-          result.consumed.length > 0 || result.next.state !== undefined
-        ) {
+        if (result.consumed.length > 0 || result.next.state !== undefined) {
           return {
             ...context.state,
             [key]: result.next.state,
@@ -12740,15 +12727,12 @@ export function merge(
 
     const mergedState = {
       ...context.state,
-      ...result.next.state as MergeState,
+      ...(result.next.state as MergeState),
     };
     if (!shouldPreserveLocalChildState(parser)) {
       return mergedState;
     }
-    if (
-      result.consumed.length === 0 &&
-      result.next.state === parserState
-    ) {
+    if (result.consumed.length === 0 && result.next.state === parserState) {
       return mergedState;
     }
     return {
@@ -12767,9 +12751,10 @@ export function merge(
   ): MergeParseResult => {
     if (!result.success) return result;
     const mergedExec = mergeChildExec(context.exec, result.next.exec);
-    const newState = result.next.state === parsedState
-      ? context.state
-      : mergeResultState(parser, context, parserState, result, index);
+    const newState =
+      result.next.state === parsedState
+        ? context.state
+        : mergeResultState(parser, context, parserState, result, index);
     return {
       success: true,
       next: {
@@ -12780,121 +12765,125 @@ export function merge(
         state: newState,
         ...(mergedExec != null
           ? {
-            trace: mergedExec.trace,
-            exec: mergedExec,
-            dependencyRegistry: mergedExec.dependencyRegistry,
-          }
+              trace: mergedExec.trace,
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
           : {}),
       },
       consumed: result.consumed,
     };
   };
 
-  const childrenInDeclarationOrder = sorted.map(
-    ([parser, originalIndex], sortedIndex) => ({
+  const childrenInDeclarationOrder = sorted
+    .map(([parser, originalIndex], sortedIndex) => ({
       parser,
       originalIndex,
       sortedIndex,
-    }),
-  ).toSorted((a, b) => a.originalIndex - b.originalIndex);
+    }))
+    .toSorted((a, b) => a.originalIndex - b.originalIndex);
   const mergeParseLanes: readonly ParseLane<MergeState>[] =
-    childrenInDeclarationOrder.flatMap(({ parser, sortedIndex }) => {
-      const occurrenceConsumptionGroups = new WeakMap<object, object>();
-      const occurrenceZeroConsumptionGroups = new WeakMap<object, object>();
-      const scopeConsumptionGroup = (group: object): object => {
-        const existing = occurrenceConsumptionGroups.get(group);
-        if (existing != null) return existing;
-        const scoped = {};
-        occurrenceConsumptionGroups.set(group, scoped);
-        return scoped;
-      };
-      const childLanes = getOwnParseLanes<unknown>(parser);
-      const lanes = childLanes ?? [
-        {
-          priority: parser.priority,
-          leadingNames: parser.leadingNames,
-          acceptingAnyToken: parser.acceptingAnyToken,
-          parse(context: ParserContext<unknown>) {
-            return parser.parse(context as ParserContext<MergeState>);
-          },
-        } satisfies ParseLane<unknown>,
-      ];
-      return lanes.map((lane): ParseLane<MergeState> => ({
-        priority: lane.priority,
-        zeroConsumptionGroup: (() => {
-          const group = lane.zeroConsumptionGroup ?? lane;
-          const existing = occurrenceZeroConsumptionGroups.get(group);
+    childrenInDeclarationOrder
+      .flatMap(({ parser, sortedIndex }) => {
+        const occurrenceConsumptionGroups = new WeakMap<object, object>();
+        const occurrenceZeroConsumptionGroups = new WeakMap<object, object>();
+        const scopeConsumptionGroup = (group: object): object => {
+          const existing = occurrenceConsumptionGroups.get(group);
           if (existing != null) return existing;
           const scoped = {};
-          occurrenceZeroConsumptionGroups.set(group, scoped);
+          occurrenceConsumptionGroups.set(group, scoped);
           return scoped;
-        })(),
-        settlesZeroConsumption: lane.settlesZeroConsumption,
-        leadingNames: lane.leadingNames,
-        acceptingAnyToken: lane.acceptingAnyToken,
-        requiredConsumptionGroups: lane.requiredConsumptionGroups?.map(
-          (group) => ({
-            id: scopeConsumptionGroup(group.id),
-            ...(group.isActive == null ? {} : {
-              isActive(state: unknown) {
-                if (state == null || typeof state !== "object") return false;
-                const parserState = extractParserStateFromState(
+        };
+        const childLanes = getOwnParseLanes<unknown>(parser);
+        const lanes = childLanes ?? [
+          {
+            priority: parser.priority,
+            leadingNames: parser.leadingNames,
+            acceptingAnyToken: parser.acceptingAnyToken,
+            parse(context: ParserContext<unknown>) {
+              return parser.parse(context as ParserContext<MergeState>);
+            },
+          } satisfies ParseLane<unknown>,
+        ];
+        return lanes.map((lane): ParseLane<MergeState> => ({
+          priority: lane.priority,
+          zeroConsumptionGroup: (() => {
+            const group = lane.zeroConsumptionGroup ?? lane;
+            const existing = occurrenceZeroConsumptionGroups.get(group);
+            if (existing != null) return existing;
+            const scoped = {};
+            occurrenceZeroConsumptionGroups.set(group, scoped);
+            return scoped;
+          })(),
+          settlesZeroConsumption: lane.settlesZeroConsumption,
+          leadingNames: lane.leadingNames,
+          acceptingAnyToken: lane.acceptingAnyToken,
+          requiredConsumptionGroups: lane.requiredConsumptionGroups?.map(
+            (group) => ({
+              id: scopeConsumptionGroup(group.id),
+              ...(group.isActive == null
+                ? {}
+                : {
+                    isActive(state: unknown) {
+                      if (state == null || typeof state !== "object")
+                        return false;
+                      const parserState = extractParserStateFromState(
+                        parser,
+                        state as MergeState,
+                        sortedIndex,
+                      );
+                      return group.isActive?.(parserState) ?? true;
+                    },
+                  }),
+            }),
+          ),
+          parse(context: ParserContext<MergeState>) {
+            const parserState = extractParserState(
+              parser,
+              context,
+              sortedIndex,
+            );
+            const childContext = withChildContext(
+              context,
+              sortedIndex,
+              parserState,
+              parser,
+            );
+            return dispatchByMode(
+              combinedMode,
+              () => {
+                const result = lane.parse(
+                  childContext,
+                ) as ParserResult<unknown>;
+                return adaptMergeLaneResult(
                   parser,
-                  state as MergeState,
+                  context,
+                  parserState,
+                  childContext.state,
+                  result,
                   sortedIndex,
                 );
-                return group.isActive?.(parserState) ?? true;
               },
-            }),
-          }),
-        ),
-        parse(context: ParserContext<MergeState>) {
-          const parserState = extractParserState(
-            parser,
-            context,
-            sortedIndex,
-          );
-          const childContext = withChildContext(
-            context,
-            sortedIndex,
-            parserState,
-            parser,
-          );
-          return dispatchByMode(
-            combinedMode,
-            () => {
-              const result = lane.parse(childContext) as ParserResult<unknown>;
-              return adaptMergeLaneResult(
-                parser,
-                context,
-                parserState,
-                childContext.state,
-                result,
-                sortedIndex,
-              );
-            },
-            async () => {
-              const result = await lane.parse(childContext);
-              return adaptMergeLaneResult(
-                parser,
-                context,
-                parserState,
-                childContext.state,
-                result,
-                sortedIndex,
-              );
-            },
-          );
-        },
-      }));
-    }).toSorted((a, b) => b.priority - a.priority);
+              async () => {
+                const result = await lane.parse(childContext);
+                return adaptMergeLaneResult(
+                  parser,
+                  context,
+                  parserState,
+                  childContext.state,
+                  result,
+                  sortedIndex,
+                );
+              },
+            );
+          },
+        }));
+      })
+      .toSorted((a, b) => b.priority - a.priority);
 
   const settleZeroConsumptionLanes = (
     context: ParserContext<MergeState>,
-    laneResults: ReadonlyMap<
-      ParseLane<MergeState>,
-      MergeParseResult
-    >,
+    laneResults: ReadonlyMap<ParseLane<MergeState>, MergeParseResult>,
   ): MergeParseResult | null => {
     const groups = new Map<object, ParseLane<MergeState>[]>();
     for (const lane of mergeParseLanes) {
@@ -12908,9 +12897,12 @@ export function merge(
     for (const groupedLanes of groups.values()) {
       const groupSucceeded = groupedLanes.every((lane) => {
         const result = laneResults.get(lane);
-        return lane.settlesZeroConsumption !== false &&
-          result?.success === true && result.consumed.length === 0 &&
-          (lane.requiredConsumptionGroups?.length ?? 0) === 0;
+        return (
+          lane.settlesZeroConsumption !== false &&
+          result?.success === true &&
+          result.consumed.length === 0 &&
+          (lane.requiredConsumptionGroups?.length ?? 0) === 0
+        );
       });
       if (!groupSucceeded) return null;
       settledGroups.push(groupedLanes);
@@ -12954,10 +12946,10 @@ export function merge(
           state: nextState,
           ...(mergedExec != null
             ? {
-              trace: mergedExec.trace,
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
+                trace: mergedExec.trace,
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
             : {}),
         };
       }
@@ -12971,9 +12963,11 @@ export function merge(
     context: ParserContext<MergeState>,
   ): boolean => {
     const token = context.buffer[0];
-    return token != null &&
+    return (
+      token != null &&
       (context.optionsTerminated || !token.startsWith("-")) &&
-      (lane.acceptingAnyToken || lane.leadingNames.has(token));
+      (lane.acceptingAnyToken || lane.leadingNames.has(token))
+    );
   };
 
   // Child-level fallback is used only when an empty buffer prevented lane
@@ -13021,9 +13015,9 @@ export function merge(
           state: newState,
           ...(mergedExec != null
             ? {
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
             : {}),
         };
 
@@ -13102,9 +13096,9 @@ export function merge(
           state: newState,
           ...(mergedExec != null
             ? {
-              exec: mergedExec,
-              dependencyRegistry: mergedExec.dependencyRegistry,
-            }
+                exec: mergedExec,
+                dependencyRegistry: mergedExec.dependencyRegistry,
+              }
             : {}),
         };
 
@@ -13140,9 +13134,7 @@ export function merge(
     return createObjectLikeInitialError(context, noMatchContext);
   };
 
-  const parseSync = (
-    context: ParserContext<MergeState>,
-  ): MergeParseResult => {
+  const parseSync = (context: ParserContext<MergeState>): MergeParseResult => {
     let currentContext = context;
     let error: DeferredFailure = createObjectLikeInitialError(
       context,
@@ -13168,10 +13160,7 @@ export function merge(
         };
       } | null = null;
       for (const lane of mergeParseLanes) {
-        if (
-          consumingError != null &&
-          lane.priority < consumingError.priority
-        ) {
+        if (consumingError != null && lane.priority < consumingError.priority) {
           // A selected opaque field can reject a token speculatively before a
           // lower-priority positional sibling gets a chance to consume it.
           // Keep option-like fallbacks blocked so malformed known options
@@ -13218,10 +13207,14 @@ export function merge(
         }
         if (!result.success) {
           if (
-            result.consumed > 0 && matchesOptionToken({
-              leadingNames: lane.leadingNames,
-              usage: parsers.flatMap((parser) => parser.usage),
-            }, currentContext.buffer[0])
+            result.consumed > 0 &&
+            matchesOptionToken(
+              {
+                leadingNames: lane.leadingNames,
+                usage: parsers.flatMap((parser) => parser.usage),
+              },
+              currentContext.buffer[0],
+            )
           ) {
             consumingFailure = retainConsumingFailure(
               consumingFailure,
@@ -13235,9 +13228,7 @@ export function merge(
           if (error.consumed < result.consumed) error = result;
         }
       }
-      if (
-        !madeProgress && consumingError != null && allConsumed.length === 0
-      ) {
+      if (!madeProgress && consumingError != null && allConsumed.length === 0) {
         return consumingError.result;
       }
     }
@@ -13256,17 +13247,19 @@ export function merge(
 
     for (const lane of mergeParseLanes) {
       if (
-        consumedLanes.has(lane) || lane.leadingNames.size > 0 ||
+        consumedLanes.has(lane) ||
+        lane.leadingNames.size > 0 ||
         lane.acceptingAnyToken ||
-        lane.requiredConsumptionGroups?.some((group) =>
-            !consumedGroups.has(group.id)
-          ) === true
+        lane.requiredConsumptionGroups?.some(
+          (group) => !consumedGroups.has(group.id),
+        ) === true
       ) {
         continue;
       }
       const result = lane.parse(currentContext) as MergeParseResult;
       if (
-        result.success && result.consumed.length === 0 &&
+        result.success &&
+        result.consumed.length === 0 &&
         result.next.state !== currentContext.state
       ) {
         currentContext = result.next;
@@ -13308,10 +13301,7 @@ export function merge(
         };
       } | null = null;
       for (const lane of mergeParseLanes) {
-        if (
-          consumingError != null &&
-          lane.priority < consumingError.priority
-        ) {
+        if (consumingError != null && lane.priority < consumingError.priority) {
           // See the synchronous loop above.
           if (!canTryPositionalLaneAfterFailure(lane, currentContext)) {
             continue;
@@ -13355,10 +13345,14 @@ export function merge(
         }
         if (!result.success) {
           if (
-            result.consumed > 0 && matchesOptionToken({
-              leadingNames: lane.leadingNames,
-              usage: parsers.flatMap((parser) => parser.usage),
-            }, currentContext.buffer[0])
+            result.consumed > 0 &&
+            matchesOptionToken(
+              {
+                leadingNames: lane.leadingNames,
+                usage: parsers.flatMap((parser) => parser.usage),
+              },
+              currentContext.buffer[0],
+            )
           ) {
             consumingFailure = retainConsumingFailure(
               consumingFailure,
@@ -13372,9 +13366,7 @@ export function merge(
           if (error.consumed < result.consumed) error = result;
         }
       }
-      if (
-        !madeProgress && consumingError != null && allConsumed.length === 0
-      ) {
+      if (!madeProgress && consumingError != null && allConsumed.length === 0) {
         return consumingError.result;
       }
     }
@@ -13393,17 +13385,19 @@ export function merge(
 
     for (const lane of mergeParseLanes) {
       if (
-        consumedLanes.has(lane) || lane.leadingNames.size > 0 ||
+        consumedLanes.has(lane) ||
+        lane.leadingNames.size > 0 ||
         lane.acceptingAnyToken ||
-        lane.requiredConsumptionGroups?.some((group) =>
-            !consumedGroups.has(group.id)
-          ) === true
+        lane.requiredConsumptionGroups?.some(
+          (group) => !consumedGroups.has(group.id),
+        ) === true
       ) {
         continue;
       }
       const result = await lane.parse(currentContext);
       if (
-        result.success && result.consumed.length === 0 &&
+        result.success &&
+        result.consumed.length === 0 &&
         result.next.state !== currentContext.state
       ) {
         currentContext = result.next;
@@ -13423,18 +13417,17 @@ export function merge(
     $valueType: [],
     $stateType: [],
     [fieldParsersKey]: mergedFieldParsers,
-    [effectfulSchedulingNodesKey]:
-      ((state, parentPath) =>
-        state != null && typeof state === "object"
-          ? buildMergeSchedulingNodes(
+    [effectfulSchedulingNodesKey]: ((state, parentPath) =>
+      state != null && typeof state === "object"
+        ? buildMergeSchedulingNodes(
             state as Record<PropertyKey, unknown>,
             parentPath,
           )
-          : []) satisfies EffectfulSchedulingNodesFn,
+        : []) satisfies EffectfulSchedulingNodesFn,
     priority: Math.max(...mergeParseLanes.map((lane) => lane.priority)),
     usage: applyHiddenToUsage(
       parsers.flatMap((p, i) =>
-        scopeCommandUsage(p.usage, commandUsageScopes[i])
+        scopeCommandUsage(p.usage, commandUsageScopes[i]),
       ),
       options.hidden,
     ),
@@ -13444,10 +13437,12 @@ export function merge(
     canSkip(state: MergeState, exec?: ExecutionContext) {
       return parsers.every((parser, index) => {
         const parserState = extractParserStateFromState(parser, state, index);
-        return parser.canSkip?.(
-          getAnnotatedChildState(state, parserState as MergeState, parser),
-          withChildExecPath(exec, index),
-        ) === true;
+        return (
+          parser.canSkip?.(
+            getAnnotatedChildState(state, parserState as MergeState, parser),
+            withChildExecPath(exec, index),
+          ) === true
+        );
       });
     },
     parse(context: ParserContext<MergeState>) {
@@ -13466,19 +13461,22 @@ export function merge(
         if (parser.initialState === undefined) {
           const key = parserStateKey(index);
           if (
-            resolvedState && typeof resolvedState === "object" &&
+            resolvedState &&
+            typeof resolvedState === "object" &&
             key in resolvedState
           ) {
             return resolvedState[key];
           }
           return undefined;
         } else if (
-          parser.initialState && typeof parser.initialState === "object"
+          parser.initialState &&
+          typeof parser.initialState === "object"
         ) {
           const key = localObjectStateKey(index);
           if (
             shouldPreserveLocalChildState(parser) &&
-            resolvedState && typeof resolvedState === "object" &&
+            resolvedState &&
+            typeof resolvedState === "object" &&
             key in resolvedState
           ) {
             return resolvedState[key];
@@ -13486,9 +13484,10 @@ export function merge(
           if (resolvedState && typeof resolvedState === "object") {
             const extractedState: MergeState = {};
             for (const field in parser.initialState) {
-              extractedState[field] = field in resolvedState
-                ? resolvedState[field]
-                : parser.initialState[field];
+              extractedState[field] =
+                field in resolvedState
+                  ? resolvedState[field]
+                  : parser.initialState[field];
             }
             // Preserve annotations from the merged state so that child
             // parsers (e.g., bindConfig) can access them during completion.
@@ -13509,18 +13508,17 @@ export function merge(
         // env/config-backed dependency values are visible across merged
         // Phase 1: Build dependency runtime and pre-complete ALL dependency
         // source parsers (all 4 cases) via old-protocol bridge.
-        const runtime = exec?.dependencyRuntime ??
+        const runtime =
+          exec?.dependencyRuntime ??
           createDependencyRuntimeContext(exec?.dependencyRegistry);
         const childExec: ExecutionContext = {
           ...exec,
           dependencyRuntime: runtime,
         } as ExecutionContext;
-        const duplicateFieldNames = collectDuplicateFieldNames(
-          mergedFieldParsers,
-        );
-        const unambiguousFieldParsers = filterDuplicateFieldParsers(
-          mergedFieldParsers,
-        );
+        const duplicateFieldNames =
+          collectDuplicateFieldNames(mergedFieldParsers);
+        const unambiguousFieldParsers =
+          filterDuplicateFieldParsers(mergedFieldParsers);
         // Pre-complete each child's dependency sources independently so
         // that branches with overlapping output keys do not collide in
         // the preCompleted map.  Only pass the cache to children whose
@@ -13556,9 +13554,10 @@ export function merge(
             // results in the flat map.
             return {
               cache: filterDuplicateKeys(preCompleted, phase1Pairs),
-              excludedSourceFields: excludedSourceFields.size > 0
-                ? excludedSourceFields
-                : undefined,
+              excludedSourceFields:
+                excludedSourceFields.size > 0
+                  ? excludedSourceFields
+                  : undefined,
             };
           }
           return { cache: undefined, excludedSourceFields: undefined };
@@ -13596,22 +13595,23 @@ export function merge(
           // owns duplicate output keys still needs to seed its own local
           // dependency sources during completion, but those sources must not
           // leak into sibling completions through the shared merge runtime.
-          const completeExec = excludedSourceFields == null
-            ? {
-              ...childCompleteExec,
-              preCompletedByParser: cache,
-            }
-            : (() => {
-              const childRuntime = createDependencyRuntimeContext(
-                runtime.registry.clone(),
-              );
-              return {
-                ...childCompleteExec,
-                dependencyRuntime: childRuntime,
-                dependencyRegistry: childRuntime.registry,
-                preCompletedByParser: cache,
-              };
-            })();
+          const completeExec =
+            excludedSourceFields == null
+              ? {
+                  ...childCompleteExec,
+                  preCompletedByParser: cache,
+                }
+              : (() => {
+                  const childRuntime = createDependencyRuntimeContext(
+                    runtime.registry.clone(),
+                  );
+                  return {
+                    ...childCompleteExec,
+                    dependencyRuntime: childRuntime,
+                    dependencyRegistry: childRuntime.registry,
+                    preCompletedByParser: cache,
+                  };
+                })();
           const result = unwrapCompleteResult(
             parser.complete(
               parserState as Parameters<typeof parser.complete>[0],
@@ -13649,11 +13649,11 @@ export function merge(
           value: object,
           ...(isDeferred
             ? {
-              deferred: true as const,
-              ...(deferredKeys.size > 0
-                ? { deferredKeys: deferredKeys as DeferredMap }
-                : {}),
-            }
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
             : {}),
         };
       }
@@ -13662,15 +13662,15 @@ export function merge(
       return (async () => {
         // Phase 1: Build dependency runtime and pre-complete ALL dependency
         // source parsers (all 4 cases) via old-protocol bridge.
-        const runtime = exec?.dependencyRuntime ??
+        const runtime =
+          exec?.dependencyRuntime ??
           createDependencyRuntimeContext(exec?.dependencyRegistry);
         const childExec: ExecutionContext = {
           ...exec,
           dependencyRuntime: runtime,
         } as ExecutionContext;
-        const duplicateFieldNames = collectDuplicateFieldNames(
-          mergedFieldParsers,
-        );
+        const duplicateFieldNames =
+          collectDuplicateFieldNames(mergedFieldParsers);
         type AsyncFieldPairs = ReadonlyArray<
           readonly [string | symbol, Parser<Mode, unknown, unknown>]
         >;
@@ -13717,9 +13717,10 @@ export function merge(
             }
             perChildPhase1[sortedIndex] = {
               cache: filterDuplicateKeys(preCompleted, phase1Pairs),
-              excludedSourceFields: excludedSourceFields.size > 0
-                ? excludedSourceFields
-                : undefined,
+              excludedSourceFields:
+                excludedSourceFields.size > 0
+                  ? excludedSourceFields
+                  : undefined,
             };
           } else {
             perChildPhase1[sortedIndex] = {
@@ -13778,10 +13779,10 @@ export function merge(
 
         // Phase 2: Resolve deferred parse states across the entire merged
         // state using the dependency runtime.
-        const resolvedState = await resolveStateWithRuntimeAsync(
+        const resolvedState = (await resolveStateWithRuntimeAsync(
           state,
           runtime,
-        ) as MergeState;
+        )) as MergeState;
 
         const object: MergeState = {};
         const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
@@ -13794,22 +13795,23 @@ export function merge(
             withoutRepublishInstruction(childExec),
             i,
           );
-          const completeExec = excludedSourceFields == null
-            ? {
-              ...childCompleteExec,
-              preCompletedByParser: asyncCache,
-            }
-            : (() => {
-              const childRuntime = createDependencyRuntimeContext(
-                runtime.registry.clone(),
-              );
-              return {
-                ...childCompleteExec,
-                dependencyRuntime: childRuntime,
-                dependencyRegistry: childRuntime.registry,
-                preCompletedByParser: asyncCache,
-              };
-            })();
+          const completeExec =
+            excludedSourceFields == null
+              ? {
+                  ...childCompleteExec,
+                  preCompletedByParser: asyncCache,
+                }
+              : (() => {
+                  const childRuntime = createDependencyRuntimeContext(
+                    runtime.registry.clone(),
+                  );
+                  return {
+                    ...childCompleteExec,
+                    dependencyRuntime: childRuntime,
+                    dependencyRegistry: childRuntime.registry,
+                    preCompletedByParser: asyncCache,
+                  };
+                })();
           const result = unwrapCompleteResult(
             await parser.complete(
               parserState as Parameters<typeof parser.complete>[0],
@@ -13847,11 +13849,11 @@ export function merge(
           value: object,
           ...(isDeferred
             ? {
-              deferred: true as const,
-              ...(deferredKeys.size > 0
-                ? { deferredKeys: deferredKeys as DeferredMap }
-                : {}),
-            }
+                deferred: true as const,
+                ...(deferredKeys.size > 0
+                  ? { deferredKeys: deferredKeys as DeferredMap }
+                  : {}),
+              }
             : {}),
         };
       })();
@@ -13865,19 +13867,22 @@ export function merge(
         if (parser.initialState === undefined) {
           const key = parserStateKey(index);
           if (
-            resolvedState && typeof resolvedState === "object" &&
+            resolvedState &&
+            typeof resolvedState === "object" &&
             key in resolvedState
           ) {
             return resolvedState[key];
           }
           return undefined;
         } else if (
-          parser.initialState && typeof parser.initialState === "object"
+          parser.initialState &&
+          typeof parser.initialState === "object"
         ) {
           const key = localObjectStateKey(index);
           if (
             shouldPreserveLocalChildState(parser) &&
-            resolvedState && typeof resolvedState === "object" &&
+            resolvedState &&
+            typeof resolvedState === "object" &&
             key in resolvedState
           ) {
             return resolvedState[key];
@@ -13885,9 +13890,10 @@ export function merge(
           if (resolvedState && typeof resolvedState === "object") {
             const extractedState: MergeState = {};
             for (const field in parser.initialState) {
-              extractedState[field] = field in resolvedState
-                ? resolvedState[field]
-                : parser.initialState[field];
+              extractedState[field] =
+                field in resolvedState
+                  ? resolvedState[field]
+                  : parser.initialState[field];
             }
             return inheritAnnotations(resolvedState, extractedState);
           }
@@ -13898,19 +13904,18 @@ export function merge(
       return dispatchByMode(
         combinedMode,
         () => {
-          const runtime = exec?.dependencyRuntime ??
+          const runtime =
+            exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec = withDependencyRuntimeExec(
             mergeParser.usage,
             exec,
             runtime,
           );
-          const duplicateFieldNames = collectDuplicateFieldNames(
-            mergedFieldParsers,
-          );
-          const unambiguousFieldParsers = filterDuplicateFieldParsers(
-            mergedFieldParsers,
-          );
+          const duplicateFieldNames =
+            collectDuplicateFieldNames(mergedFieldParsers);
+          const unambiguousFieldParsers =
+            filterDuplicateFieldParsers(mergedFieldParsers);
           type FieldPairs = ReadonlyArray<
             readonly [string | symbol, Parser<Mode, unknown, unknown>]
           >;
@@ -13936,9 +13941,10 @@ export function merge(
               );
               return {
                 cache: filterDuplicateKeys(preCompleted, phase1Pairs),
-                excludedSourceFields: excludedSourceFields.size > 0
-                  ? excludedSourceFields
-                  : undefined,
+                excludedSourceFields:
+                  excludedSourceFields.size > 0
+                    ? excludedSourceFields
+                    : undefined,
               };
             }
             return { cache: undefined, excludedSourceFields: undefined };
@@ -13974,22 +13980,23 @@ export function merge(
               withoutRepublishInstruction(childExec),
               i,
             );
-            const completeExec = excludedSourceFields == null
-              ? {
-                ...childCompleteExec,
-                preCompletedByParser: cache,
-              }
-              : (() => {
-                const childRuntime = createDependencyRuntimeContext(
-                  runtime.registry.clone(),
-                );
-                return {
-                  ...childCompleteExec,
-                  dependencyRuntime: childRuntime,
-                  dependencyRegistry: childRuntime.registry,
-                  preCompletedByParser: cache,
-                };
-              })();
+            const completeExec =
+              excludedSourceFields == null
+                ? {
+                    ...childCompleteExec,
+                    preCompletedByParser: cache,
+                  }
+                : (() => {
+                    const childRuntime = createDependencyRuntimeContext(
+                      runtime.registry.clone(),
+                    );
+                    return {
+                      ...childCompleteExec,
+                      dependencyRuntime: childRuntime,
+                      dependencyRegistry: childRuntime.registry,
+                      preCompletedByParser: cache,
+                    };
+                  })();
             const seed = completeOrExtractPhase2Seed(
               parser,
               parserState as Parameters<typeof parser.complete>[0],
@@ -14021,25 +14028,25 @@ export function merge(
             value: object,
             ...(deferredKeys.size > 0 || hasDeferred
               ? {
-                deferred: true as const,
-                ...(deferredKeys.size > 0
-                  ? { deferredKeys: deferredKeys as DeferredMap }
-                  : {}),
-              }
+                  deferred: true as const,
+                  ...(deferredKeys.size > 0
+                    ? { deferredKeys: deferredKeys as DeferredMap }
+                    : {}),
+                }
               : {}),
           };
         },
         async () => {
-          const runtime = exec?.dependencyRuntime ??
+          const runtime =
+            exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec = withDependencyRuntimeExec(
             mergeParser.usage,
             exec,
             runtime,
           );
-          const duplicateFieldNames = collectDuplicateFieldNames(
-            mergedFieldParsers,
-          );
+          const duplicateFieldNames =
+            collectDuplicateFieldNames(mergedFieldParsers);
           type AsyncFieldPairs = ReadonlyArray<
             readonly [string | symbol, Parser<Mode, unknown, unknown>]
           >;
@@ -14082,9 +14089,10 @@ export function merge(
               if (firstPreCompletedFailure(preCompleted) != null) return null;
               perChildPhase1[sortedIndex] = {
                 cache: filterDuplicateKeys(preCompleted, phase1Pairs),
-                excludedSourceFields: excludedSourceFields.size > 0
-                  ? excludedSourceFields
-                  : undefined,
+                excludedSourceFields:
+                  excludedSourceFields.size > 0
+                    ? excludedSourceFields
+                    : undefined,
               };
             } else {
               perChildPhase1[sortedIndex] = {
@@ -14137,10 +14145,10 @@ export function merge(
               }
             }
           }
-          const resolvedState = await resolveStateWithRuntimeAsync(
+          const resolvedState = (await resolveStateWithRuntimeAsync(
             state,
             runtime,
-          ) as MergeState;
+          )) as MergeState;
 
           const object: MergeState = {};
           const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
@@ -14153,29 +14161,29 @@ export function merge(
               resolvedState,
               i,
             );
-            const { cache: asyncCache, excludedSourceFields } = perChildPhase1[
-              i
-            ];
+            const { cache: asyncCache, excludedSourceFields } =
+              perChildPhase1[i];
             const childCompleteExec = withChildExecPath(
               withoutRepublishInstruction(childExec),
               i,
             );
-            const completeExec = excludedSourceFields == null
-              ? {
-                ...childCompleteExec,
-                preCompletedByParser: asyncCache,
-              }
-              : (() => {
-                const childRuntime = createDependencyRuntimeContext(
-                  runtime.registry.clone(),
-                );
-                return {
-                  ...childCompleteExec,
-                  dependencyRuntime: childRuntime,
-                  dependencyRegistry: childRuntime.registry,
-                  preCompletedByParser: asyncCache,
-                };
-              })();
+            const completeExec =
+              excludedSourceFields == null
+                ? {
+                    ...childCompleteExec,
+                    preCompletedByParser: asyncCache,
+                  }
+                : (() => {
+                    const childRuntime = createDependencyRuntimeContext(
+                      runtime.registry.clone(),
+                    );
+                    return {
+                      ...childCompleteExec,
+                      dependencyRuntime: childRuntime,
+                      dependencyRegistry: childRuntime.registry,
+                      preCompletedByParser: asyncCache,
+                    };
+                  })();
             const seed = await completeOrExtractPhase2Seed(
               parser,
               parserState as Parameters<typeof parser.complete>[0],
@@ -14207,20 +14215,17 @@ export function merge(
             value: object,
             ...(deferredKeys.size > 0 || hasDeferred
               ? {
-                deferred: true as const,
-                ...(deferredKeys.size > 0
-                  ? { deferredKeys: deferredKeys as DeferredMap }
-                  : {}),
-              }
+                  deferred: true as const,
+                  ...(deferredKeys.size > 0
+                    ? { deferredKeys: deferredKeys as DeferredMap }
+                    : {}),
+                }
               : {}),
           };
         },
       );
     },
-    suggest(
-      context: ParserContext<MergeState>,
-      prefix: string,
-    ) {
+    suggest(context: ParserContext<MergeState>, prefix: string) {
       if (options.hidden === true) {
         return dispatchIterableByMode(
           combinedMode,
@@ -14236,19 +14241,19 @@ export function merge(
         if (p.initialState === undefined) {
           const key = parserStateKey(i);
           if (
-            context.state && typeof context.state === "object" &&
+            context.state &&
+            typeof context.state === "object" &&
             key in context.state
           ) {
             return context.state[key];
           }
           return undefined;
-        } else if (
-          p.initialState && typeof p.initialState === "object"
-        ) {
+        } else if (p.initialState && typeof p.initialState === "object") {
           const key = localObjectStateKey(i);
           if (
             shouldPreserveLocalChildState(p) &&
-            context.state && typeof context.state === "object" &&
+            context.state &&
+            typeof context.state === "object" &&
             key in context.state
           ) {
             return context.state[key];
@@ -14256,9 +14261,10 @@ export function merge(
           if (context.state && typeof context.state === "object") {
             const extractedState: MergeState = {};
             for (const field in p.initialState) {
-              extractedState[field] = field in context.state
-                ? context.state[field]
-                : (p.initialState as Record<string, unknown>)[field];
+              extractedState[field] =
+                field in context.state
+                  ? context.state[field]
+                  : (p.initialState as Record<string, unknown>)[field];
             }
             return extractedState;
           }
@@ -14275,16 +14281,16 @@ export function merge(
           );
           const mergedPairs = collectChildFieldParsers(parsers);
           const duplicateFieldNames = collectDuplicateFieldNames(mergedPairs);
-          const childFieldPairs = filterDuplicateFieldParsers(
-            mergedPairs,
-          );
+          const childFieldPairs = filterDuplicateFieldParsers(mergedPairs);
           const perChildExcludedSourceFields = parsers.map((parser) => {
             if (!(fieldParsersKey in parser)) return undefined;
-            const pairs = (parser as {
-              [fieldParsersKey]: ReadonlyArray<
-                readonly [string | symbol, Parser<Mode, unknown, unknown>]
-              >;
-            })[fieldParsersKey];
+            const pairs = (
+              parser as {
+                [fieldParsersKey]: ReadonlyArray<
+                  readonly [string | symbol, Parser<Mode, unknown, unknown>]
+                >;
+              }
+            )[fieldParsersKey];
             const excludedSourceFields = new Set(
               pairs
                 .map(([field]) => field)
@@ -14337,31 +14343,30 @@ export function merge(
               parser,
             );
             const excludedSourceFields = perChildExcludedSourceFields[i];
-            const contextForChild = excludedSourceFields == null
-              ? childContext
-              : (() => {
-                const childRuntime = createDependencyRuntimeContext(
-                  runtime.registry.clone(),
-                );
-                return {
-                  ...childContext,
-                  dependencyRegistry: childRuntime.registry,
-                  exec: childContext.exec == null ? childContext.exec : {
-                    ...childContext.exec,
-                    dependencyRegistry: childRuntime.registry,
-                  },
-                };
-              })();
+            const contextForChild =
+              excludedSourceFields == null
+                ? childContext
+                : (() => {
+                    const childRuntime = createDependencyRuntimeContext(
+                      runtime.registry.clone(),
+                    );
+                    return {
+                      ...childContext,
+                      dependencyRegistry: childRuntime.registry,
+                      exec:
+                        childContext.exec == null
+                          ? childContext.exec
+                          : {
+                              ...childContext.exec,
+                              dependencyRegistry: childRuntime.registry,
+                            },
+                    };
+                  })();
 
-            const parserSuggestions = parser.suggest(
-              contextForChild,
-              prefix,
-            );
+            const parserSuggestions = parser.suggest(contextForChild, prefix);
 
             if (parser.mode === "async") {
-              for await (
-                const s of parserSuggestions as AsyncIterable<Suggestion>
-              ) {
+              for await (const s of parserSuggestions as AsyncIterable<Suggestion>) {
                 suggestions.push(s);
               }
             } else {
@@ -14379,16 +14384,16 @@ export function merge(
       );
       const mergedPairs = collectChildFieldParsers(syncParsers);
       const duplicateFieldNames = collectDuplicateFieldNames(mergedPairs);
-      const childFieldPairs = filterDuplicateFieldParsers(
-        mergedPairs,
-      );
+      const childFieldPairs = filterDuplicateFieldParsers(mergedPairs);
       const perChildExcludedSourceFields = syncParsers.map((parser) => {
         if (!(fieldParsersKey in parser)) return undefined;
-        const pairs = (parser as {
-          [fieldParsersKey]: ReadonlyArray<
-            readonly [string | symbol, Parser<Mode, unknown, unknown>]
-          >;
-        })[fieldParsersKey];
+        const pairs = (
+          parser as {
+            [fieldParsersKey]: ReadonlyArray<
+              readonly [string | symbol, Parser<Mode, unknown, unknown>]
+            >;
+          }
+        )[fieldParsersKey];
         const excludedSourceFields = new Set(
           pairs
             .map(([field]) => field)
@@ -14440,26 +14445,27 @@ export function merge(
             parser,
           );
           const excludedSourceFields = perChildExcludedSourceFields[i];
-          const contextForChild = excludedSourceFields == null
-            ? childContext
-            : (() => {
-              const childRuntime = createDependencyRuntimeContext(
-                runtime.registry.clone(),
-              );
-              return {
-                ...childContext,
-                dependencyRegistry: childRuntime.registry,
-                exec: childContext.exec == null ? childContext.exec : {
-                  ...childContext.exec,
-                  dependencyRegistry: childRuntime.registry,
-                },
-              };
-            })();
+          const contextForChild =
+            excludedSourceFields == null
+              ? childContext
+              : (() => {
+                  const childRuntime = createDependencyRuntimeContext(
+                    runtime.registry.clone(),
+                  );
+                  return {
+                    ...childContext,
+                    dependencyRegistry: childRuntime.registry,
+                    exec:
+                      childContext.exec == null
+                        ? childContext.exec
+                        : {
+                            ...childContext.exec,
+                            dependencyRegistry: childRuntime.registry,
+                          },
+                  };
+                })();
 
-          const parserSuggestions = parser.suggest(
-            contextForChild,
-            prefix,
-          );
+          const parserSuggestions = parser.suggest(contextForChild, prefix);
 
           suggestions.push(...parserSuggestions);
         }
@@ -14503,9 +14509,10 @@ export function merge(
         } else {
           // If parser has defined initialState (like object()),
           // pass the available state directly as it shares the merged state object
-          parserState = state.kind === "unavailable"
-            ? { kind: "unavailable" }
-            : { kind: "available", state: state.state };
+          parserState =
+            state.kind === "unavailable"
+              ? { kind: "unavailable" }
+              : { kind: "available", state: state.state };
         }
 
         // Cast parserState because the generic type constraints on p.getDocFragments
@@ -14530,8 +14537,8 @@ export function merge(
         fragments,
         options.hidden,
       );
-      const entries: DocEntry[] = hiddenAwareFragments.filter((f) =>
-        f.type === "entry"
+      const entries: DocEntry[] = hiddenAwareFragments.filter(
+        (f) => f.type === "entry",
       );
       const sections: DocSection[] = [];
       for (const fragment of hiddenAwareFragments) {
@@ -14547,28 +14554,34 @@ export function merge(
       if (label) {
         const labeledSection: DocSection = { title: label, entries };
         sections.push(labeledSection);
-        return withCommandDocMetadata({
+        return withCommandDocMetadata(
+          {
+            ...sourceDocumentation(children, options.hidden),
+            brief,
+            description,
+            footer,
+            fragments: sections.map<DocFragment>((s) => ({
+              ...s,
+              type: "section",
+            })),
+          },
+          commandMetadata,
+        );
+      }
+
+      return withCommandDocMetadata(
+        {
           ...sourceDocumentation(children, options.hidden),
           brief,
           description,
           footer,
-          fragments: sections.map<DocFragment>((s) => ({
-            ...s,
-            type: "section",
-          })),
-        }, commandMetadata);
-      }
-
-      return withCommandDocMetadata({
-        ...sourceDocumentation(children, options.hidden),
-        brief,
-        description,
-        footer,
-        fragments: [
-          ...sections.map<DocFragment>((s) => ({ ...s, type: "section" })),
-          { type: "section", entries },
-        ],
-      }, commandMetadata);
+          fragments: [
+            ...sections.map<DocFragment>((s) => ({ ...s, type: "section" })),
+            { type: "section", entries },
+          ],
+        },
+        commandMetadata,
+      );
     },
   } as Parser<
     Mode,
@@ -14583,18 +14596,15 @@ export function merge(
   // ownership cannot be resolved from the value alone.
   defineParseLanes(mergeParser, mergeParseLanes);
   defineInheritedAnnotationParser(mergeParser);
-  defineReachableChildren(
-    mergeParser,
-    parsers,
-    (state) =>
-      sorted.map(([parser], index) => ({
+  defineReachableChildren(mergeParser, parsers, (state) =>
+    sorted.map(([parser], index) => ({
+      parser,
+      state: getParseChildState(
+        state,
+        extractParserStateFromState(parser, state, index),
         parser,
-        state: getParseChildState(
-          state,
-          extractParserStateFromState(parser, state, index),
-          parser,
-        ),
-      })),
+      ),
+    })),
   );
   return fluent(
     scopeParser(
@@ -14624,32 +14634,35 @@ type ConcatParserArity =
   | 14
   | 15;
 type ConcatArityLimitError = {
-  readonly __optiqueConcatArityLimit:
-    "concat() requires between 1 and 15 parser arguments. Nest concat() to combine more.";
+  readonly __optiqueConcatArityLimit: "concat() requires between 1 and 15 parser arguments. Nest concat() to combine more.";
 };
 type ConcatParsers = readonly Parser<Mode, readonly unknown[], unknown>[];
 type ConcatArityGuard<TParsers extends readonly unknown[]> =
   IsTuple<TParsers> extends true
-    ? TParsers["length"] extends ConcatParserArity ? unknown
-    : ConcatArityLimitError
+    ? TParsers["length"] extends ConcatParserArity
+      ? unknown
+      : ConcatArityLimitError
     : unknown;
 type ConcatStates<TParsers extends ConcatParsers> = {
   [K in keyof TParsers]: TParsers[K] extends Parser<
     Mode,
     readonly unknown[],
     infer TState
-  > ? TState
+  >
+    ? TState
     : never;
 };
-type ConcatTupleValues<TParsers extends ConcatParsers> = TParsers extends
-  readonly [
+type ConcatTupleValues<TParsers extends ConcatParsers> =
+  TParsers extends readonly [
     Parser<Mode, infer THead extends readonly unknown[], unknown>,
     ...infer TRest extends ConcatParsers,
-  ] ? [...THead, ...ConcatTupleValues<TRest>]
-  : [];
-type ConcatValues<TParsers extends ConcatParsers> = IsTuple<TParsers> extends
-  true ? ConcatTupleValues<TParsers>
-  : readonly unknown[];
+  ]
+    ? [...THead, ...ConcatTupleValues<TRest>]
+    : [];
+type ConcatValues<TParsers extends ConcatParsers> =
+  IsTuple<TParsers> extends true
+    ? ConcatTupleValues<TParsers>
+    : readonly unknown[];
 
 /**
  * Builds a dependency registry from the pre-parsed context state and returns
@@ -14674,12 +14687,7 @@ function buildSuggestRegistry(
       stateArray,
       preParsedContext.exec?.path,
     );
-    collectExplicitSourceValues(
-      expandSourceCollectionNodes(
-        nodes,
-      ),
-      runtime,
-    );
+    collectExplicitSourceValues(expandSourceCollectionNodes(nodes), runtime);
     fillMissingSourceDefaults(nodes, runtime);
     collectSourcesFromState(stateArray, runtime);
     completeDependencySourceDefaults(
@@ -14707,12 +14715,12 @@ function buildSuggestRegistry(
       dependencyRegistry: runtime.registry,
       ...(preParsedContext.exec != null
         ? {
-          exec: {
-            ...preParsedContext.exec,
-            dependencyRuntime: runtime,
-            dependencyRegistry: runtime.registry,
-          },
-        }
+            exec: {
+              ...preParsedContext.exec,
+              dependencyRuntime: runtime,
+              dependencyRegistry: runtime.registry,
+            },
+          }
         : {}),
     },
     stateArray,
@@ -14737,9 +14745,7 @@ async function buildSuggestRegistryAsync(
       preParsedContext.exec?.path,
     );
     await collectExplicitSourceValuesAsync(
-      expandSourceCollectionNodes(
-        nodes,
-      ),
+      expandSourceCollectionNodes(nodes),
       runtime,
     );
     await fillMissingSourceDefaultsAsync(nodes, runtime);
@@ -14769,12 +14775,12 @@ async function buildSuggestRegistryAsync(
       dependencyRegistry: runtime.registry,
       ...(preParsedContext.exec != null
         ? {
-          exec: {
-            ...preParsedContext.exec,
-            dependencyRuntime: runtime,
-            dependencyRegistry: runtime.registry,
-          },
-        }
+            exec: {
+              ...preParsedContext.exec,
+              dependencyRuntime: runtime,
+              dependencyRegistry: runtime.registry,
+            },
+          }
         : {}),
     },
     stateArray,
@@ -14788,18 +14794,19 @@ function seedSuggestRuntimeFromFieldParsers(
   parentPath: readonly PropertyKey[],
 ): void {
   if (!(fieldParsersKey in parser)) return;
-  const rawPairs = (parser as {
-    [fieldParsersKey]: ReadonlyArray<
-      readonly [string | symbol, Parser<Mode, unknown, unknown>]
-    >;
-  })[fieldParsersKey];
+  const rawPairs = (
+    parser as {
+      [fieldParsersKey]: ReadonlyArray<
+        readonly [string | symbol, Parser<Mode, unknown, unknown>]
+      >;
+    }
+  )[fieldParsersKey];
   const duplicateFieldNames = collectDuplicateFieldNames(rawPairs);
-  const pairs = filterDuplicateFieldParsers(
-    rawPairs,
-  );
-  const stateRecord = state != null && typeof state === "object"
-    ? state as Record<PropertyKey, unknown>
-    : {};
+  const pairs = filterDuplicateFieldParsers(rawPairs);
+  const stateRecord =
+    state != null && typeof state === "object"
+      ? (state as Record<PropertyKey, unknown>)
+      : {};
   const nodes = buildSuggestRuntimeNodesFromPairs(
     pairs,
     stateRecord,
@@ -14855,18 +14862,19 @@ async function seedSuggestRuntimeFromFieldParsersAsync(
   parentPath: readonly PropertyKey[],
 ): Promise<void> {
   if (!(fieldParsersKey in parser)) return;
-  const rawPairs = (parser as {
-    [fieldParsersKey]: ReadonlyArray<
-      readonly [string | symbol, Parser<Mode, unknown, unknown>]
-    >;
-  })[fieldParsersKey];
+  const rawPairs = (
+    parser as {
+      [fieldParsersKey]: ReadonlyArray<
+        readonly [string | symbol, Parser<Mode, unknown, unknown>]
+      >;
+    }
+  )[fieldParsersKey];
   const duplicateFieldNames = collectDuplicateFieldNames(rawPairs);
-  const pairs = filterDuplicateFieldParsers(
-    rawPairs,
-  );
-  const stateRecord = state != null && typeof state === "object"
-    ? state as Record<PropertyKey, unknown>
-    : {};
+  const pairs = filterDuplicateFieldParsers(rawPairs);
+  const stateRecord =
+    state != null && typeof state === "object"
+      ? (state as Record<PropertyKey, unknown>)
+      : {};
   const nodes = buildSuggestRuntimeNodesFromPairs(
     pairs,
     stateRecord,
@@ -14927,9 +14935,7 @@ function preParseSuggestContext(
   context: ParserContext<readonly unknown[]>,
   parsers: readonly Parser<"sync", readonly unknown[], unknown>[],
 ): ParserContext<readonly unknown[]> {
-  if (
-    context.buffer.length < 1 || !Array.isArray(context.state)
-  ) {
+  if (context.buffer.length < 1 || !Array.isArray(context.state)) {
     return context;
   }
   // All parsers are sync, so the loop never returns a Promise.
@@ -14949,9 +14955,7 @@ async function preParseSuggestContextAsync(
   context: ParserContext<readonly unknown[]>,
   parsers: readonly Parser<Mode, readonly unknown[], unknown>[],
 ): Promise<ParserContext<readonly unknown[]>> {
-  if (
-    context.buffer.length < 1 || !Array.isArray(context.state)
-  ) {
+  if (context.buffer.length < 1 || !Array.isArray(context.state)) {
     return context;
   }
   return await preParseSuggestLoop(
@@ -14975,8 +14979,9 @@ function preParseSuggestLoop(
 ):
   | ParserContext<readonly unknown[]>
   | Promise<ParserContext<readonly unknown[]>> {
-  const indexedParsers = parsers
-    .map((parser, index) => [parser, index] as [typeof parser, number]);
+  const indexedParsers = parsers.map(
+    (parser, index) => [parser, index] as [typeof parser, number],
+  );
 
   let currentContext = context;
   let changed = true;
@@ -14996,7 +15001,8 @@ function preParseSuggestLoop(
     if (tried === null) continue;
     // If a Promise was returned, the async chain continues from there.
     if (
-      typeof tried === "object" && "then" in tried &&
+      typeof tried === "object" &&
+      "then" in tried &&
       typeof tried.then === "function"
     ) {
       return tried as Promise<ParserContext<readonly unknown[]>>;
@@ -15027,88 +15033,86 @@ function tryParseSuggestList(
   | null {
   for (let ri = 0; ri < remaining.length; ri++) {
     const [parser, index] = remaining[ri];
-    const parserState = index < stateArray.length
-      ? stateArray[index]
-      : parser.initialState;
+    const parserState =
+      index < stateArray.length ? stateArray[index] : parser.initialState;
     const resultOrPromise = parser.parse(
       withChildContext(context, index, parserState, parser),
     );
 
     // If the result is a thenable, chain the rest asynchronously.
     if (
-      resultOrPromise != null && typeof resultOrPromise === "object" &&
-      "then" in resultOrPromise && typeof resultOrPromise.then === "function"
+      resultOrPromise != null &&
+      typeof resultOrPromise === "object" &&
+      "then" in resultOrPromise &&
+      typeof resultOrPromise.then === "function"
     ) {
       const tail = remaining.slice(ri + 1);
-      return (resultOrPromise as Promise<ParserResult<readonly unknown[]>>)
-        .then((result) => {
-          if (result.success && result.consumed.length > 0) {
-            stateArray[index] = getAnnotatedChildState(
-              context.state,
-              result.next.state,
-              parser,
-            );
-            matchedParsers.add(index);
-            const mergedExec = mergeChildExec(context.exec, result.next.exec);
-            return preParseSuggestLoop(
-              {
-                ...context,
-                ...getPassThroughFailureHint(result.next),
-                buffer: result.next.buffer,
-                optionsTerminated: result.next.optionsTerminated,
-                state: stateArray,
-                ...(mergedExec != null
-                  ? {
+      return (
+        resultOrPromise as Promise<ParserResult<readonly unknown[]>>
+      ).then((result) => {
+        if (result.success && result.consumed.length > 0) {
+          stateArray[index] = getAnnotatedChildState(
+            context.state,
+            result.next.state,
+            parser,
+          );
+          matchedParsers.add(index);
+          const mergedExec = mergeChildExec(context.exec, result.next.exec);
+          return preParseSuggestLoop(
+            {
+              ...context,
+              ...getPassThroughFailureHint(result.next),
+              buffer: result.next.buffer,
+              optionsTerminated: result.next.optionsTerminated,
+              state: stateArray,
+              ...(mergedExec != null
+                ? {
                     exec: mergedExec,
                     dependencyRegistry: mergedExec.dependencyRegistry,
                   }
-                  : {}),
-              },
-              stateArray,
-              parsers,
-              matchedParsers,
-            );
-          }
-          // This async parser didn't consume—try the remaining parsers.
-          // If one of them consumes, restart the full outer loop.
-          const next = tryParseSuggestList(
-            context,
+                : {}),
+            },
             stateArray,
             parsers,
             matchedParsers,
-            tail,
           );
-          if (next === null) return { ...context, state: stateArray };
-          // A tail parser consumed—restart the loop on the updated
-          // context, but only if the buffer actually shrank; otherwise
-          // we'd re-enter with the same state and recurse infinitely.
-          if (
-            typeof next === "object" && "then" in next &&
-            typeof next.then === "function"
-          ) {
-            return (next as Promise<ParserContext<readonly unknown[]>>)
-              .then((ctx) =>
-                ctx.buffer.length < context.buffer.length
-                  ? preParseSuggestLoop(
-                    ctx,
-                    stateArray,
-                    parsers,
-                    matchedParsers,
-                  )
-                  : ctx
-              );
-          }
-          const nextCtx = next as ParserContext<readonly unknown[]>;
-          if (nextCtx.buffer.length < context.buffer.length) {
-            return preParseSuggestLoop(
-              nextCtx,
-              stateArray,
-              parsers,
-              matchedParsers,
-            );
-          }
-          return nextCtx;
-        });
+        }
+        // This async parser didn't consume—try the remaining parsers.
+        // If one of them consumes, restart the full outer loop.
+        const next = tryParseSuggestList(
+          context,
+          stateArray,
+          parsers,
+          matchedParsers,
+          tail,
+        );
+        if (next === null) return { ...context, state: stateArray };
+        // A tail parser consumed—restart the loop on the updated
+        // context, but only if the buffer actually shrank; otherwise
+        // we'd re-enter with the same state and recurse infinitely.
+        if (
+          typeof next === "object" &&
+          "then" in next &&
+          typeof next.then === "function"
+        ) {
+          return (next as Promise<ParserContext<readonly unknown[]>>).then(
+            (ctx) =>
+              ctx.buffer.length < context.buffer.length
+                ? preParseSuggestLoop(ctx, stateArray, parsers, matchedParsers)
+                : ctx,
+          );
+        }
+        const nextCtx = next as ParserContext<readonly unknown[]>;
+        if (nextCtx.buffer.length < context.buffer.length) {
+          return preParseSuggestLoop(
+            nextCtx,
+            stateArray,
+            parsers,
+            matchedParsers,
+          );
+        }
+        return nextCtx;
+      });
     }
 
     const result = resultOrPromise as ParserResult<readonly unknown[]>;
@@ -15128,9 +15132,9 @@ function tryParseSuggestList(
         state: stateArray,
         ...(mergedExec != null
           ? {
-            exec: mergedExec,
-            dependencyRegistry: mergedExec.dependencyRegistry,
-          }
+              exec: mergedExec,
+              dependencyRegistry: mergedExec.dependencyRegistry,
+            }
           : {}),
       };
     }
@@ -15236,17 +15240,21 @@ export function concat(
       const remainingParsers = orderBeforePassThrough(
         syncParsers
           .map((parser, index) => [parser, index] as [typeof parser, number])
-          .filter(([parser, index]) =>
-            !matchedParsers.has(index) ||
-            (getOptionMatch(parser, stateArray[index], currentContext.buffer[0])
-                  ?.continuesCommand === true ||
+          .filter(
+            ([parser, index]) =>
+              !matchedParsers.has(index) ||
+              getOptionMatch(
+                parser,
+                stateArray[index],
+                currentContext.buffer[0],
+              )?.continuesCommand === true ||
               (passThroughParsers.size > 0 &&
                 !currentContext.optionsTerminated &&
                 getOptionMatch(
-                    parser,
-                    stateArray[index],
-                    currentContext.buffer[0],
-                  ) != null))
+                  parser,
+                  stateArray[index],
+                  currentContext.buffer[0],
+                ) != null),
           )
           .sort(([parserA], [parserB]) => parserB.priority - parserA.priority),
         currentContext,
@@ -15275,11 +15283,11 @@ export function concat(
             stateArray.map((s, idx) =>
               idx === index
                 ? getAnnotatedChildState(
-                  currentContext.state,
-                  result.next.state,
-                  parser,
-                )
-                : s
+                    currentContext.state,
+                    result.next.state,
+                    parser,
+                  )
+                : s,
             ),
           );
           const mergedExec = mergeChildExec(
@@ -15294,9 +15302,9 @@ export function concat(
             state: newStateArray as readonly unknown[],
             ...(mergedExec != null
               ? {
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           };
 
@@ -15367,11 +15375,11 @@ export function concat(
               stateArray.map((s, idx) =>
                 idx === index
                   ? getAnnotatedChildState(
-                    currentContext.state,
-                    result.next.state,
-                    parser,
-                  )
-                  : s
+                      currentContext.state,
+                      result.next.state,
+                      parser,
+                    )
+                  : s,
               ),
             );
             const mergedExec = mergeChildExec(
@@ -15383,9 +15391,9 @@ export function concat(
               state: newStateArray as readonly unknown[],
               ...(mergedExec != null
                 ? {
-                  exec: mergedExec,
-                  dependencyRegistry: mergedExec.dependencyRegistry,
-                }
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
                 : {}),
             };
 
@@ -15440,17 +15448,21 @@ export function concat(
       const remainingParsers = orderBeforePassThrough(
         parsers
           .map((parser, index) => [parser, index] as [typeof parser, number])
-          .filter(([parser, index]) =>
-            !matchedParsers.has(index) ||
-            (getOptionMatch(parser, stateArray[index], currentContext.buffer[0])
-                  ?.continuesCommand === true ||
+          .filter(
+            ([parser, index]) =>
+              !matchedParsers.has(index) ||
+              getOptionMatch(
+                parser,
+                stateArray[index],
+                currentContext.buffer[0],
+              )?.continuesCommand === true ||
               (passThroughParsers.size > 0 &&
                 !currentContext.optionsTerminated &&
                 getOptionMatch(
-                    parser,
-                    stateArray[index],
-                    currentContext.buffer[0],
-                  ) != null))
+                  parser,
+                  stateArray[index],
+                  currentContext.buffer[0],
+                ) != null),
           )
           .sort(([parserA], [parserB]) => parserB.priority - parserA.priority),
         currentContext,
@@ -15479,11 +15491,11 @@ export function concat(
             stateArray.map((s, idx) =>
               idx === index
                 ? getAnnotatedChildState(
-                  currentContext.state,
-                  result.next.state,
-                  parser,
-                )
-                : s
+                    currentContext.state,
+                    result.next.state,
+                    parser,
+                  )
+                : s,
             ),
           );
           const mergedExec = mergeChildExec(
@@ -15498,9 +15510,9 @@ export function concat(
             state: newStateArray as readonly unknown[],
             ...(mergedExec != null
               ? {
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           };
 
@@ -15571,11 +15583,11 @@ export function concat(
               stateArray.map((s, idx) =>
                 idx === index
                   ? getAnnotatedChildState(
-                    currentContext.state,
-                    result.next.state,
-                    parser,
-                  )
-                  : s
+                      currentContext.state,
+                      result.next.state,
+                      parser,
+                    )
+                  : s,
               ),
             );
             const mergedExec = mergeChildExec(
@@ -15587,9 +15599,9 @@ export function concat(
               state: newStateArray as readonly unknown[],
               ...(mergedExec != null
                 ? {
-                  exec: mergedExec,
-                  dependencyRegistry: mergedExec.dependencyRegistry,
-                }
+                    exec: mergedExec,
+                    dependencyRegistry: mergedExec.dependencyRegistry,
+                  }
                 : {}),
             };
 
@@ -15631,7 +15643,8 @@ export function concat(
 
     // Phase 1: Build dependency runtime and pre-complete dependency
     // source parsers before resolving deferred states.
-    const runtime = exec?.dependencyRuntime ??
+    const runtime =
+      exec?.dependencyRuntime ??
       createDependencyRuntimeContext(exec?.dependencyRegistry);
     const childExec: ExecutionContext = {
       ...exec,
@@ -15673,14 +15686,15 @@ export function concat(
     for (let i = 0; i < syncParsers.length; i++) {
       const parser = syncParsers[i];
       const preCompletedResult = preCompleted.get(String(i));
-      const result = preCompletedResult !== undefined
-        ? unwrapCompleteResult(preCompletedResult)
-        : unwrapCompleteResult(
-          parser.complete(
-            prepareStateForCompletion(resolvedArray[i], parser),
-            withChildExecPath(phase3Exec, i),
-          ),
-        );
+      const result =
+        preCompletedResult !== undefined
+          ? unwrapCompleteResult(preCompletedResult)
+          : unwrapCompleteResult(
+              parser.complete(
+                prepareStateForCompletion(resolvedArray[i], parser),
+                withChildExecPath(phase3Exec, i),
+              ),
+            );
       if (!result.success) return result;
 
       // Flatten the tuple results, remapping deferred keys to the
@@ -15709,9 +15723,7 @@ export function concat(
         if (result.deferred) {
           if (result.deferredKeys) {
             deferredKeys.set(baseIndex, result.deferredKeys);
-          } else if (
-            result.value == null || typeof result.value !== "object"
-          ) {
+          } else if (result.value == null || typeof result.value !== "object") {
             // Scalar deferred child—record its index.
             deferredKeys.set(baseIndex, null);
           } else {
@@ -15726,11 +15738,11 @@ export function concat(
       value: results,
       ...(isDeferred
         ? {
-          deferred: true as const,
-          ...(deferredKeys.size > 0
-            ? { deferredKeys: deferredKeys as DeferredMap }
-            : {}),
-        }
+            deferred: true as const,
+            ...(deferredKeys.size > 0
+              ? { deferredKeys: deferredKeys as DeferredMap }
+              : {}),
+          }
         : {}),
     };
   };
@@ -15744,7 +15756,8 @@ export function concat(
 
     // Phase 1: Build dependency runtime and pre-complete dependency
     // source parsers before resolving deferred states.
-    const runtime = exec?.dependencyRuntime ??
+    const runtime =
+      exec?.dependencyRuntime ??
       createDependencyRuntimeContext(exec?.dependencyRegistry);
     const childExec: ExecutionContext = {
       ...exec,
@@ -15776,10 +15789,7 @@ export function concat(
     // Deferred Phase 1 results stay schedulable so a demand-only
     // prompt can still complete once demand is discovered here.
     const effectfulFailure = await scheduleEffectfulSourceCompletions(
-      filterSchedulableRuntimeNodes(
-        allRuntimeNodes,
-        preCompleted,
-      ),
+      filterSchedulableRuntimeNodes(allRuntimeNodes, preCompleted),
       stateArray,
       runtime,
       childExec,
@@ -15793,10 +15803,10 @@ export function concat(
     } as ExecutionContext;
 
     // Phase 2: Resolve deferred parse states across all tuples using runtime.
-    const resolvedArray = await resolveStateWithRuntimeAsync(
+    const resolvedArray = (await resolveStateWithRuntimeAsync(
       stateArray,
       runtime,
-    ) as unknown[];
+    )) as unknown[];
 
     // Phase 3: Complete each parser with resolved state
     const results: unknown[] = [];
@@ -15805,14 +15815,15 @@ export function concat(
     for (let i = 0; i < parsers.length; i++) {
       const parser = parsers[i];
       const preCompletedResult = preCompleted.get(String(i));
-      const result = preCompletedResult !== undefined
-        ? unwrapCompleteResult(preCompletedResult)
-        : unwrapCompleteResult(
-          await parser.complete(
-            prepareStateForCompletion(resolvedArray[i], parser),
-            withChildExecPath(phase3Exec, i),
-          ),
-        );
+      const result =
+        preCompletedResult !== undefined
+          ? unwrapCompleteResult(preCompletedResult)
+          : unwrapCompleteResult(
+              await parser.complete(
+                prepareStateForCompletion(resolvedArray[i], parser),
+                withChildExecPath(phase3Exec, i),
+              ),
+            );
       if (!result.success) return result;
 
       // Flatten the tuple results, remapping deferred keys to the
@@ -15837,9 +15848,7 @@ export function concat(
         if (result.deferred) {
           if (result.deferredKeys) {
             deferredKeys.set(baseIndex, result.deferredKeys);
-          } else if (
-            result.value == null || typeof result.value !== "object"
-          ) {
+          } else if (result.value == null || typeof result.value !== "object") {
             // Scalar deferred child—record its index.
             deferredKeys.set(baseIndex, null);
           } else {
@@ -15854,11 +15863,11 @@ export function concat(
       value: results,
       ...(isDeferred
         ? {
-          deferred: true as const,
-          ...(deferredKeys.size > 0
-            ? { deferredKeys: deferredKeys as DeferredMap }
-            : {}),
-        }
+            deferred: true as const,
+            ...(deferredKeys.size > 0
+              ? { deferredKeys: deferredKeys as DeferredMap }
+              : {}),
+          }
         : {}),
     };
   };
@@ -15868,11 +15877,10 @@ export function concat(
     mode: combinedMode,
     $valueType: [],
     $stateType: [],
-    priority: parsers.length > 0
-      ? Math.max(...parsers.map((p) => p.priority))
-      : 0,
+    priority:
+      parsers.length > 0 ? Math.max(...parsers.map((p) => p.priority)) : 0,
     usage: parsers.flatMap((p, i) =>
-      scopeCommandUsage(p.usage, commandUsageScopes[i])
+      scopeCommandUsage(p.usage, commandUsageScopes[i]),
     ),
     leadingNames: sharedBufferLeadingNames(parsers),
     acceptingAnyToken: parsers.some((p) => p.acceptingAnyToken),
@@ -15881,19 +15889,17 @@ export function concat(
     // effectful source completions.
     [fieldParsersKey]: parsers.map(
       (parser, index) =>
-        [String(index), parser] as [
-          string,
-          Parser<Mode, unknown, unknown>,
-        ],
+        [String(index), parser] as [string, Parser<Mode, unknown, unknown>],
     ),
     initialState,
     canSkip(state, exec?: ExecutionContext) {
       const stateArray = state as readonly unknown[];
-      return parsers.every((parser, index) =>
-        parser.canSkip?.(
-          getAnnotatedChildState(stateArray, stateArray[index], parser),
-          withChildExecPath(exec, index),
-        ) === true
+      return parsers.every(
+        (parser, index) =>
+          parser.canSkip?.(
+            getAnnotatedChildState(stateArray, stateArray[index], parser),
+            withChildExecPath(exec, index),
+          ) === true,
       );
     },
     parse(context) {
@@ -15913,7 +15919,8 @@ export function concat(
         combinedMode,
         () => {
           const stateArray = state as unknown[];
-          const runtime = exec?.dependencyRuntime ??
+          const runtime =
+            exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec = withDependencyRuntimeExec(
             concatParser.usage,
@@ -15955,18 +15962,19 @@ export function concat(
             const parser = syncParsers[i];
             const childExec = withChildExecPath(phase3Exec, i);
             const preCompletedResult = preCompleted.get(String(i));
-            const seed = preCompletedResult !== undefined
-              ? reusePreCompletedPhase2Seed(
-                parser,
-                prepareStateForCompletion(resolvedArray[i], parser),
-                preCompletedResult,
-                childExec,
-              )
-              : completeOrExtractPhase2Seed(
-                parser,
-                prepareStateForCompletion(resolvedArray[i], parser),
-                childExec,
-              );
+            const seed =
+              preCompletedResult !== undefined
+                ? reusePreCompletedPhase2Seed(
+                    parser,
+                    prepareStateForCompletion(resolvedArray[i], parser),
+                    preCompletedResult,
+                    childExec,
+                  )
+                : completeOrExtractPhase2Seed(
+                    parser,
+                    prepareStateForCompletion(resolvedArray[i], parser),
+                    childExec,
+                  );
             if (seed == null) continue;
             hasAnySeed = true;
             hasDeferred =
@@ -15978,17 +15986,18 @@ export function concat(
             value: results,
             ...(deferredKeys.size > 0 || hasDeferred
               ? {
-                deferred: true as const,
-                ...(deferredKeys.size > 0
-                  ? { deferredKeys: deferredKeys as DeferredMap }
-                  : {}),
-              }
+                  deferred: true as const,
+                  ...(deferredKeys.size > 0
+                    ? { deferredKeys: deferredKeys as DeferredMap }
+                    : {}),
+                }
               : {}),
           };
         },
         async () => {
           const stateArray = state as unknown[];
-          const runtime = exec?.dependencyRuntime ??
+          const runtime =
+            exec?.dependencyRuntime ??
             createDependencyRuntimeContext(exec?.dependencyRegistry);
           const childExec = withDependencyRuntimeExec(
             concatParser.usage,
@@ -16024,10 +16033,7 @@ export function concat(
           // demand-only prompt can still complete once demand is
           // discovered here.
           const effectfulFailure = await scheduleEffectfulSourceCompletions(
-            filterSchedulableRuntimeNodes(
-              allRuntimeNodes,
-              preCompleted,
-            ),
+            filterSchedulableRuntimeNodes(allRuntimeNodes, preCompleted),
             stateArray,
             runtime,
             childExec,
@@ -16039,10 +16045,10 @@ export function concat(
             preCompletedByParser: undefined,
             republishCachedCompletions: undefined,
           } as ExecutionContext;
-          const resolvedArray = await resolveStateWithRuntimeAsync(
+          const resolvedArray = (await resolveStateWithRuntimeAsync(
             stateArray,
             runtime,
-          ) as unknown[];
+          )) as unknown[];
 
           const results: unknown[] = [];
           const deferredKeys = new Map<PropertyKey, DeferredMap | null>();
@@ -16052,18 +16058,19 @@ export function concat(
             const parser = parsers[i];
             const childExec = withChildExecPath(phase3Exec, i);
             const preCompletedResult = preCompleted.get(String(i));
-            const seed = preCompletedResult !== undefined
-              ? await reusePreCompletedPhase2SeedAsync(
-                parser,
-                prepareStateForCompletion(resolvedArray[i], parser),
-                preCompletedResult,
-                childExec,
-              )
-              : await completeOrExtractPhase2Seed(
-                parser,
-                prepareStateForCompletion(resolvedArray[i], parser),
-                childExec,
-              );
+            const seed =
+              preCompletedResult !== undefined
+                ? await reusePreCompletedPhase2SeedAsync(
+                    parser,
+                    prepareStateForCompletion(resolvedArray[i], parser),
+                    preCompletedResult,
+                    childExec,
+                  )
+                : await completeOrExtractPhase2Seed(
+                    parser,
+                    prepareStateForCompletion(resolvedArray[i], parser),
+                    childExec,
+                  );
             if (seed == null) continue;
             hasAnySeed = true;
             hasDeferred =
@@ -16075,11 +16082,11 @@ export function concat(
             value: results,
             ...(deferredKeys.size > 0 || hasDeferred
               ? {
-                deferred: true as const,
-                ...(deferredKeys.size > 0
-                  ? { deferredKeys: deferredKeys as DeferredMap }
-                  : {}),
-              }
+                  deferred: true as const,
+                  ...(deferredKeys.size > 0
+                    ? { deferredKeys: deferredKeys as DeferredMap }
+                    : {}),
+                }
               : {}),
           };
         },
@@ -16101,9 +16108,10 @@ export function concat(
 
           for (let i = 0; i < parsers.length; i++) {
             const parser = parsers[i];
-            const parserState = stateArray && Array.isArray(stateArray)
-              ? stateArray[i]
-              : parser.initialState;
+            const parserState =
+              stateArray && Array.isArray(stateArray)
+                ? stateArray[i]
+                : parser.initialState;
 
             const parserSuggestions = parser.suggest(
               withChildContext(contextWithRegistry, i, parserState, parser),
@@ -16111,9 +16119,7 @@ export function concat(
             );
 
             if (parser.mode === "async") {
-              for await (
-                const s of parserSuggestions as AsyncIterable<Suggestion>
-              ) {
+              for await (const s of parserSuggestions as AsyncIterable<Suggestion>) {
                 suggestions.push(s);
               }
             } else {
@@ -16126,10 +16132,7 @@ export function concat(
       }
 
       // Sync branch: pre-parse sync children only.
-      const preParsedContext = preParseSuggestContext(
-        context,
-        syncParsers,
-      );
+      const preParsedContext = preParseSuggestContext(context, syncParsers);
       const { context: contextWithRegistry, stateArray } = buildSuggestRegistry(
         preParsedContext,
         syncParsers,
@@ -16140,9 +16143,10 @@ export function concat(
 
         for (let i = 0; i < syncParsers.length; i++) {
           const parser = syncParsers[i];
-          const parserState = stateArray && Array.isArray(stateArray)
-            ? stateArray[i]
-            : parser.initialState;
+          const parserState =
+            stateArray && Array.isArray(stateArray)
+              ? stateArray[i]
+              : parser.initialState;
 
           const parserSuggestions = parser.suggest(
             withChildContext(contextWithRegistry, i, parserState, parser),
@@ -16163,9 +16167,10 @@ export function concat(
       };
       let commandMetadata: CommandDocMetadata | undefined;
       const fragments = syncParsers.flatMap((p, index) => {
-        const indexState: DocState<unknown> = state.kind === "unavailable"
-          ? { kind: "unavailable" }
-          : { kind: "available", state: state.state[index] };
+        const indexState: DocState<unknown> =
+          state.kind === "unavailable"
+            ? { kind: "unavailable" }
+            : { kind: "available", state: state.state[index] };
         const docs = p.getDocFragments(indexState, undefined);
         commandMetadata = collectCommandDocMetadata(
           commandMetadata,
@@ -16191,22 +16196,22 @@ export function concat(
       if (entries.length > 0) {
         result.push({ type: "section", entries });
       }
-      return withCommandDocMetadata({
-        ...sourceDocumentation(children),
-        ...commandMetadata,
-        fragments: result,
-      }, commandMetadata);
+      return withCommandDocMetadata(
+        {
+          ...sourceDocumentation(children),
+          ...commandMetadata,
+          fragments: result,
+        },
+        commandMetadata,
+      );
     },
   } as Parser<Mode, readonly unknown[], readonly unknown[]>;
   defineInheritedAnnotationParser(concatParser);
-  defineReachableChildren(
-    concatParser,
-    parsers,
-    (state) =>
-      parsers.map((parser, index) => ({
-        parser,
-        state: getParseChildState(state, state[index], parser),
-      })),
+  defineReachableChildren(concatParser, parsers, (state) =>
+    parsers.map((parser, index) => ({
+      parser,
+      state: getParseChildState(state, state[index], parser),
+    })),
   );
   return fluent(
     scopeParser(
@@ -16295,62 +16300,64 @@ export function group<M extends Mode, TValue, TState>(
     // See: https://github.com/dahlia/optique/issues/681
     ...(fieldParsersKey in parser
       ? {
-        [fieldParsersKey]: (
-          parser as { [fieldParsersKey]: unknown }
-        )[fieldParsersKey],
-      }
+          [fieldParsersKey]: (parser as { [fieldParsersKey]: unknown })[
+            fieldParsersKey
+          ],
+        }
       : {}),
     // Forward effectful scheduling nodes so that a grouped merge()
     // expands with the same child-indexed paths and declaration order.
     ...(effectfulSchedulingNodesKey in parser
       ? {
-        [effectfulSchedulingNodesKey]: (
-          parser as {
-            [effectfulSchedulingNodesKey]: EffectfulSchedulingNodesFn;
-          }
-        )[effectfulSchedulingNodesKey],
-      }
+          [effectfulSchedulingNodesKey]: (
+            parser as {
+              [effectfulSchedulingNodesKey]: EffectfulSchedulingNodesFn;
+            }
+          )[effectfulSchedulingNodesKey],
+        }
       : {}),
     // Forward the source-collection opt-in so a grouped conditional()
     // or command() keeps its collection scope.
     ...(sourceCollectionExpansionKey in parser
       ? {
-        [sourceCollectionExpansionKey]: (
-          parser as { [sourceCollectionExpansionKey]: boolean }
-        )[sourceCollectionExpansionKey],
-      }
+          [sourceCollectionExpansionKey]: (
+            parser as { [sourceCollectionExpansionKey]: boolean }
+          )[sourceCollectionExpansionKey],
+        }
       : {}),
     // Forward the exclusive-scope marker so a grouped or()/conditional()
     // keeps its own scope: a label must not make an alternative's
     // sources visible to the enclosing collection.
     ...(exclusiveSourceScopeKey in parser
       ? {
-        [exclusiveSourceScopeKey]: (
-          parser as {
-            [exclusiveSourceScopeKey]: ReadonlyArray<
-              Parser<Mode, unknown, unknown>
-            >;
-          }
-        )[exclusiveSourceScopeKey],
-      }
+          [exclusiveSourceScopeKey]: (
+            parser as {
+              [exclusiveSourceScopeKey]: ReadonlyArray<
+                Parser<Mode, unknown, unknown>
+              >;
+            }
+          )[exclusiveSourceScopeKey],
+        }
       : {}),
     // Forward completion deferral hook from inner parser so that
     // prompt(group("label", bindConfig(...))) defers correctly.
     ...(typeof parser.shouldDeferCompletion === "function"
       ? {
-        shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser),
-      }
+          shouldDeferCompletion: parser.shouldDeferCompletion.bind(parser),
+        }
       : {}),
     ...(typeof parser.canSkip === "function"
       ? {
-        canSkip: parser.canSkip.bind(parser),
-      }
+          canSkip: parser.canSkip.bind(parser),
+        }
       : {}),
     getSuggestRuntimeNodes(state: TState, path: readonly PropertyKey[]) {
-      return parser.getSuggestRuntimeNodes?.(state, path) ??
+      return (
+        parser.getSuggestRuntimeNodes?.(state, path) ??
         (parser.dependencyMetadata?.source != null
           ? [{ path, parser, state }]
-          : []);
+          : [])
+      );
     },
     parse: (context) => parser.parse(context),
     complete: (state, exec?) => parser.complete(state, exec),
@@ -16370,10 +16377,7 @@ export function group<M extends Mode, TValue, TState>(
         children.push(docs);
         return docs.fragments;
       };
-      const docs = parser.getDocFragments(
-        state,
-        defaultValue,
-      );
+      const docs = parser.getDocFragments(state, defaultValue);
       const { brief, description, footer } = docs;
       const fragments = collect(docs);
       const hiddenAwareFragments = applyHiddenToDocFragments(
@@ -16444,19 +16448,22 @@ export function group<M extends Mode, TValue, TState>(
         ? { title: label, entries: allEntries }
         : { entries: allEntries };
 
-      return withCommandDocMetadata({
-        ...sourceDocumentation(children, options.hidden),
-        brief,
-        description,
-        footer,
-        fragments: [
-          ...titledSections.map<DocFragment>((s) => ({
-            ...s,
-            type: "section",
-          })),
-          { type: "section", ...labeledSection },
-        ],
-      }, getCommandDocMetadata(docs));
+      return withCommandDocMetadata(
+        {
+          ...sourceDocumentation(children, options.hidden),
+          brief,
+          description,
+          footer,
+          fragments: [
+            ...titledSections.map<DocFragment>((s) => ({
+              ...s,
+              type: "section",
+            })),
+            { type: "section", ...labeledSection },
+          ],
+        },
+        getCommandDocMetadata(docs),
+      );
     },
   };
   defineParseLanes(groupParser, getOwnParseLanes(parser));
@@ -16486,9 +16493,11 @@ export function group<M extends Mode, TValue, TState>(
   // marker that distinguishes a bound state from command-line input
   // travels with the metadata.
   if (
-    (parser as {
-      readonly [unmatchedNonCliDependencySourceStateMarker]?: true;
-    })[unmatchedNonCliDependencySourceStateMarker] === true
+    (
+      parser as {
+        readonly [unmatchedNonCliDependencySourceStateMarker]?: true;
+      }
+    )[unmatchedNonCliDependencySourceStateMarker] === true
   ) {
     Object.defineProperty(
       groupParser,
@@ -16526,11 +16535,9 @@ export function group<M extends Mode, TValue, TState>(
     });
   }
   delegateKnownCompletion(groupParser, parser);
-  defineReachableChildren(
-    groupParser,
-    [parser],
-    (state) => [{ parser, state }],
-  );
+  defineReachableChildren(groupParser, [parser], (state) => [
+    { parser, state },
+  ]);
   return fluent(
     withEmptyInputFacts(
       scopeParser(groupParser, combinedOptionScope([parser])),
@@ -16774,10 +16781,11 @@ export function conditional(
     : branchParsers.map(([_, p]) => p);
 
   // Compute combined mode
-  const combinedMode: Mode = discriminator.mode === "async" ||
-      allBranchParsers.some((p) => p.mode === "async")
-    ? "async"
-    : "sync";
+  const combinedMode: Mode =
+    discriminator.mode === "async" ||
+    allBranchParsers.some((p) => p.mode === "async")
+      ? "async"
+      : "sync";
 
   const isAsync = combinedMode === "async";
 
@@ -16840,13 +16848,16 @@ export function conditional(
   const defaultUsageScope = new WeakMap<object, object>();
   // Build usage: discriminator (with literal value) + exclusive branches
   const branchUsages: Usage[] = branchParsers.map(([key, p]) =>
-    scopeCommandUsage([
-      ...appendLiteralToUsage(
-        scopeCommandUsage(discriminator.usage, discriminatorUsageScope),
-        key,
-      ),
-      ...scopeCommandUsage(p.usage, branchUsageScope),
-    ], commandUsageScopes.get(key)!)
+    scopeCommandUsage(
+      [
+        ...appendLiteralToUsage(
+          scopeCommandUsage(discriminator.usage, discriminatorUsageScope),
+          key,
+        ),
+        ...scopeCommandUsage(p.usage, branchUsageScope),
+      ],
+      commandUsageScopes.get(key)!,
+    ),
   );
   if (defaultBranch) {
     branchUsages.push(
@@ -16854,9 +16865,10 @@ export function conditional(
     );
   }
 
-  const usage: Usage = branchUsages.length > 1
-    ? [{ type: "exclusive", terms: branchUsages }]
-    : branchUsages[0] ?? [];
+  const usage: Usage =
+    branchUsages.length > 1
+      ? [{ type: "exclusive", terms: branchUsages }]
+      : (branchUsages[0] ?? []);
 
   const initialState: ConditionalState<string> = {
     discriminatorState: discriminator.initialState,
@@ -16907,7 +16919,7 @@ export function conditional(
     selected: SelectedBranch<string>,
     table: Readonly<Record<string, Parser<M, unknown, unknown>>>,
     fallback: Parser<M, unknown, unknown> | undefined,
-  ) => selected.kind === "default" ? fallback : table[selected.key];
+  ) => (selected.kind === "default" ? fallback : table[selected.key]);
 
   // Sync parse implementation
   const parseSync = (
@@ -16957,9 +16969,9 @@ export function conditional(
             },
             ...(mergedExec != null
               ? {
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           },
           consumed: branchResult.consumed,
@@ -17008,9 +17020,9 @@ export function conditional(
                 ...branchContext,
                 ...(discriminatorExec != null
                   ? {
-                    exec: discriminatorExec,
-                    dependencyRegistry: discriminatorExec.dependencyRegistry,
-                  }
+                      exec: discriminatorExec,
+                      dependencyRegistry: discriminatorExec.dependencyRegistry,
+                    }
                   : {}),
               },
               "_branch",
@@ -17039,7 +17051,8 @@ export function conditional(
             // discriminator consumed nothing and the branch is
             // interactive (has leadingNames or accepts any token),
             // meaning it can match tokens but didn't.
-            const isProvisional = branchParseResult.provisional ||
+            const isProvisional =
+              branchParseResult.provisional ||
               (discriminatorResult.consumed.length === 0 &&
                 branchParseResult.consumed.length === 0 &&
                 (branchParser.leadingNames.size > 0 ||
@@ -17061,9 +17074,9 @@ export function conditional(
                 },
                 ...(mergedExec != null
                   ? {
-                    exec: mergedExec,
-                    dependencyRegistry: mergedExec.dependencyRegistry,
-                  }
+                      exec: mergedExec,
+                      dependencyRegistry: mergedExec.dependencyRegistry,
+                    }
                   : {}),
               },
               consumed: [
@@ -17094,9 +17107,9 @@ export function conditional(
                 },
                 ...(discriminatorExec != null
                   ? {
-                    exec: discriminatorExec,
-                    dependencyRegistry: discriminatorExec.dependencyRegistry,
-                  }
+                      exec: discriminatorExec,
+                      dependencyRegistry: discriminatorExec.dependencyRegistry,
+                    }
                   : {}),
               },
               consumed: discriminatorResult.consumed,
@@ -17157,8 +17170,8 @@ export function conditional(
         // buffer is empty (no more input to parse, so committing is
         // safe and prevents complete() from re-evaluating lazy/
         // stateful discriminators that could pick a different branch).
-        const commitDefault = defaultResult.consumed.length > 0 ||
-          context.buffer.length === 0;
+        const commitDefault =
+          defaultResult.consumed.length > 0 || context.buffer.length === 0;
         if (commitDefault) adoptOptionScope(context, defaultResult.next);
         return {
           success: true,
@@ -17178,9 +17191,9 @@ export function conditional(
             },
             ...(mergedExec != null
               ? {
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           },
           consumed: defaultResult.consumed,
@@ -17233,7 +17246,7 @@ export function conditional(
           // is consulted (and locally cleared) during completion
           // verification—completeAsync() does not write the cleared
           // state back into parse-time state.
-          ...((state.speculative || branchResult.provisional)
+          ...(state.speculative || branchResult.provisional
             ? { provisional: true as const }
             : {}),
           next: {
@@ -17248,9 +17261,9 @@ export function conditional(
             },
             ...(mergedExec != null
               ? {
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           },
           consumed: branchResult.consumed,
@@ -17312,22 +17325,24 @@ export function conditional(
           optionsTerminated: discriminatorResult.next.optionsTerminated,
           ...(discriminatorExec != null
             ? {
-              exec: discriminatorExec,
-              dependencyRegistry: discriminatorExec.dependencyRegistry,
-            }
+                exec: discriminatorExec,
+                dependencyRegistry: discriminatorExec.dependencyRegistry,
+              }
             : {}),
         };
-        let speculativeHit: {
-          key: string;
-          bp: Parser<Mode, unknown, unknown>;
-          result: ParserResult<unknown>;
-        } | undefined;
+        let speculativeHit:
+          | {
+              key: string;
+              bp: Parser<Mode, unknown, unknown>;
+              result: ParserResult<unknown>;
+            }
+          | undefined;
         let provisionalHit: typeof speculativeHit;
         let provisionalAmbiguous = false;
         let speculativeError:
           | (ParserResult<unknown> & {
-            success: false;
-          })
+              success: false;
+            })
           | undefined;
         let ambiguous = false;
         for (const [key, bp] of branchParsers) {
@@ -17366,7 +17381,8 @@ export function conditional(
           // keep trying other branches—a later branch may succeed
           // (e.g., flag("--x") vs option("--x", string())).
           if (
-            !branchResult.success && branchResult.consumed > 0 &&
+            !branchResult.success &&
+            branchResult.consumed > 0 &&
             (speculativeError == null ||
               speculativeError.consumed < branchResult.consumed)
           ) {
@@ -17387,7 +17403,9 @@ export function conditional(
         // speculative conditional) when no definitive hit was found
         // and provisional results were unambiguous.
         if (
-          speculativeHit == null && !ambiguous && !provisionalAmbiguous &&
+          speculativeHit == null &&
+          !ambiguous &&
+          !provisionalAmbiguous &&
           provisionalHit != null
         ) {
           speculativeHit = provisionalHit;
@@ -17423,9 +17441,9 @@ export function conditional(
                 },
                 ...(mergedExec != null
                   ? {
-                    exec: mergedExec,
-                    dependencyRegistry: mergedExec.dependencyRegistry,
-                  }
+                      exec: mergedExec,
+                      dependencyRegistry: mergedExec.dependencyRegistry,
+                    }
                   : {}),
               },
               consumed: branchResult.consumed,
@@ -17444,7 +17462,9 @@ export function conditional(
         // the named branches.
         let deferredBranchState: unknown = state.branchState;
         if (
-          defaultBranch !== undefined && !ambiguous && !provisionalAmbiguous
+          defaultBranch !== undefined &&
+          !ambiguous &&
+          !provisionalAmbiguous
         ) {
           const defaultResult = await defaultBranch.parse(
             withChildContext(
@@ -17455,10 +17475,7 @@ export function conditional(
               defaultBranch.usage,
             ),
           );
-          if (
-            defaultResult.success &&
-            defaultResult.consumed.length > 0
-          ) {
+          if (defaultResult.success && defaultResult.consumed.length > 0) {
             // Commit the default when it consumed tokens.
             const defaultExec = mergeChildExec(
               discriminatorExec ?? context.exec,
@@ -17483,9 +17500,9 @@ export function conditional(
                 },
                 ...(defaultExec != null
                   ? {
-                    exec: defaultExec,
-                    dependencyRegistry: defaultExec.dependencyRegistry,
-                  }
+                      exec: defaultExec,
+                      dependencyRegistry: defaultExec.dependencyRegistry,
+                    }
                   : {}),
               },
               consumed: defaultResult.consumed,
@@ -17514,9 +17531,7 @@ export function conditional(
         // either definitive or provisional ambiguity—otherwise the
         // returned error would be order-dependent and contradict the
         // ambiguity-skip intent.
-        if (
-          speculativeError != null && !ambiguous && !provisionalAmbiguous
-        ) {
+        if (speculativeError != null && !ambiguous && !provisionalAmbiguous) {
           return speculativeError;
         }
 
@@ -17569,9 +17584,9 @@ export function conditional(
                 ...branchContext,
                 ...(discriminatorExec != null
                   ? {
-                    exec: discriminatorExec,
-                    dependencyRegistry: discriminatorExec.dependencyRegistry,
-                  }
+                      exec: discriminatorExec,
+                      dependencyRegistry: discriminatorExec.dependencyRegistry,
+                    }
                   : {}),
               },
               "_branch",
@@ -17598,11 +17613,11 @@ export function conditional(
             return {
               success: true,
               // See sync counterpart for isProvisional rationale.
-              ...((branchParseResult.provisional ||
-                  (discriminatorResult.consumed.length === 0 &&
-                    branchParseResult.consumed.length === 0 &&
-                    (branchParser.leadingNames.size > 0 ||
-                      branchParser.acceptingAnyToken)))
+              ...(branchParseResult.provisional ||
+              (discriminatorResult.consumed.length === 0 &&
+                branchParseResult.consumed.length === 0 &&
+                (branchParser.leadingNames.size > 0 ||
+                  branchParser.acceptingAnyToken))
                 ? { provisional: true as const }
                 : {}),
               next: {
@@ -17619,9 +17634,9 @@ export function conditional(
                 },
                 ...(mergedExec != null
                   ? {
-                    exec: mergedExec,
-                    dependencyRegistry: mergedExec.dependencyRegistry,
-                  }
+                      exec: mergedExec,
+                      dependencyRegistry: mergedExec.dependencyRegistry,
+                    }
                   : {}),
               },
               consumed: [
@@ -17651,9 +17666,9 @@ export function conditional(
                 },
                 ...(discriminatorExec != null
                   ? {
-                    exec: discriminatorExec,
-                    dependencyRegistry: discriminatorExec.dependencyRegistry,
-                  }
+                      exec: discriminatorExec,
+                      dependencyRegistry: discriminatorExec.dependencyRegistry,
+                    }
                   : {}),
               },
               consumed: discriminatorResult.consumed,
@@ -17705,8 +17720,8 @@ export function conditional(
           defaultResult.next.exec,
         );
         // See sync counterpart for rationale on commitDefault.
-        const commitDefault = defaultResult.consumed.length > 0 ||
-          context.buffer.length === 0;
+        const commitDefault =
+          defaultResult.consumed.length > 0 || context.buffer.length === 0;
         if (commitDefault) adoptOptionScope(context, defaultResult.next);
         return {
           success: true,
@@ -17726,9 +17741,9 @@ export function conditional(
             },
             ...(mergedExec != null
               ? {
-                exec: mergedExec,
-                dependencyRegistry: mergedExec.dependencyRegistry,
-              }
+                  exec: mergedExec,
+                  dependencyRegistry: mergedExec.dependencyRegistry,
+                }
               : {}),
           },
           consumed: defaultResult.consumed,
@@ -17813,10 +17828,7 @@ export function conditional(
               deferredBranch,
             );
             const branchResult = unwrapCompleteResult(
-              deferredBranch.complete(
-                annotatedBranchState,
-                branchExec,
-              ),
+              deferredBranch.complete(annotatedBranchState, branchExec),
             );
             if (branchResult.success) {
               return {
@@ -17824,24 +17836,20 @@ export function conditional(
                 value: [deferredValue, branchResult.value] as const,
                 ...(branchResult.deferred
                   ? {
-                    deferred: true as const,
-                    ...(branchResult.deferredKeys
-                      ? {
-                        deferredKeys: new Map([[
-                          1,
-                          branchResult.deferredKeys,
-                        ]]) as DeferredMap,
-                      }
-                      : branchResult.value == null ||
-                          typeof branchResult.value !== "object"
-                      ? {
-                        deferredKeys: new Map([[
-                          1,
-                          null,
-                        ]]) as DeferredMap,
-                      }
-                      : {}),
-                  }
+                      deferred: true as const,
+                      ...(branchResult.deferredKeys
+                        ? {
+                            deferredKeys: new Map([
+                              [1, branchResult.deferredKeys],
+                            ]) as DeferredMap,
+                          }
+                        : branchResult.value == null ||
+                            typeof branchResult.value !== "object"
+                          ? {
+                              deferredKeys: new Map([[1, null]]) as DeferredMap,
+                            }
+                          : {}),
+                    }
                   : {}),
               };
             }
@@ -17891,19 +17899,18 @@ export function conditional(
           value: [undefined, defaultResult.value] as const,
           ...(defaultResult.deferred
             ? {
-              deferred: true as const,
-              ...(defaultResult.deferredKeys
-                ? {
-                  deferredKeys: new Map([[
-                    1,
-                    defaultResult.deferredKeys,
-                  ]]) as DeferredMap,
-                }
-                : defaultResult.value == null ||
-                    typeof defaultResult.value !== "object"
-                ? { deferredKeys: new Map([[1, null]]) as DeferredMap }
-                : {}),
-            }
+                deferred: true as const,
+                ...(defaultResult.deferredKeys
+                  ? {
+                      deferredKeys: new Map([
+                        [1, defaultResult.deferredKeys],
+                      ]) as DeferredMap,
+                    }
+                  : defaultResult.value == null ||
+                      typeof defaultResult.value !== "object"
+                    ? { deferredKeys: new Map([[1, null]]) as DeferredMap }
+                    : {}),
+              }
             : {}),
         };
       }
@@ -17913,9 +17920,10 @@ export function conditional(
         error: message`Missing required discriminator option.`,
       };
     }
-    const branchParser = state.selectedBranch.kind === "default"
-      ? syncDefaultBranch!
-      : syncBranches[state.selectedBranch.key];
+    const branchParser =
+      state.selectedBranch.kind === "default"
+        ? syncDefaultBranch!
+        : syncBranches[state.selectedBranch.key];
     const annotatedDiscriminatorState = getAnnotatedChildState(
       state,
       state.discriminatorState,
@@ -17923,18 +17931,15 @@ export function conditional(
     );
     const combinedState = {
       _discriminator: annotatedDiscriminatorState,
-      _branch: getAnnotatedChildState(
-        state,
-        state.branchState,
-        branchParser,
-      ),
+      _branch: getAnnotatedChildState(state, state.branchState, branchParser),
     };
-    const runtime = state.speculative === true
-      ? createDependencyRuntimeContext(exec?.dependencyRegistry?.clone())
-      : forkRuntimeForCommittedSubtree(
-        exec,
-        committedSourceIds(state, exec?.path),
-      );
+    const runtime =
+      state.speculative === true
+        ? createDependencyRuntimeContext(exec?.dependencyRegistry?.clone())
+        : forkRuntimeForCommittedSubtree(
+            exec,
+            committedSourceIds(state, exec?.path),
+          );
     collectExplicitSourceValues(
       expandSourceCollectionNodes(
         buildRuntimeNodesFromPairs(
@@ -17967,15 +17972,17 @@ export function conditional(
     // Only complete the discriminator when needed—skip re-completion
     // when the cached discriminatorValue already matches the selected
     // branch key, avoiding side effects from non-idempotent discriminators.
-    const needsDiscriminatorCompletion = state.selectedBranch.kind !==
-        "default" &&
-      !(state.discriminatorValue != null &&
-        state.discriminatorValue === state.selectedBranch.key);
+    const needsDiscriminatorCompletion =
+      state.selectedBranch.kind !== "default" &&
+      !(
+        state.discriminatorValue != null &&
+        state.discriminatorValue === state.selectedBranch.key
+      );
     const discriminatorCompleteResult = needsDiscriminatorCompletion
       ? syncDiscriminator.complete(
-        annotatedDiscriminatorState,
-        withChildExecPath(completionExec, "_discriminator"),
-      )
+          annotatedDiscriminatorState,
+          withChildExecPath(completionExec, "_discriminator"),
+        )
       : undefined;
 
     const branchResult = unwrapCompleteResult(
@@ -18014,7 +18021,7 @@ export function conditional(
         discriminatorCompleteResult,
       );
       discriminatorValue = completedDiscriminator.success
-        ? completedDiscriminator.value as string
+        ? (completedDiscriminator.value as string)
         : state.selectedBranch.key;
     }
 
@@ -18025,19 +18032,18 @@ export function conditional(
       // remapping to index 1 of the [discriminator, branchValue] tuple.
       ...(branchResult.deferred
         ? {
-          deferred: true as const,
-          ...(branchResult.deferredKeys
-            ? {
-              deferredKeys: new Map([[
-                1,
-                branchResult.deferredKeys,
-              ]]) as DeferredMap,
-            }
-            : branchResult.value == null ||
-                typeof branchResult.value !== "object"
-            ? { deferredKeys: new Map([[1, null]]) as DeferredMap }
-            : {}),
-        }
+            deferred: true as const,
+            ...(branchResult.deferredKeys
+              ? {
+                  deferredKeys: new Map([
+                    [1, branchResult.deferredKeys],
+                  ]) as DeferredMap,
+                }
+              : branchResult.value == null ||
+                  typeof branchResult.value !== "object"
+                ? { deferredKeys: new Map([[1, null]]) as DeferredMap }
+                : {}),
+          }
         : {}),
     };
   };
@@ -18056,9 +18062,8 @@ export function conditional(
     resolvedValue: unknown,
     speculativeKey: string,
   ): { readonly success: false; readonly error: Message } => {
-    const resolvedKey = typeof resolvedValue === "string"
-      ? resolvedValue
-      : "<unknown>";
+    const resolvedKey =
+      typeof resolvedValue === "string" ? resolvedValue : "<unknown>";
     return {
       success: false,
       error: options?.errors?.branchMismatch
@@ -18107,29 +18112,33 @@ export function conditional(
       if (resolveBarrier == null && prepare == null) return node;
       return {
         ...node,
-        ...(resolveBarrier == null ? {} : {
-          resolveBarrier: async (ctx: SchedulingBarrierContext) => {
-            const result = await resolveBarrier(ctx);
-            if (result != null && "success" in result) {
-              return {
-                success: false as const,
-                error: branchError(branchKey, result.error),
-              };
-            }
-            return result;
-          },
-        }),
-        ...(prepare == null ? {} : {
-          prepare: async (ctx: SchedulingBarrierContext) => {
-            const failure = await prepare(ctx);
-            if (failure == null) return undefined;
-            return wrapCachedBarrierFailure(
-              ctx.exec?.effectfulCompletionSession,
-              failure,
-              branchKey,
-            );
-          },
-        }),
+        ...(resolveBarrier == null
+          ? {}
+          : {
+              resolveBarrier: async (ctx: SchedulingBarrierContext) => {
+                const result = await resolveBarrier(ctx);
+                if (result != null && "success" in result) {
+                  return {
+                    success: false as const,
+                    error: branchError(branchKey, result.error),
+                  };
+                }
+                return result;
+              },
+            }),
+        ...(prepare == null
+          ? {}
+          : {
+              prepare: async (ctx: SchedulingBarrierContext) => {
+                const failure = await prepare(ctx);
+                if (failure == null) return undefined;
+                return wrapCachedBarrierFailure(
+                  ctx.exec?.effectfulCompletionSession,
+                  failure,
+                  branchKey,
+                );
+              },
+            }),
       };
     });
   };
@@ -18217,12 +18226,13 @@ export function conditional(
       }
       mergedEdges.push(...estimate.dependencies.demandEdges);
     }
-    const merged = orderingUnion.size < 1 && mergedEdges.length < 1
-      ? undefined
-      : {
-        orderingDependencyIds: [...orderingUnion],
-        demandEdges: mergedEdges,
-      };
+    const merged =
+      orderingUnion.size < 1 && mergedEdges.length < 1
+        ? undefined
+        : {
+            orderingDependencyIds: [...orderingUnion],
+            demandEdges: mergedEdges,
+          };
     return {
       branchProvidedSourceIds: provided,
       branchGuaranteedIntersection: intersection ?? new Set<symbol>(),
@@ -18236,11 +18246,9 @@ export function conditional(
     path: readonly PropertyKey[] | undefined,
   ): ReadonlySet<symbol> => {
     const ids = new Set<symbol>();
-    for (
-      const node of expandEffectfulRuntimeNodes(
-        buildConditionalSchedulingNodes(state, path),
-      )
-    ) {
+    for (const node of expandEffectfulRuntimeNodes(
+      buildConditionalSchedulingNodes(state, path),
+    )) {
       const source = node.parser.dependencyMetadata?.source;
       if (source != null) ids.add(source.sourceId);
     }
@@ -18273,16 +18281,17 @@ export function conditional(
       conditionalState.discriminatorState,
       discriminator,
     );
-    const nodes: RuntimeNode[] = [{
-      path: [...(parentPath ?? []), "_discriminator"],
-      parser: discriminator,
-      state: annotatedDiscriminatorState,
-    }];
+    const nodes: RuntimeNode[] = [
+      {
+        path: [...(parentPath ?? []), "_discriminator"],
+        parser: discriminator,
+        state: annotatedDiscriminatorState,
+      },
+    ];
     const selected = conditionalState.selectedBranch;
     if (selected !== undefined && conditionalState.speculative !== true) {
-      const branchParser = selected.kind === "default"
-        ? defaultBranch
-        : branches[selected.key];
+      const branchParser =
+        selected.kind === "default" ? defaultBranch : branches[selected.key];
       if (branchParser != null) {
         const branchNode: RuntimeNode = {
           path: [...(parentPath ?? []), "_branch"],
@@ -18301,15 +18310,13 @@ export function conditional(
           // expansion is the same one the enclosing pass would apply,
           // and the nodes stay marked as expanded descendants so the
           // scheduling call never treats them as reusable.
-          for (
-            const expanded of wrapBranchBarrierNodes(
-              // The caller's traversal limits apply to the branch too:
-              // pre-expanding here must not fold an alternative that the
-              // caller would have stopped at into its scope.
-              expandEffectfulRuntimeNodes([branchNode], expandOptions),
-              branchKey,
-            )
-          ) {
+          for (const expanded of wrapBranchBarrierNodes(
+            // The caller's traversal limits apply to the branch too:
+            // pre-expanding here must not fold an alternative that the
+            // caller would have stopped at into its scope.
+            expandEffectfulRuntimeNodes([branchNode], expandOptions),
+            branchKey,
+          )) {
             preExpandedBranchNodes.add(expanded);
             nodes.push(expanded);
           }
@@ -18370,15 +18377,17 @@ export function conditional(
       const expandGuessedBranchNodes = (): readonly RuntimeNode[] => {
         const branchParser = branches[speculativeKey];
         if (branchParser == null) return [];
-        return expandEffectfulRuntimeNodes([{
-          path: [...(parentPath ?? []), "_branch"],
-          parser: branchParser,
-          state: getAnnotatedChildState(
-            conditionalState,
-            conditionalState.branchState,
-            branchParser,
-          ),
-        }]);
+        return expandEffectfulRuntimeNodes([
+          {
+            path: [...(parentPath ?? []), "_branch"],
+            parser: branchParser,
+            state: getAnnotatedChildState(
+              conditionalState,
+              conditionalState.branchState,
+              branchParser,
+            ),
+          },
+        ]);
       };
       // The guessed branch was parsed, so its occurrence states can
       // refine the static estimate: a consumer already satisfied by the
@@ -18402,10 +18411,11 @@ export function conditional(
           : {}),
         providesSourceIds: branchProvidedSourceIds,
         ...(speculativeEstimate != null &&
-            speculativeEstimate.guaranteedProvides.size > 0
+        speculativeEstimate.guaranteedProvides.size > 0
           ? {
-            guaranteedProvidesSourceIds: speculativeEstimate.guaranteedProvides,
-          }
+              guaranteedProvidesSourceIds:
+                speculativeEstimate.guaranteedProvides,
+            }
           : {}),
         ...(speculativeBarrierDependencies != null
           ? { barrierCompletionDependencies: speculativeBarrierDependencies }
@@ -18414,10 +18424,11 @@ export function conditional(
         resolveBarrier: async (ctx) => {
           const session = ctx.exec?.effectfulCompletionSession;
           if (session == null) return undefined;
-          const result = cell.result ??
-            session.completedByPath.get(discriminatorPathKey);
+          const result =
+            cell.result ?? session.completedByPath.get(discriminatorPathKey);
           if (
-            result == null || isDeferredCompletionResult(result) ||
+            result == null ||
+            isDeferredCompletionResult(result) ||
             result.success !== true
           ) {
             return undefined;
@@ -18445,10 +18456,11 @@ export function conditional(
         prepare: async (ctx) => {
           const session = ctx.exec?.effectfulCompletionSession;
           if (session == null) return undefined;
-          const result = cell.result ??
-            session.completedByPath.get(discriminatorPathKey);
+          const result =
+            cell.result ?? session.completedByPath.get(discriminatorPathKey);
           if (
-            result == null || isDeferredCompletionResult(result) ||
+            result == null ||
+            isDeferredCompletionResult(result) ||
             result.success !== true
           ) {
             return undefined;
@@ -18491,19 +18503,20 @@ export function conditional(
         | PreparedConditionalSelection
         | undefined;
       if (prepared == null) {
-        let discriminatorResult = cell.result ??
-          session.completedByPath.get(discriminatorPathKey);
-        if (
-          discriminatorResult == null && innerCompleteSource == null
-        ) {
+        let discriminatorResult =
+          cell.result ?? session.completedByPath.get(discriminatorPathKey);
+        if (discriminatorResult == null && innerCompleteSource == null) {
           // Effect-free discriminator: complete it once here; final
           // completion reuses the prepared result, so non-idempotent
           // completions (e.g., lazy defaults) still evaluate once.
-          const discriminatorExec = ctx.exec == null ? undefined : {
-            ...ctx.exec,
-            path: [...(parentPath ?? []), "_discriminator"],
-            republishCachedCompletions: undefined,
-          };
+          const discriminatorExec =
+            ctx.exec == null
+              ? undefined
+              : {
+                  ...ctx.exec,
+                  path: [...(parentPath ?? []), "_discriminator"],
+                  republishCachedCompletions: undefined,
+                };
           discriminatorResult = unwrapCompleteResult(
             await discriminator.complete(
               annotatedDiscriminatorState,
@@ -18525,11 +18538,14 @@ export function conditional(
         if (branchParser != null) {
           // Mirror final completion's empty-input replay parse so the
           // prepared branch state matches what completion would build.
-          const branchExec = ctx.exec == null ? undefined : {
-            ...ctx.exec,
-            path: [...(parentPath ?? []), "_branch"],
-            republishCachedCompletions: undefined,
-          };
+          const branchExec =
+            ctx.exec == null
+              ? undefined
+              : {
+                  ...ctx.exec,
+                  path: [...(parentPath ?? []), "_branch"],
+                  republishCachedCompletions: undefined,
+                };
           const annotatedInitial = getAnnotatedChildState(
             conditionalState,
             branchParser.initialState,
@@ -18550,11 +18566,12 @@ export function conditional(
         prepared = {
           discriminatorResult,
           branchParser,
-          branchKey: namedBranch != null
-            ? String(
-              (discriminatorResult as { readonly value: unknown }).value,
-            )
-            : undefined,
+          branchKey:
+            namedBranch != null
+              ? String(
+                  (discriminatorResult as { readonly value: unknown }).value,
+                )
+              : undefined,
           branchState,
         };
         session.preparedByPath.set(key, prepared);
@@ -18565,15 +18582,17 @@ export function conditional(
       prepared: PreparedConditionalSelection,
     ): readonly RuntimeNode[] => {
       if (prepared.branchParser == null) return [];
-      return expandEffectfulRuntimeNodes([{
-        path: [...(parentPath ?? []), "_branch"],
-        parser: prepared.branchParser,
-        state: getAnnotatedChildState(
-          conditionalState,
-          prepared.branchState,
-          prepared.branchParser,
-        ),
-      }]);
+      return expandEffectfulRuntimeNodes([
+        {
+          path: [...(parentPath ?? []), "_branch"],
+          parser: prepared.branchParser,
+          state: getAnnotatedChildState(
+            conditionalState,
+            prepared.branchState,
+            prepared.branchParser,
+          ),
+        },
+      ]);
     };
     nodes.push({
       path: [...(parentPath ?? []), "_branch"],
@@ -18699,14 +18718,15 @@ export function conditional(
         // Consume the prepared decision instead of re-completing the
         // discriminator, so a non-idempotent completion cannot select
         // a different branch than the one whose sources were scheduled.
-        const deferredDiscriminatorResult = prepared != null
-          ? prepared.discriminatorResult
-          : unwrapCompleteResult(
-            await discriminator.complete(
-              annotatedDiscriminatorStateForDeferred,
-              withChildExecPath(childExec, "_discriminator"),
-            ),
-          );
+        const deferredDiscriminatorResult =
+          prepared != null
+            ? prepared.discriminatorResult
+            : unwrapCompleteResult(
+                await discriminator.complete(
+                  annotatedDiscriminatorStateForDeferred,
+                  withChildExecPath(childExec, "_discriminator"),
+                ),
+              );
         if (deferredDiscriminatorResult.success) {
           const deferredValue = deferredDiscriminatorResult.value as string;
           const deferredBranch = branches[deferredValue];
@@ -18744,10 +18764,7 @@ export function conditional(
               deferredBranch,
             );
             const branchResult = unwrapCompleteResult(
-              await deferredBranch.complete(
-                annotatedBranchState,
-                branchExec,
-              ),
+              await deferredBranch.complete(annotatedBranchState, branchExec),
             );
             if (branchResult.success) {
               return {
@@ -18755,24 +18772,20 @@ export function conditional(
                 value: [deferredValue, branchResult.value] as const,
                 ...(branchResult.deferred
                   ? {
-                    deferred: true as const,
-                    ...(branchResult.deferredKeys
-                      ? {
-                        deferredKeys: new Map([[
-                          1,
-                          branchResult.deferredKeys,
-                        ]]) as DeferredMap,
-                      }
-                      : branchResult.value == null ||
-                          typeof branchResult.value !== "object"
-                      ? {
-                        deferredKeys: new Map([[
-                          1,
-                          null,
-                        ]]) as DeferredMap,
-                      }
-                      : {}),
-                  }
+                      deferred: true as const,
+                      ...(branchResult.deferredKeys
+                        ? {
+                            deferredKeys: new Map([
+                              [1, branchResult.deferredKeys],
+                            ]) as DeferredMap,
+                          }
+                        : branchResult.value == null ||
+                            typeof branchResult.value !== "object"
+                          ? {
+                              deferredKeys: new Map([[1, null]]) as DeferredMap,
+                            }
+                          : {}),
+                    }
                   : {}),
               };
             }
@@ -18825,7 +18838,9 @@ export function conditional(
           state,
           (prepared != null && prepared.branchKey == null
             ? prepared.branchState
-            : undefined) ?? state.branchState ?? defaultBranch.initialState,
+            : undefined) ??
+            state.branchState ??
+            defaultBranch.initialState,
           defaultBranch,
         );
         const defaultResult = unwrapCompleteResult(
@@ -18842,19 +18857,18 @@ export function conditional(
           value: [undefined, defaultResult.value] as const,
           ...(defaultResult.deferred
             ? {
-              deferred: true as const,
-              ...(defaultResult.deferredKeys
-                ? {
-                  deferredKeys: new Map([[
-                    1,
-                    defaultResult.deferredKeys,
-                  ]]) as DeferredMap,
-                }
-                : defaultResult.value == null ||
-                    typeof defaultResult.value !== "object"
-                ? { deferredKeys: new Map([[1, null]]) as DeferredMap }
-                : {}),
-            }
+                deferred: true as const,
+                ...(defaultResult.deferredKeys
+                  ? {
+                      deferredKeys: new Map([
+                        [1, defaultResult.deferredKeys],
+                      ]) as DeferredMap,
+                    }
+                  : defaultResult.value == null ||
+                      typeof defaultResult.value !== "object"
+                    ? { deferredKeys: new Map([[1, null]]) as DeferredMap }
+                    : {}),
+              }
             : {}),
         };
       }
@@ -18864,9 +18878,10 @@ export function conditional(
         error: message`Missing required discriminator option.`,
       };
     }
-    const branchParser = state.selectedBranch.kind === "default"
-      ? defaultBranch!
-      : branches[state.selectedBranch.key];
+    const branchParser =
+      state.selectedBranch.kind === "default"
+        ? defaultBranch!
+        : branches[state.selectedBranch.key];
     const annotatedDiscriminatorState = getAnnotatedChildState(
       state,
       state.discriminatorState,
@@ -18874,18 +18889,14 @@ export function conditional(
     );
     const combinedState = {
       _discriminator: annotatedDiscriminatorState,
-      _branch: getAnnotatedChildState(
-        state,
-        state.branchState,
-        branchParser,
-      ),
+      _branch: getAnnotatedChildState(state, state.branchState, branchParser),
     };
     const runtime = wasSpeculative
       ? createDependencyRuntimeContext(exec?.dependencyRegistry?.clone())
       : forkRuntimeForCommittedSubtree(
-        exec,
-        committedSourceIds(state, exec?.path),
-      );
+          exec,
+          committedSourceIds(state, exec?.path),
+        );
     await collectExplicitSourceValuesAsync(
       expandSourceCollectionNodes(
         buildRuntimeNodesFromPairs(
@@ -18930,9 +18941,9 @@ export function conditional(
         exec?.path,
       );
       const schedulingNodes = wasSpeculative
-        ? allSchedulingNodes.filter((node) =>
-          node.path.at(-1) === "_discriminator"
-        )
+        ? allSchedulingNodes.filter(
+            (node) => node.path.at(-1) === "_discriminator",
+          )
         : allSchedulingNodes;
       const schedulingFailure = await scheduleEffectfulSourceCompletions(
         schedulingNodes,
@@ -18950,10 +18961,12 @@ export function conditional(
     const childCompletionExec = withoutRepublishInstruction(completionExec);
     // Only complete the discriminator when needed
     // (see sync counterpart for rationale).
-    const needsDiscriminatorCompletion = state.selectedBranch.kind !==
-        "default" &&
-      !(state.discriminatorValue != null &&
-        state.discriminatorValue === state.selectedBranch.key);
+    const needsDiscriminatorCompletion =
+      state.selectedBranch.kind !== "default" &&
+      !(
+        state.discriminatorValue != null &&
+        state.discriminatorValue === state.selectedBranch.key
+      );
     // For speculative verification, complete the discriminator with
     // a runtime that ONLY contains discriminator-side sources.  In
     // the non-speculative path, the branch was selected by the
@@ -18989,9 +19002,9 @@ export function conditional(
     }
     const discriminatorCompleteResult = needsDiscriminatorCompletion
       ? await discriminator.complete(
-        annotatedDiscriminatorState,
-        withChildExecPath(discriminatorCompletionExec, "_discriminator"),
-      )
+          annotatedDiscriminatorState,
+          withChildExecPath(discriminatorCompletionExec, "_discriminator"),
+        )
       : undefined;
 
     // Determine the discriminator value before completing the branch
@@ -19082,7 +19095,8 @@ export function conditional(
         // in the session, which is how it is told apart here.
         const branchError = options?.errors?.branchError;
         if (
-          branchError == null || discriminatorValue === undefined ||
+          branchError == null ||
+          discriminatorValue === undefined ||
           replaceCachedBarrierFailure(
             completionExec.effectfulCompletionSession,
             replayFailure,
@@ -19113,10 +19127,7 @@ export function conditional(
     );
 
     if (!branchResult.success) {
-      if (
-        discriminatorValue !== undefined &&
-        options?.errors?.branchError
-      ) {
+      if (discriminatorValue !== undefined && options?.errors?.branchError) {
         return {
           success: false,
           error: options.errors.branchError(
@@ -19133,19 +19144,18 @@ export function conditional(
       value: [discriminatorValue, branchResult.value] as const,
       ...(branchResult.deferred
         ? {
-          deferred: true as const,
-          ...(branchResult.deferredKeys
-            ? {
-              deferredKeys: new Map([[
-                1,
-                branchResult.deferredKeys,
-              ]]) as DeferredMap,
-            }
-            : branchResult.value == null ||
-                typeof branchResult.value !== "object"
-            ? { deferredKeys: new Map([[1, null]]) as DeferredMap }
-            : {}),
-        }
+            deferred: true as const,
+            ...(branchResult.deferredKeys
+              ? {
+                  deferredKeys: new Map([
+                    [1, branchResult.deferredKeys],
+                  ]) as DeferredMap,
+                }
+              : branchResult.value == null ||
+                  typeof branchResult.value !== "object"
+                ? { deferredKeys: new Map([[1, null]]) as DeferredMap }
+                : {}),
+          }
         : {}),
     };
   };
@@ -19215,23 +19225,24 @@ export function conditional(
       );
       const defaultCombinedState = {
         _discriminator: annotatedDiscriminatorState,
-        _branch: syncDefaultBranch == null
-          ? state.branchState
-          : getAnnotatedChildState(
-            state,
-            state.branchState,
-            syncDefaultBranch,
-          ),
+        _branch:
+          syncDefaultBranch == null
+            ? state.branchState
+            : getAnnotatedChildState(
+                state,
+                state.branchState,
+                syncDefaultBranch,
+              ),
       };
       collectExplicitSourceValues(
         expandSourceCollectionNodes(
           buildRuntimeNodesFromPairs(
             syncDefaultBranch == null
-              ? [["\u005fdiscriminator", discriminator]] as const
-              : [
-                ["\u005fdiscriminator", discriminator],
-                ["\u005fbranch", syncDefaultBranch],
-              ] as const,
+              ? ([["\u005fdiscriminator", discriminator]] as const)
+              : ([
+                  ["\u005fdiscriminator", discriminator],
+                  ["\u005fbranch", syncDefaultBranch],
+                ] as const),
             defaultCombinedState,
             context.exec?.path,
           ),
@@ -19244,12 +19255,12 @@ export function conditional(
         dependencyRegistry: runtime.registry,
         ...(context.exec != null
           ? {
-            exec: {
-              ...context.exec,
-              dependencyRuntime: runtime,
-              dependencyRegistry: runtime.registry,
-            },
-          }
+              exec: {
+                ...context.exec,
+                dependencyRuntime: runtime,
+                dependencyRegistry: runtime.registry,
+              },
+            }
           : {}),
       };
       // Discriminator suggestions
@@ -19311,9 +19322,10 @@ export function conditional(
       }
     } else {
       // Delegate to selected branch
-      const branchParser = state.selectedBranch.kind === "default"
-        ? syncDefaultBranch!
-        : syncBranches[state.selectedBranch.key];
+      const branchParser =
+        state.selectedBranch.kind === "default"
+          ? syncDefaultBranch!
+          : syncBranches[state.selectedBranch.key];
       const runtime = createDependencyRuntimeContext(
         context.dependencyRegistry?.clone(),
       );
@@ -19324,11 +19336,7 @@ export function conditional(
       );
       const combinedState = {
         _discriminator: annotatedDiscriminatorState,
-        _branch: getAnnotatedChildState(
-          state,
-          state.branchState,
-          branchParser,
-        ),
+        _branch: getAnnotatedChildState(state, state.branchState, branchParser),
       };
       collectExplicitSourceValues(
         expandSourceCollectionNodes(
@@ -19349,12 +19357,12 @@ export function conditional(
         dependencyRegistry: runtime.registry,
         ...(context.exec != null
           ? {
-            exec: {
-              ...context.exec,
-              dependencyRuntime: runtime,
-              dependencyRegistry: runtime.registry,
-            },
-          }
+              exec: {
+                ...context.exec,
+                dependencyRuntime: runtime,
+                dependencyRegistry: runtime.registry,
+              },
+            }
           : {}),
       };
 
@@ -19389,23 +19397,20 @@ export function conditional(
       );
       const defaultCombinedState = {
         _discriminator: annotatedDiscriminatorState,
-        _branch: defaultBranch == null
-          ? state.branchState
-          : getAnnotatedChildState(
-            state,
-            state.branchState,
-            defaultBranch,
-          ),
+        _branch:
+          defaultBranch == null
+            ? state.branchState
+            : getAnnotatedChildState(state, state.branchState, defaultBranch),
       };
       await collectExplicitSourceValuesAsync(
         expandSourceCollectionNodes(
           buildRuntimeNodesFromPairs(
             defaultBranch == null
-              ? [["\u005fdiscriminator", discriminator]] as const
-              : [
-                ["\u005fdiscriminator", discriminator],
-                ["\u005fbranch", defaultBranch],
-              ] as const,
+              ? ([["\u005fdiscriminator", discriminator]] as const)
+              : ([
+                  ["\u005fdiscriminator", discriminator],
+                  ["\u005fbranch", defaultBranch],
+                ] as const),
             defaultCombinedState,
             context.exec?.path,
           ),
@@ -19418,12 +19423,12 @@ export function conditional(
         dependencyRegistry: runtime.registry,
         ...(context.exec != null
           ? {
-            exec: {
-              ...context.exec,
-              dependencyRuntime: runtime,
-              dependencyRegistry: runtime.registry,
-            },
-          }
+              exec: {
+                ...context.exec,
+                dependencyRuntime: runtime,
+                dependencyRegistry: runtime.registry,
+              },
+            }
           : {}),
       };
       // Discriminator suggestions
@@ -19493,9 +19498,10 @@ export function conditional(
       }
     } else {
       // Delegate to selected branch
-      const branchParser = state.selectedBranch.kind === "default"
-        ? defaultBranch!
-        : branches[state.selectedBranch.key];
+      const branchParser =
+        state.selectedBranch.kind === "default"
+          ? defaultBranch!
+          : branches[state.selectedBranch.key];
       const runtime = createDependencyRuntimeContext(
         context.dependencyRegistry?.clone(),
       );
@@ -19506,11 +19512,7 @@ export function conditional(
       );
       const combinedState = {
         _discriminator: annotatedDiscriminatorState,
-        _branch: getAnnotatedChildState(
-          state,
-          state.branchState,
-          branchParser,
-        ),
+        _branch: getAnnotatedChildState(state, state.branchState, branchParser),
       };
       await collectExplicitSourceValuesAsync(
         expandSourceCollectionNodes(
@@ -19531,12 +19533,12 @@ export function conditional(
         dependencyRegistry: runtime.registry,
         ...(context.exec != null
           ? {
-            exec: {
-              ...context.exec,
-              dependencyRuntime: runtime,
-              dependencyRegistry: runtime.registry,
-            },
-          }
+              exec: {
+                ...context.exec,
+                dependencyRuntime: runtime,
+                dependencyRegistry: runtime.registry,
+              },
+            }
           : {}),
       };
 
@@ -19640,29 +19642,31 @@ export function conditional(
             return combineTuplePhase2Seeds(discriminatorSeed, null);
           }
 
-          const branchParser = state.selectedBranch.kind === "default"
-            ? syncDefaultBranch!
-            : syncBranches[state.selectedBranch.key];
+          const branchParser =
+            state.selectedBranch.kind === "default"
+              ? syncDefaultBranch!
+              : syncBranches[state.selectedBranch.key];
           const branchSeed = getConditionalBranchSeedSync(
             state,
             branchParser,
             state.branchState ?? branchParser.initialState,
             exec,
           );
-          const discriminatorSeed = state.selectedBranch.kind === "default"
-            ? null
-            : state.discriminatorValue != null &&
-                state.discriminatorValue === state.selectedBranch.key
-            ? { value: state.discriminatorValue }
-            : completeOrExtractPhase2Seed(
-              syncDiscriminator,
-              getAnnotatedChildState(
-                state,
-                state.discriminatorState,
-                syncDiscriminator,
-              ),
-              discriminatorExec,
-            ) ?? { value: state.selectedBranch.key };
+          const discriminatorSeed =
+            state.selectedBranch.kind === "default"
+              ? null
+              : state.discriminatorValue != null &&
+                  state.discriminatorValue === state.selectedBranch.key
+                ? { value: state.discriminatorValue }
+                : (completeOrExtractPhase2Seed(
+                    syncDiscriminator,
+                    getAnnotatedChildState(
+                      state,
+                      state.discriminatorState,
+                      syncDiscriminator,
+                    ),
+                    discriminatorExec,
+                  ) ?? { value: state.selectedBranch.key });
           return combineTuplePhase2Seeds(discriminatorSeed, branchSeed);
         },
         async () => {
@@ -19701,29 +19705,31 @@ export function conditional(
             return combineTuplePhase2Seeds(discriminatorSeed, null);
           }
 
-          const branchParser = state.selectedBranch.kind === "default"
-            ? defaultBranch!
-            : branches[state.selectedBranch.key];
+          const branchParser =
+            state.selectedBranch.kind === "default"
+              ? defaultBranch!
+              : branches[state.selectedBranch.key];
           const branchSeed = await getConditionalBranchSeedAsync(
             state,
             branchParser,
             state.branchState ?? branchParser.initialState,
             exec,
           );
-          const discriminatorSeed = state.selectedBranch.kind === "default"
-            ? null
-            : state.discriminatorValue != null &&
-                state.discriminatorValue === state.selectedBranch.key
-            ? { value: state.discriminatorValue }
-            : await completeOrExtractPhase2Seed(
-              discriminator,
-              getAnnotatedChildState(
-                state,
-                state.discriminatorState,
-                discriminator,
-              ),
-              discriminatorExec,
-            ) ?? { value: state.selectedBranch.key };
+          const discriminatorSeed =
+            state.selectedBranch.kind === "default"
+              ? null
+              : state.discriminatorValue != null &&
+                  state.discriminatorValue === state.selectedBranch.key
+                ? { value: state.discriminatorValue }
+                : ((await completeOrExtractPhase2Seed(
+                    discriminator,
+                    getAnnotatedChildState(
+                      state,
+                      state.discriminatorState,
+                      discriminator,
+                    ),
+                    discriminatorExec,
+                  )) ?? { value: state.selectedBranch.key });
           return combineTuplePhase2Seeds(discriminatorSeed, branchSeed);
         },
       );
@@ -19759,8 +19765,9 @@ export function conditional(
         );
 
         children.push(branchFragments);
-        const entries: DocEntry[] = branchFragments.fragments
-          .filter((f): f is DocEntry & { type: "entry" } => f.type === "entry");
+        const entries: DocEntry[] = branchFragments.fragments.filter(
+          (f): f is DocEntry & { type: "entry" } => f.type === "entry",
+        );
 
         // Also collect entries from sections
         for (const fragment of branchFragments.fragments) {
@@ -19786,8 +19793,9 @@ export function conditional(
         );
 
         children.push(defaultFragments);
-        const entries: DocEntry[] = defaultFragments.fragments
-          .filter((f): f is DocEntry & { type: "entry" } => f.type === "entry");
+        const entries: DocEntry[] = defaultFragments.fragments.filter(
+          (f): f is DocEntry & { type: "entry" } => f.type === "entry",
+        );
 
         for (const fragment of defaultFragments.fragments) {
           if (fragment.type === "section") {
@@ -19807,32 +19815,41 @@ export function conditional(
       let selected = getSelectedCommandUsage(undefined);
       if (state.kind === "available" && state.state.selectedBranch != null) {
         const selection = state.state.selectedBranch;
-        const branch = selection.kind === "default"
-          ? defaultBranch
-          : branches[selection.key];
+        const branch =
+          selection.kind === "default"
+            ? defaultBranch
+            : branches[selection.key];
         if (branch != null) {
-          const docs = branch.getDocFragments({
-            kind: "available",
-            state: getAnnotatedChildState(
-              state.state,
-              state.state.branchState,
-              branch,
-            ),
-          }, undefined);
-          if (selection.kind === "default") {
-            selected = getSelectedCommandUsage(scopeCommandDocMetadata(
-              getCommandDocMetadata(docs),
-              defaultUsageScope,
-            ));
-          } else {
-            const discriminatorDocs = discriminator.getDocFragments({
+          const docs = branch.getDocFragments(
+            {
               kind: "available",
               state: getAnnotatedChildState(
                 state.state,
-                state.state.discriminatorState,
-                discriminator,
+                state.state.branchState,
+                branch,
               ),
-            }, undefined);
+            },
+            undefined,
+          );
+          if (selection.kind === "default") {
+            selected = getSelectedCommandUsage(
+              scopeCommandDocMetadata(
+                getCommandDocMetadata(docs),
+                defaultUsageScope,
+              ),
+            );
+          } else {
+            const discriminatorDocs = discriminator.getDocFragments(
+              {
+                kind: "available",
+                state: getAnnotatedChildState(
+                  state.state,
+                  state.state.discriminatorState,
+                  discriminator,
+                ),
+              },
+              undefined,
+            );
             const metadata = collectCommandDocMetadata(
               scopeCommandDocMetadata(
                 getCommandDocMetadata(discriminatorDocs),
@@ -19842,10 +19859,12 @@ export function conditional(
               false,
               branchUsageScope,
             );
-            selected = getSelectedCommandUsage(scopeCommandDocMetadata(
-              metadata,
-              commandUsageScopes.get(selection.key)!,
-            ));
+            selected = getSelectedCommandUsage(
+              scopeCommandDocMetadata(
+                metadata,
+                commandUsageScopes.get(selection.key)!,
+              ),
+            );
           }
         }
       }
@@ -19921,9 +19940,8 @@ export function conditional(
     }
     const known = getKnownCompletion(discriminator, state.discriminatorState);
     if (known != null) {
-      const branch = typeof known.value === "string"
-        ? branches[known.value]
-        : undefined;
+      const branch =
+        typeof known.value === "string" ? branches[known.value] : undefined;
       const reachable = branch ?? defaultBranch;
       return reachable == null
         ? []
@@ -19934,25 +19952,28 @@ export function conditional(
       state: branch.initialState,
     }));
   };
-  defineReachableChildren(conditionalParser, [
-    discriminator,
-    ...allBranchParsers,
-  ], (state) => [
-    ...(state.selectedBranch == null
-      ? [{
-        parser: discriminator,
-        state: getParseChildState(
-          state,
-          state.discriminatorState,
-          discriminator,
-        ),
-      }]
-      : []),
-    ...reachableBranches(state).map(({ branch, state: childState }) => ({
-      parser: branch,
-      state: getParseChildState(state, childState, branch),
-    })),
-  ]);
+  defineReachableChildren(
+    conditionalParser,
+    [discriminator, ...allBranchParsers],
+    (state) => [
+      ...(state.selectedBranch == null
+        ? [
+            {
+              parser: discriminator,
+              state: getParseChildState(
+                state,
+                state.discriminatorState,
+                discriminator,
+              ),
+            },
+          ]
+        : []),
+      ...reachableBranches(state).map(({ branch, state: childState }) => ({
+        parser: branch,
+        state: getParseChildState(state, childState, branch),
+      })),
+    ],
+  );
   return fluent(
     scopeParser(conditionalParser, optionScope.source, (context) => {
       const selected = context.state?.selectedBranch;
@@ -19972,9 +19993,9 @@ function commandDocBranchContext<TState>(
   nextIndex: number,
 ): ParserContext<TState> {
   if (activeIndex == null || activeIndex === nextIndex) return context;
-  const exec = withoutCommandDocPolicySubtree(
-    context.exec,
-    [...(context.exec?.path ?? []), activeIndex],
-  );
+  const exec = withoutCommandDocPolicySubtree(context.exec, [
+    ...(context.exec?.path ?? []),
+    activeIndex,
+  ]);
   return exec === context.exec ? context : { ...context, exec };
 }

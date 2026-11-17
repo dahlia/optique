@@ -17,8 +17,7 @@ await runProgram({
     name: "tasks",
     version: "1.0.0",
     brief: message`Project task runner.`,
-    description:
-      message`A small task runner whose commands are discovered from files.`,
+    description: message`A small task runner whose commands are discovered from files.`,
   },
   args: process.argv.slice(2),
   showDefault: true,

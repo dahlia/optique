@@ -38,14 +38,16 @@ describe("discovered command showUsage", () => {
   });
 
   it("does not copy a descendant policy into a synthetic namespace", async () => {
-    const parser = createProgramParser([{
-      path: ["admin", "create"],
-      command: defineCommand({
-        parser: option("--verbose"),
-        metadata: { showUsage: true },
-        handler() {},
-      }),
-    }]);
+    const parser = createProgramParser([
+      {
+        path: ["admin", "create"],
+        command: defineCommand({
+          parser: option("--verbose"),
+          metadata: { showUsage: true },
+          handler() {},
+        }),
+      },
+    ]);
     assert.equal((await getDocPage(parser, ["admin"]))?.showUsage, undefined);
     assert.ok((await getDocPage(parser, ["admin", "create"]))?.showUsage);
   });
@@ -54,29 +56,34 @@ describe("discovered command showUsage", () => {
     const exit = new Error("Help completed.");
     let output = "";
     let exitCode: number | undefined;
-    await assert.rejects(async () => {
-      await runProgram({
-        commands: [defineCommand({
-          path: ["build"],
-          parser: option("--verbose"),
-          metadata: { showUsage: true },
-          handler() {
-            assert.fail("Help must not dispatch the handler.");
+    await assert.rejects(
+      async () => {
+        await runProgram({
+          commands: [
+            defineCommand({
+              path: ["build"],
+              parser: option("--verbose"),
+              metadata: { showUsage: true },
+              handler() {
+                assert.fail("Help must not dispatch the handler.");
+              },
+            }),
+          ],
+          metadata: { name: "tool" },
+          args: ["build", "--help"],
+          showUsage: false,
+          colors: false,
+          stdout: (text) => {
+            output += text;
           },
-        })],
-        metadata: { name: "tool" },
-        args: ["build", "--help"],
-        showUsage: false,
-        colors: false,
-        stdout: (text) => {
-          output += text;
-        },
-        onExit(code): never {
-          exitCode = code;
-          throw exit;
-        },
-      });
-    }, (error: unknown) => error === exit);
+          onExit(code): never {
+            exitCode = code;
+            throw exit;
+          },
+        });
+      },
+      (error: unknown) => error === exit,
+    );
     assert.equal(exitCode, 0);
     assert.match(output, /Usage: tool build/);
   });

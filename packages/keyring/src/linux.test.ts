@@ -15,7 +15,8 @@ import {
 } from "@jellybrick/dbus-next";
 import { readLinuxPassword } from "./linux.ts";
 
-const available = process.platform === "linux" &&
+const available =
+  process.platform === "linux" &&
   spawnSync("dbus-daemon", ["--version"]).status === 0;
 
 describe("Secret Service password lookup", { skip: !available }, () => {
@@ -55,10 +56,12 @@ describe("Secret Service password lookup", { skip: !available }, () => {
   it("should report absence only after a successful empty search", async () => {
     respond = (request) => {
       assert.equal(request.member, "SearchItems");
-      assert.deepEqual(request.body, [{
-        service: "example.test",
-        username: "alice",
-      }]);
+      assert.deepEqual(request.body, [
+        {
+          service: "example.test",
+          username: "alice",
+        },
+      ]);
 
       return Message.newMethodReturn(request, "aoao", [[], []]);
     };
@@ -96,9 +99,10 @@ describe("Secret Service password lookup", { skip: !available }, () => {
     respond = (request) => {
       assert.equal(request.member, "SearchItems");
 
-      return Message.newMethodReturn(request, "aoao", [["/item/one"], [
-        "/item/two",
-      ]]);
+      return Message.newMethodReturn(request, "aoao", [
+        ["/item/one"],
+        ["/item/two"],
+      ]);
     };
 
     await assert.rejects(read(), {
@@ -111,10 +115,10 @@ describe("Secret Service password lookup", { skip: !available }, () => {
       request.member === "SearchItems"
         ? Message.newMethodReturn(request, "aoao", [["/item/one"], []])
         : Message.newError(
-          request,
-          "org.freedesktop.DBus.Error.Failed",
-          "Session failed.",
-        );
+            request,
+            "org.freedesktop.DBus.Error.Failed",
+            "Session failed.",
+          );
 
     await assert.rejects(read(), {
       type: "org.freedesktop.DBus.Error.Failed",
@@ -122,9 +126,11 @@ describe("Secret Service password lookup", { skip: !available }, () => {
     });
   });
 
-  for (
-    const password of ["", "비밀번호\nwith spaces\u0000", "\ufeffpassword"]
-  ) {
+  for (const password of [
+    "",
+    "비밀번호\nwith spaces\u0000",
+    "\ufeffpassword",
+  ]) {
     it(`should read an encrypted ${password === "" ? "empty" : "Unicode"} password without altering it`, async () => {
       respond = encryptedStore(Buffer.from(password, "utf8"));
 
@@ -143,10 +149,10 @@ describe("Secret Service password lookup", { skip: !available }, () => {
     respond = (request) =>
       request.member === "GetSecret"
         ? Message.newError(
-          request,
-          "org.freedesktop.Secret.Error.IsLocked",
-          "Locked during lookup.",
-        )
+            request,
+            "org.freedesktop.Secret.Error.IsLocked",
+            "Locked during lookup.",
+          )
         : normal(request);
 
     await assert.rejects(read(), {
@@ -204,12 +210,9 @@ function encryptedStore(password: Buffer): (request: Message) => Message {
     const cipher = createCipheriv("aes-128-cbc", key, iv);
     const encrypted = Buffer.concat([cipher.update(password), cipher.final()]);
 
-    return Message.newMethodReturn(request, "(oayays)", [[
-      "/session/one",
-      iv,
-      encrypted,
-      "text/plain; charset=utf-8",
-    ]]);
+    return Message.newMethodReturn(request, "(oayays)", [
+      ["/session/one", iv, encrypted, "text/plain; charset=utf-8"],
+    ]);
   };
 }
 
@@ -218,13 +221,17 @@ async function startBus(): Promise<{
   readonly stop: () => Promise<void>;
 }> {
   const directory = await mkdtemp(join(tmpdir(), "optique-keyring-"));
-  const child = spawn("dbus-daemon", [
-    "--session",
-    "--nofork",
-    "--nopidfile",
-    "--print-address=1",
-    `--address=unix:path=${join(directory, "bus")}`,
-  ], { stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(
+    "dbus-daemon",
+    [
+      "--session",
+      "--nofork",
+      "--nopidfile",
+      "--print-address=1",
+      `--address=unix:path=${join(directory, "bus")}`,
+    ],
+    { stdio: ["ignore", "pipe", "pipe"] },
+  );
   const closed = once(child, "close");
 
   const stop = async () => {
@@ -237,9 +244,8 @@ async function startBus(): Promise<{
     const address = await new Promise<string>((resolve, reject) => {
       let output = "";
       child.once("error", reject);
-      child.once(
-        "exit",
-        () => reject(new Error("The test D-Bus daemon exited.")),
+      child.once("exit", () =>
+        reject(new Error("The test D-Bus daemon exited.")),
       );
       child.stdout.on("data", (data: Buffer) => {
         output += data.toString();

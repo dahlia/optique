@@ -112,10 +112,7 @@ describe("escapeRequestArg()", () => {
   });
 
   it("escapes both backslashes and double quotes", () => {
-    assert.equal(
-      escapeRequestArg('A\\B "quoted"'),
-      "A\\(rsB \\(dqquoted\\(dq",
-    );
+    assert.equal(escapeRequestArg('A\\B "quoted"'), "A\\(rsB \\(dqquoted\\(dq");
   });
 
   it("leaves plain text unchanged", () => {
@@ -252,10 +249,7 @@ describe("formatMessageAsRoff()", () => {
   });
 
   it("rejects empty values", () => {
-    assert.throws(
-      () => values([]),
-      TypeError,
-    );
+    assert.throws(() => values([]), TypeError);
   });
 
   it("formats envVar in bold", () => {
@@ -277,9 +271,9 @@ describe("formatMessageAsRoff()", () => {
   });
 
   it("formats complex message with multiple terms", () => {
-    const msg = message`Use ${optionName("--config")} ${
-      metavar("FILE")
-    } to specify config.`;
+    const msg = message`Use ${optionName("--config")} ${metavar(
+      "FILE",
+    )} to specify config.`;
     assert.equal(
       formatMessageAsRoff(msg),
       "Use \\fB\\-\\-config\\fR \\fIFILE\\fR to specify config.",
@@ -314,10 +308,7 @@ describe("formatMessageAsRoff()", () => {
 
   it("handles multiple paragraph breaks", () => {
     const msg = [text("First.\n\nSecond.\n\nThird.")];
-    assert.equal(
-      formatMessageAsRoff(msg),
-      "First.\n.PP\nSecond.\n.PP\nThird.",
-    );
+    assert.equal(formatMessageAsRoff(msg), "First.\n.PP\nSecond.\n.PP\nThird.");
   });
 
   it("formats message with all term types", () => {

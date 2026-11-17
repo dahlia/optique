@@ -130,7 +130,7 @@ describe("logLevel()", () => {
       assert.ok(!result.success);
       if (!result.success) {
         const text = result.error
-          .map((part) => "text" in part ? part.text : "")
+          .map((part) => ("text" in part ? part.text : ""))
           .join("");
         assert.ok(text.includes("Bad level."));
       }
@@ -146,7 +146,7 @@ describe("logLevel()", () => {
       assert.ok(!result.success);
       if (!result.success) {
         const text = result.error
-          .map((part) => "text" in part ? part.text : "")
+          .map((part) => ("text" in part ? part.text : ""))
           .join("");
         assert.ok(text.includes("Unknown level:"));
       }
@@ -280,15 +280,12 @@ describe("verbosity()", () => {
   });
 
   it("should reject invalid base level at runtime", () => {
-    assert.throws(
-      () => verbosity({ baseLevel: "invalid" as never }),
-      {
-        name: "TypeError",
-        message:
-          'Invalid log level for baseLevel: invalid.  Expected "trace", ' +
-          '"debug", "info", "warning", "error", "fatal".',
-      },
-    );
+    assert.throws(() => verbosity({ baseLevel: "invalid" as never }), {
+      name: "TypeError",
+      message:
+        'Invalid log level for baseLevel: invalid.  Expected "trace", ' +
+        '"debug", "info", "warning", "error", "fatal".',
+    });
   });
 });
 
@@ -327,27 +324,21 @@ describe("debug()", () => {
   });
 
   it("should reject invalid debugLevel at runtime", () => {
-    assert.throws(
-      () => debug({ debugLevel: "invalid" as never }),
-      {
-        name: "TypeError",
-        message:
-          'Invalid log level for debugLevel: invalid.  Expected "trace", ' +
-          '"debug", "info", "warning", "error", "fatal".',
-      },
-    );
+    assert.throws(() => debug({ debugLevel: "invalid" as never }), {
+      name: "TypeError",
+      message:
+        'Invalid log level for debugLevel: invalid.  Expected "trace", ' +
+        '"debug", "info", "warning", "error", "fatal".',
+    });
   });
 
   it("should reject invalid normalLevel at runtime", () => {
-    assert.throws(
-      () => debug({ normalLevel: "invalid" as never }),
-      {
-        name: "TypeError",
-        message:
-          'Invalid log level for normalLevel: invalid.  Expected "trace", ' +
-          '"debug", "info", "warning", "error", "fatal".',
-      },
-    );
+    assert.throws(() => debug({ normalLevel: "invalid" as never }), {
+      name: "TypeError",
+      message:
+        'Invalid log level for normalLevel: invalid.  Expected "trace", ' +
+        '"debug", "info", "warning", "error", "fatal".',
+    });
   });
 
   it("should respect custom levels", () => {
@@ -545,12 +536,10 @@ describe("logOutput()", () => {
       output: logOutput(),
     });
     const suggestions = suggestSync(parser, ["--log-output", ""]);
+    assert.ok(suggestions.some((s) => s.kind === "literal" && s.text === "-"));
     assert.ok(
-      suggestions.some((s) => s.kind === "literal" && s.text === "-"),
-    );
-    assert.ok(
-      suggestions.some((s) =>
-        s.kind === "file" && s.type === "file" && s.pattern === ""
+      suggestions.some(
+        (s) => s.kind === "file" && s.type === "file" && s.pattern === "",
       ),
     );
   });
@@ -561,29 +550,30 @@ describe("logOutput()", () => {
     });
     const dotSuggestions = suggestSync(parser, ["--log-output", "."]);
     assert.ok(
-      dotSuggestions.some((s) =>
-        s.kind === "file" && s.type === "file" && s.includeHidden === true
+      dotSuggestions.some(
+        (s) =>
+          s.kind === "file" && s.type === "file" && s.includeHidden === true,
       ),
     );
-    const nestedDotSuggestions = suggestSync(parser, [
-      "--log-output",
-      "src/.",
-    ]);
+    const nestedDotSuggestions = suggestSync(parser, ["--log-output", "src/."]);
     assert.ok(
-      nestedDotSuggestions.some((s) =>
-        s.kind === "file" && s.type === "file" && s.includeHidden === true
+      nestedDotSuggestions.some(
+        (s) =>
+          s.kind === "file" && s.type === "file" && s.includeHidden === true,
       ),
     );
     const normalSuggestions = suggestSync(parser, ["--log-output", "src"]);
     assert.ok(
-      normalSuggestions.some((s) =>
-        s.kind === "file" && s.type === "file" && s.includeHidden === false
+      normalSuggestions.some(
+        (s) =>
+          s.kind === "file" && s.type === "file" && s.includeHidden === false,
       ),
     );
     const dotdotSuggestions = suggestSync(parser, ["--log-output", ".."]);
     assert.ok(
-      dotdotSuggestions.some((s) =>
-        s.kind === "file" && s.type === "file" && s.includeHidden === false
+      dotdotSuggestions.some(
+        (s) =>
+          s.kind === "file" && s.type === "file" && s.includeHidden === false,
       ),
     );
     const nestedDotdotSuggestions = suggestSync(parser, [
@@ -591,17 +581,16 @@ describe("logOutput()", () => {
       "src/..",
     ]);
     assert.ok(
-      nestedDotdotSuggestions.some((s) =>
-        s.kind === "file" && s.type === "file" && s.includeHidden === false
+      nestedDotdotSuggestions.some(
+        (s) =>
+          s.kind === "file" && s.type === "file" && s.includeHidden === false,
       ),
     );
-    const parentDirSuggestions = suggestSync(parser, [
-      "--log-output",
-      "../",
-    ]);
+    const parentDirSuggestions = suggestSync(parser, ["--log-output", "../"]);
     assert.ok(
-      parentDirSuggestions.some((s) =>
-        s.kind === "file" && s.type === "file" && s.includeHidden === false
+      parentDirSuggestions.some(
+        (s) =>
+          s.kind === "file" && s.type === "file" && s.includeHidden === false,
       ),
     );
   });
@@ -658,13 +647,10 @@ describe("logOutput()", () => {
   });
 
   it("should throw TypeError for empty metavar", () => {
-    assert.throws(
-      () => logOutput({ metavar: "" as never }),
-      {
-        name: "TypeError",
-        message: "Expected a non-empty string.",
-      },
-    );
+    assert.throws(() => logOutput({ metavar: "" as never }), {
+      name: "TypeError",
+      message: "Expected a non-empty string.",
+    });
   });
 });
 
@@ -824,7 +810,8 @@ describe("loggingOptions()", () => {
         }),
       {
         name: "TypeError",
-        message: 'Invalid log level for default: invalid.  Expected "trace", ' +
+        message:
+          'Invalid log level for default: invalid.  Expected "trace", ' +
           '"debug", "info", "warning", "error", "fatal".',
       },
     );
@@ -847,14 +834,12 @@ describe("loggingOptions()", () => {
   });
 
   it("should reject invalid level discriminant", () => {
-    assert.throws(
-      () => loggingOptions({ level: "traceflag" } as never),
-      {
-        name: "TypeError",
-        message: "Unsupported level configuration: traceflag." +
-          '  Expected "option", "verbosity", or "debug".',
-      },
-    );
+    assert.throws(() => loggingOptions({ level: "traceflag" } as never), {
+      name: "TypeError",
+      message:
+        "Unsupported level configuration: traceflag." +
+        '  Expected "option", "verbosity", or "debug".',
+    });
   });
 
   describe("default log output", () => {
@@ -1110,11 +1095,7 @@ describe("createConsoleSink()", () => {
       });
     });
     assert.deepEqual(calls, [
-      [
-        "%s %o",
-        "WARNING",
-        { category: ["app", "worker"], message: "started" },
-      ],
+      ["%s %o", "WARNING", { category: ["app", "worker"], message: "started" }],
     ]);
   });
 
@@ -1152,7 +1133,7 @@ describe("createConsoleSink()", () => {
 
   it("should route by stream resolver", () => {
     const sink = createConsoleSink({
-      streamResolver: (level) => level === "error" ? "stderr" : "stdout",
+      streamResolver: (level) => (level === "error" ? "stderr" : "stdout"),
     });
     const originalError = console.error;
     const originalLog = console.log;
@@ -1198,25 +1179,19 @@ describe("createConsoleSink()", () => {
   });
 
   it("should throw TypeError for invalid static stream option", () => {
-    assert.throws(
-      () => createConsoleSink({ stream: "stdrr" as never }),
-      {
-        name: "TypeError",
-        message: 'Invalid stream: expected "stdout" or "stderr", got "stdrr".',
-      },
-    );
+    assert.throws(() => createConsoleSink({ stream: "stdrr" as never }), {
+      name: "TypeError",
+      message: 'Invalid stream: expected "stdout" or "stderr", got "stdrr".',
+    });
   });
 
   it("should throw TypeError for numeric stream option", () => {
     // Non-string, non-object invalid stream uses String(value) for repr
     // (line 233–234 in output.ts: `value === null || typeof value !== "object"`).
-    assert.throws(
-      () => createConsoleSink({ stream: 42 as never }),
-      {
-        name: "TypeError",
-        message: 'Invalid stream: expected "stdout" or "stderr", got 42.',
-      },
-    );
+    assert.throws(() => createConsoleSink({ stream: 42 as never }), {
+      name: "TypeError",
+      message: 'Invalid stream: expected "stdout" or "stderr", got 42.',
+    });
   });
 
   it("should throw TypeError for object stream option", () => {
@@ -1239,14 +1214,11 @@ describe("createConsoleSink()", () => {
       },
     };
 
-    assert.throws(
-      () => createConsoleSink({ stream: stream as never }),
-      {
-        name: "TypeError",
-        message:
-          'Invalid stream: expected "stdout" or "stderr", got [object Object].',
-      },
-    );
+    assert.throws(() => createConsoleSink({ stream: stream as never }), {
+      name: "TypeError",
+      message:
+        'Invalid stream: expected "stdout" or "stderr", got [object Object].',
+    });
   });
 
   it("should throw TypeError for cyclic object stream (JSON.stringify throws)", () => {
@@ -1254,14 +1226,11 @@ describe("createConsoleSink()", () => {
     // to String(value) = "[object Object]" (lines 238–240 in output.ts).
     const cyclic: { self?: unknown } = {};
     cyclic.self = cyclic;
-    assert.throws(
-      () => createConsoleSink({ stream: cyclic as never }),
-      {
-        name: "TypeError",
-        message:
-          'Invalid stream: expected "stdout" or "stderr", got [object Object].',
-      },
-    );
+    assert.throws(() => createConsoleSink({ stream: cyclic as never }), {
+      name: "TypeError",
+      message:
+        'Invalid stream: expected "stdout" or "stderr", got [object Object].',
+    });
   });
 
   it("should treat null stream as default stderr", () => {
@@ -1329,10 +1298,7 @@ describe("createConsoleSink()", () => {
 describe("createSink()", () => {
   it("should declare @logtape/file in deno.json imports", async () => {
     const denoJson = JSON.parse(
-      await readFile(
-        new URL("../deno.json", import.meta.url),
-        "utf-8",
-      ),
+      await readFile(new URL("../deno.json", import.meta.url), "utf-8"),
     ) as Record<string, unknown>;
     const imports = denoJson.imports as Record<string, unknown> | undefined;
     assert.ok(
@@ -1348,10 +1314,13 @@ describe("createSink()", () => {
   });
 
   it("should use formatter from console log output", async () => {
-    const sink = await createSink({
-      type: "console",
-      formatter: (record) => `formatted ${record.rawMessage}`,
-    }, { stream: "stdout" });
+    const sink = await createSink(
+      {
+        type: "console",
+        formatter: (record) => `formatted ${record.rawMessage}`,
+      },
+      { stream: "stdout" },
+    );
     const lines = captureConsoleLog(() => {
       sink({
         category: ["test"],
@@ -1366,13 +1335,16 @@ describe("createSink()", () => {
   });
 
   it("should prefer explicit console sink formatter", async () => {
-    const sink = await createSink({
-      type: "console",
-      formatter: () => "from output",
-    }, {
-      stream: "stdout",
-      formatter: () => "from sink options",
-    });
+    const sink = await createSink(
+      {
+        type: "console",
+        formatter: () => "from output",
+      },
+      {
+        stream: "stdout",
+        formatter: () => "from sink options",
+      },
+    );
     const lines = captureConsoleLog(() => {
       sink({
         category: ["test"],
@@ -1460,11 +1432,13 @@ describe("createLoggingConfig()", () => {
       {},
       {
         sinks: { other: otherSink },
-        loggers: [{
-          category: ["extra"],
-          lowestLevel: "warning",
-          sinks: ["other"],
-        }],
+        loggers: [
+          {
+            category: ["extra"],
+            lowestLevel: "warning",
+            sinks: ["other"],
+          },
+        ],
         filters: {},
         reset: true,
       },

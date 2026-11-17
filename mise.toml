@@ -33,7 +33,13 @@ run = "node scripts/setup_deno.smoke.ts"
 
 [tasks.check]
 description = "Check code formatting, linting, and type checking"
-depends = ["check:versions", "check:type", "check:lint", "check:fmt", "check:fmt-md"]
+depends = [
+  "check:versions",
+  "check:type",
+  "check:lint",
+  "check:fmt",
+  "check:fmt-md",
+]
 run = "sacho check"
 
 [tasks."check:versions"]
@@ -64,9 +70,8 @@ description = "Check Deno types and all recommended compatibility lint rules"
 run = ["deno check", "deno lint"]
 
 [tasks."check:fmt"]
-tools = { deno = "2.9" }
-description = "Check transitional Deno source format (until Oxfmt adoption)"
-run = "deno fmt --check"
+description = "Check source and JSON format using Oxfmt"
+run = "node scripts/tooling/format.mjs --check"
 
 [tasks."check:fmt-md"]
 description = "Check Markdown docs format"
@@ -89,9 +94,12 @@ node scripts/bump_version.ts $env.usage_version
 """
 
 [tasks.fmt]
-tools = { deno = "2.9" }
-description = "Format source files"
-run = ["deno fmt", "hongdown --write", "mise fmt"]
+description = "Format source, JSON, Markdown, and mise configuration"
+run = [
+  "node scripts/tooling/format.mjs --write",
+  "hongdown --write",
+  "mise fmt",
+]
 
 [tasks."test:deno"]
 tools = { deno = "2.9" }
@@ -113,24 +121,27 @@ description = "Run the test suite across all environments"
 depends = ["dev", "check:deno", "check:publish", "test:deno", "test:bun"]
 
 [tasks.dev]
-description = "Run Node checks/tests (transitional formatter still uses Deno)"
+description = "Run Node checks and built-artifact tests"
 depends = ["check", "test:node"]
 
 [tasks."test:tooling"]
 description = "Test Node-only compiler and repository tooling"
 depends = ["build"]
-run = ["node --test scripts/check-types.test.ts", "node --test scripts/tooling/*.test.mjs"]
+run = [
+  "node --test scripts/check-types.test.ts",
+  "node --test scripts/tooling/*.test.mjs",
+]
 
 [tasks."oxfmt:inventory"]
-description = "List preparatory Oxfmt ownership; not the active format gate"
+description = "List source and JSON files owned by Oxfmt"
 run = "node scripts/tooling/format.mjs --list"
 
 [tasks."oxfmt:check"]
-description = "Check preparatory Oxfmt format (not yet a required gate)"
+description = "Check source and JSON format"
 run = "node scripts/tooling/format.mjs --check"
 
 [tasks."oxfmt:write"]
-description = "Explicitly apply preparatory Oxfmt format"
+description = "Format owned source and JSON files"
 run = "node scripts/tooling/format.mjs --write"
 
 [tasks.build]
@@ -199,7 +210,11 @@ run = "pnpm --filter file-inspect test:bun"
 
 [tasks."file-inspect:test"]
 description = "Test the file inspection recipe across all runtimes"
-depends = ["file-inspect:test:deno", "file-inspect:test:node", "file-inspect:test:bun"]
+depends = [
+  "file-inspect:test:deno",
+  "file-inspect:test:node",
+  "file-inspect:test:bun",
+]
 
 [tasks."file-inspect:standalone"]
 description = "Compile the verified JS bundle for the current host"
@@ -239,7 +254,11 @@ run = "pnpm --filter tsv-to-csv test:bun"
 
 [tasks."tsv-to-csv:test"]
 description = "Test the file conversion example across all runtimes"
-depends = ["tsv-to-csv:test:deno", "tsv-to-csv:test:node", "tsv-to-csv:test:bun"]
+depends = [
+  "tsv-to-csv:test:deno",
+  "tsv-to-csv:test:node",
+  "tsv-to-csv:test:bun",
+]
 
 [tasks."benchmark:test"]
 description = "Test startup baseline measurement contracts"

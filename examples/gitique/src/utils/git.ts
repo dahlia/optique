@@ -102,14 +102,15 @@ export function createGitSignature(
   }
 
   if (!authorName || !authorEmail) {
-    const missing = [
-      !authorName && "user.name",
-      !authorEmail && "user.email",
-    ].filter(Boolean).join(" and ");
+    const missing = [!authorName && "user.name", !authorEmail && "user.email"]
+      .filter(Boolean)
+      .join(" and ");
     const commands = [
       !authorName && `  git config --global user.name "Your Name"`,
       !authorEmail && `  git config --global user.email "you@example.com"`,
-    ].filter(Boolean).join("\n");
+    ]
+      .filter(Boolean)
+      .join("\n");
     throw new Error(
       `Please tell me who you are.\n\n` +
         `Run\n\n` +
@@ -195,9 +196,7 @@ export function addFile(
       // not in HEAD)—staging its deletion is valid even under --force.
       const inIndex = index.getByPath(repoRelativePath) !== null;
       if (!trackedInHead && !inIndex) {
-        throw new Error(
-          `pathspec '${filePath}' did not match any files.`,
-        );
+        throw new Error(`pathspec '${filePath}' did not match any files.`);
       }
     }
     index.updateAll([repoRelativePath]);
@@ -358,12 +357,17 @@ export function moveHead(repo: Repository, targetOid: string): void {
     // throws because the branch ref doesn't exist yet.
     let branchName: string | null = null;
     try {
-      branchName = repo.head().name().replace(/^refs\/heads\//, "");
+      branchName = repo
+        .head()
+        .name()
+        .replace(/^refs\/heads\//, "");
     } catch {
       // Unborn branch—read the symbolic target from .git/HEAD
       try {
-        const headContent = readFileSync(resolve(repo.path(), "HEAD"), "utf-8")
-          .trim();
+        const headContent = readFileSync(
+          resolve(repo.path(), "HEAD"),
+          "utf-8",
+        ).trim();
         if (headContent.startsWith("ref: refs/heads/")) {
           branchName = headContent.slice("ref: refs/heads/".length);
         }
@@ -557,10 +561,7 @@ export function getStatus(repo: Repository): FileStatus[] {
 
     if (indexTreeOid !== null) {
       const indexTree = repo.getTree(indexTreeOid);
-      const stagedDiff = repo.diffTreeToTree(
-        headTree ?? undefined,
-        indexTree,
-      );
+      const stagedDiff = repo.diffTreeToTree(headTree ?? undefined, indexTree);
       stagedDiff.findSimilar();
       for (const delta of stagedDiff.deltas()) {
         // Deleted deltas have no newFile path; use oldFile path instead.
@@ -571,9 +572,10 @@ export function getStatus(repo: Repository): FileStatus[] {
         results.push({
           path,
           status,
-          oldPath: (status === "Renamed" || status === "Copied")
-            ? (delta.oldFile().path() ?? undefined)
-            : undefined,
+          oldPath:
+            status === "Renamed" || status === "Copied"
+              ? (delta.oldFile().path() ?? undefined)
+              : undefined,
           staged: true,
         });
       }
@@ -599,9 +601,10 @@ export function getStatus(repo: Repository): FileStatus[] {
       results.push({
         path,
         status,
-        oldPath: (status === "Renamed" || status === "Copied")
-          ? (delta.oldFile().path() ?? undefined)
-          : undefined,
+        oldPath:
+          status === "Renamed" || status === "Copied"
+            ? (delta.oldFile().path() ?? undefined)
+            : undefined,
         staged: false,
       });
     }
@@ -749,9 +752,10 @@ export function getDiff(
 
       deltas.push({
         path,
-        oldPath: (status === "Renamed" || status === "Copied")
-          ? (delta.oldFile().path() ?? undefined)
-          : undefined,
+        oldPath:
+          status === "Renamed" || status === "Copied"
+            ? (delta.oldFile().path() ?? undefined)
+            : undefined,
         status,
       });
     }

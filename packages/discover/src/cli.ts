@@ -28,8 +28,7 @@ const cliProgram = defineProgram({
     }),
     base: optional(
       option("--base", string({ metavar: "PATH" }), {
-        description:
-          message`Module map base path passed to commandsFromModules().
+        description: message`Module map base path passed to commandsFromModules().
 Defaults to the command directory relative to the generated module.`,
       }),
     ),
@@ -88,8 +87,8 @@ export async function main(): Promise<void> {
     ...(args.noEntryFileName
       ? { entryFileName: false as const }
       : args.entryFileName != null
-      ? { entryFileName: args.entryFileName }
-      : {}),
+        ? { entryFileName: args.entryFileName }
+        : {}),
   };
 
   try {
@@ -117,10 +116,9 @@ function printGenerationError(error: unknown, exitCode?: number): void {
   if (exitCode == null) {
     printError(message`Failed to generate command module: ${messageText}`);
   } else {
-    printError(
-      message`Failed to generate command module: ${messageText}`,
-      { exitCode },
-    );
+    printError(message`Failed to generate command module: ${messageText}`, {
+      exitCode,
+    });
   }
 }
 

@@ -107,25 +107,22 @@ export function verbosity(
   const effectiveBaseIndex = VERBOSITY_LEVELS.indexOf(baseLevel);
 
   const flagParser = flag(short, long, {
-    description: options.description ??
-      message`Be more verbose. Can be repeated.`,
+    description:
+      options.description ?? message`Be more verbose. Can be repeated.`,
   });
 
   // Create a parser that allows multiple occurrences of the flag
   // The flag parser returns `true` when present, so multiple() collects them
   const multipleFlags = multiple(flagParser);
 
-  return map(
-    multipleFlags,
-    (flags: readonly true[]) => {
-      // Count the number of flags that were actually provided
-      const count = flags.length;
-      // Calculate the target level index (higher index = more verbose)
-      const targetIndex = Math.min(
-        effectiveBaseIndex + count,
-        VERBOSITY_LEVELS.length - 1,
-      );
-      return VERBOSITY_LEVELS[targetIndex];
-    },
-  );
+  return map(multipleFlags, (flags: readonly true[]) => {
+    // Count the number of flags that were actually provided
+    const count = flags.length;
+    // Calculate the target level index (higher index = more verbose)
+    const targetIndex = Math.min(
+      effectiveBaseIndex + count,
+      VERBOSITY_LEVELS.length - 1,
+    );
+    return VERBOSITY_LEVELS[targetIndex];
+  });
 }

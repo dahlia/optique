@@ -167,9 +167,12 @@ describe("zod()", () => {
 
   describe("transformations", () => {
     it("should apply transformations", () => {
-      const parser = zod(z.string().transform((s) => s.toUpperCase()), {
-        placeholder: "",
-      });
+      const parser = zod(
+        z.string().transform((s) => s.toUpperCase()),
+        {
+          placeholder: "",
+        },
+      );
       const result = parser.parse("hello");
 
       assert.ok(result.success);
@@ -270,10 +273,13 @@ describe("zod()", () => {
 
       it("should infer IPV4/IPV6/IP/JWT/EMOJI/BASE64 from internal checks", () => {
         const make = (check: Record<string, unknown>) =>
-          zod({
-            _def: { type: "string", checks: [check] },
-            safeParse: (input: unknown) => ({ success: true, data: input }),
-          } as unknown as z.Schema<unknown>, { placeholder: "" as unknown });
+          zod(
+            {
+              _def: { type: "string", checks: [check] },
+              safeParse: (input: unknown) => ({ success: true, data: input }),
+            } as unknown as z.Schema<unknown>,
+            { placeholder: "" as unknown },
+          );
 
         assert.equal(make({ kind: "ip", version: "v4" }).metavar, "IPV4");
         assert.equal(make({ kind: "ip", version: "v6" }).metavar, "IPV6");
@@ -370,9 +376,12 @@ describe("zod()", () => {
       });
 
       it("should fallback to VALUE for transform schemas", () => {
-        const parser = zod(z.string().transform((s) => s.toUpperCase()), {
-          placeholder: "",
-        });
+        const parser = zod(
+          z.string().transform((s) => s.toUpperCase()),
+          {
+            placeholder: "",
+          },
+        );
         assert.equal(parser.metavar, "VALUE");
       });
 
@@ -382,21 +391,30 @@ describe("zod()", () => {
       });
 
       it("should fallback to VALUE when schema definition is missing", () => {
-        const parser = zod({
-          safeParse: (input: unknown) => ({ success: true, data: input }),
-        } as unknown as z.Schema<unknown>, { placeholder: "" as unknown });
+        const parser = zod(
+          {
+            safeParse: (input: unknown) => ({ success: true, data: input }),
+          } as unknown as z.Schema<unknown>,
+          { placeholder: "" as unknown },
+        );
         assert.equal(parser.metavar, "VALUE");
       });
 
       it("should fallback to VALUE for optional/default without innerType", () => {
-        const optionalLike = zod({
-          _def: { type: "optional" },
-          safeParse: (input: unknown) => ({ success: true, data: input }),
-        } as unknown as z.Schema<unknown>, { placeholder: "" as unknown });
-        const defaultLike = zod({
-          _def: { type: "default" },
-          safeParse: (input: unknown) => ({ success: true, data: input }),
-        } as unknown as z.Schema<unknown>, { placeholder: "" as unknown });
+        const optionalLike = zod(
+          {
+            _def: { type: "optional" },
+            safeParse: (input: unknown) => ({ success: true, data: input }),
+          } as unknown as z.Schema<unknown>,
+          { placeholder: "" as unknown },
+        );
+        const defaultLike = zod(
+          {
+            _def: { type: "default" },
+            safeParse: (input: unknown) => ({ success: true, data: input }),
+          } as unknown as z.Schema<unknown>,
+          { placeholder: "" as unknown },
+        );
 
         assert.equal(optionalLike.metavar, "VALUE");
         assert.equal(defaultLike.metavar, "VALUE");
@@ -443,17 +461,23 @@ describe("zod()", () => {
     });
 
     it("should format date values as ISO strings", () => {
-      const parser = zod(z.string().transform((s) => new Date(s)), {
-        placeholder: new Date(0),
-      });
+      const parser = zod(
+        z.string().transform((s) => new Date(s)),
+        {
+          placeholder: new Date(0),
+        },
+      );
       const date = new Date("2025-06-15T00:00:00.000Z");
       assert.equal(parser.format(date), "2025-06-15T00:00:00.000Z");
     });
 
     it("should not throw for invalid date values", () => {
-      const parser = zod(z.string().transform((s) => new Date(s)), {
-        placeholder: new Date(0),
-      });
+      const parser = zod(
+        z.string().transform((s) => new Date(s)),
+        {
+          placeholder: new Date(0),
+        },
+      );
       const invalid = new Date("bad");
       assert.equal(parser.format(invalid), "Invalid Date");
     });
@@ -628,10 +652,12 @@ describe("zod()", () => {
         const parser = zod(schema, { placeholder: "" });
         const result = parser.parse("not-an-email");
         assert.ok(!result.success);
-        assert.deepEqual(result.error, [{
-          type: "value",
-          value: "Pretty zod error",
-        }]);
+        assert.deepEqual(result.error, [
+          {
+            type: "value",
+            value: "Pretty zod error",
+          },
+        ]);
       } finally {
         ctor.prettifyError = original;
       }
@@ -688,10 +714,7 @@ describe("zod()", () => {
 
     it("should handle union types", () => {
       const parser = zod(
-        z.union([
-          z.literal("auto"),
-          z.coerce.number().int().positive(),
-        ]),
+        z.union([z.literal("auto"), z.coerce.number().int().positive()]),
         { placeholder: "auto" },
       );
 
@@ -744,9 +767,7 @@ describe("zod()", () => {
 
     it("should handle startsWith/endsWith", () => {
       const parser = zod(
-        z.string().startsWith("http://").or(
-          z.string().startsWith("https://"),
-        ),
+        z.string().startsWith("http://").or(z.string().startsWith("https://")),
         { placeholder: "" },
       );
 
@@ -909,22 +930,20 @@ describe("zod()", () => {
 
     it("should be case-insensitive", () => {
       const parser = zod(z.coerce.boolean(), { placeholder: false });
-      for (
-        const input of [
-          "True",
-          "TRUE",
-          "False",
-          "FALSE",
-          "Yes",
-          "YES",
-          "No",
-          "NO",
-          "On",
-          "ON",
-          "Off",
-          "OFF",
-        ]
-      ) {
+      for (const input of [
+        "True",
+        "TRUE",
+        "False",
+        "FALSE",
+        "Yes",
+        "YES",
+        "No",
+        "NO",
+        "On",
+        "ON",
+        "Off",
+        "OFF",
+      ]) {
         const result = parser.parse(input);
         assert.ok(result.success, `Expected "${input}" to parse successfully`);
       }
@@ -992,9 +1011,12 @@ describe("zod()", () => {
     });
 
     it("should preserve Zod refinements", () => {
-      const parser = zod(z.coerce.boolean().refine((v) => v === true), {
-        placeholder: false,
-      });
+      const parser = zod(
+        z.coerce.boolean().refine((v) => v === true),
+        {
+          placeholder: false,
+        },
+      );
       const trueResult = parser.parse("true");
       assert.ok(trueResult.success);
       assert.ok(trueResult.value);
@@ -1066,9 +1088,12 @@ describe("zod()", () => {
     });
 
     it("should not expose choices for refined boolean schemas", () => {
-      const parser = zod(z.coerce.boolean().refine((v) => v === true), {
-        placeholder: false,
-      });
+      const parser = zod(
+        z.coerce.boolean().refine((v) => v === true),
+        {
+          placeholder: false,
+        },
+      );
       assert.equal(parser.choices, undefined);
       assert.equal(parser.suggest, undefined);
     });
@@ -1100,12 +1125,15 @@ describe("zod()", () => {
     });
 
     it("should respect custom zodError for refinement failures", () => {
-      const parser = zod(z.coerce.boolean().refine((v) => v === true), {
-        placeholder: false,
-        errors: {
-          zodError: message`Only true is accepted.`,
+      const parser = zod(
+        z.coerce.boolean().refine((v) => v === true),
+        {
+          placeholder: false,
+          errors: {
+            zodError: message`Only true is accepted.`,
+          },
         },
-      });
+      );
       const result = parser.parse("false");
       assert.ok(!result.success);
       assert.deepEqual(result.error, [
@@ -1199,10 +1227,7 @@ describe("zod()", () => {
         placeholder: false as never,
       });
       // Async detected via doSafeParse when a valid literal is parsed
-      assert.throws(
-        () => parser.parse("true"),
-        { name: "TypeError" },
-      );
+      assert.throws(() => parser.parse("true"), { name: "TypeError" });
     });
 
     it("should not execute refinements at construction time", () => {
@@ -1253,9 +1278,12 @@ describe("zod()", () => {
     });
 
     it("should work with z.coerce.boolean().transform()", () => {
-      const parser = zod(z.coerce.boolean().transform((v) => !v), {
-        placeholder: true,
-      });
+      const parser = zod(
+        z.coerce.boolean().transform((v) => !v),
+        {
+          placeholder: true,
+        },
+      );
       const result = parser.parse("false");
       assert.ok(result.success);
       assert.ok(result.value);
@@ -1327,10 +1355,7 @@ describe("zod()", () => {
         placeholder: false as never,
       });
       // Async detected via doSafeParse on valid boolean literals
-      assert.throws(
-        () => parser.parse("true"),
-        { name: "TypeError" },
-      );
+      assert.throws(() => parser.parse("true"), { name: "TypeError" });
     });
 
     it("should throw TypeError for async boolean transforms on valid input", () => {
@@ -1341,10 +1366,7 @@ describe("zod()", () => {
       const parser = zod(asyncTransform as never, {
         placeholder: false as never,
       });
-      assert.throws(
-        () => parser.parse("true"),
-        { name: "TypeError" },
-      );
+      assert.throws(() => parser.parse("true"), { name: "TypeError" });
     });
   });
 
@@ -1355,15 +1377,12 @@ describe("zod()", () => {
       const asyncSchema = z.string().refine(async (value) => value === "ok");
       /* oxlint-enable require-await */
       const parser = zod(asyncSchema as never, { placeholder: "" as never });
-      assert.throws(
-        () => parser.parse("ok"),
-        {
-          name: "TypeError",
-          message:
-            "Async Zod schemas (e.g., async refinements) are not supported " +
-            "by zod(). Use synchronous schemas instead.",
-        },
-      );
+      assert.throws(() => parser.parse("ok"), {
+        name: "TypeError",
+        message:
+          "Async Zod schemas (e.g., async refinements) are not supported " +
+          "by zod(). Use synchronous schemas instead.",
+      });
     });
 
     it("should not mask unrelated errors containing 'Promise'", () => {
@@ -1371,13 +1390,10 @@ describe("zod()", () => {
         throw new Error("Promise rejected by upstream");
       });
       const parser = zod(schema, { placeholder: "" });
-      assert.throws(
-        () => parser.parse("ok"),
-        {
-          name: "Error",
-          message: "Promise rejected by upstream",
-        },
-      );
+      assert.throws(() => parser.parse("ok"), {
+        name: "Error",
+        message: "Promise rejected by upstream",
+      });
     });
   });
 });
@@ -1411,10 +1427,12 @@ describe("zodAsync()", () => {
   describe("async parsing", () => {
     it("should parse async refinements", async () => {
       const parser = zodAsync(
-        z.string().refine(
-          async (value) => await Promise.resolve(value === "valid-api-key"),
-          "API key is not valid.",
-        ),
+        z
+          .string()
+          .refine(
+            async (value) => await Promise.resolve(value === "valid-api-key"),
+            "API key is not valid.",
+          ),
         { placeholder: "" },
       );
 
@@ -1441,11 +1459,9 @@ describe("zodAsync()", () => {
 
     it("should parse async transforms", async () => {
       const parser = zodAsync(
-        z.string().transform(async (value) =>
-          await Promise.resolve(
-            Number(value),
-          )
-        ),
+        z
+          .string()
+          .transform(async (value) => await Promise.resolve(Number(value))),
         { placeholder: 0 },
       );
 
@@ -1456,10 +1472,12 @@ describe("zodAsync()", () => {
     });
 
     it("should work with parseAsync()", async () => {
-      const schema = z.string().refine(
-        async (value) => await Promise.resolve(value.startsWith("live_")),
-        "API key must be live.",
-      );
+      const schema = z
+        .string()
+        .refine(
+          async (value) => await Promise.resolve(value.startsWith("live_")),
+          "API key must be live.",
+        );
       const parser = option("--api-key", zodAsync(schema, { placeholder: "" }));
 
       const result = await parseAsync(parser, ["--api-key", "live_secret"]);
@@ -1469,10 +1487,12 @@ describe("zodAsync()", () => {
     });
 
     it("should validate fallback values through validateValue()", async () => {
-      const schema = z.string().refine(
-        async (value) => await Promise.resolve(value.startsWith("live_")),
-        "API key must be live.",
-      );
+      const schema = z
+        .string()
+        .refine(
+          async (value) => await Promise.resolve(value.startsWith("live_")),
+          "API key must be live.",
+        );
       const parser = option("--api-key", zodAsync(schema, { placeholder: "" }));
 
       const validation = await parser.validateValue?.("test_secret");
@@ -1566,10 +1586,9 @@ describe("analyzeBooleanInner()—cycle detection via z.lazy()", () => {
     lazySchema = z.lazy(() => lazySchema);
     // If cycle detection is broken this would recurse infinitely.
     // Just constructing the parser is enough to exercise the guard.
-    const parser = zod(
-      lazySchema as z.Schema<unknown>,
-      { placeholder: null as unknown },
-    );
+    const parser = zod(lazySchema as z.Schema<unknown>, {
+      placeholder: null as unknown,
+    });
     // The schema is not recognized as boolean, so no boolean-specific metavar.
     assert.notEqual(parser.metavar, "BOOLEAN");
   });
@@ -1595,10 +1614,9 @@ describe("analyzeBooleanInner()—cycle detection via z.lazy()", () => {
     lazySchema = z.lazy(() => lazySchema);
     // optional unwraps to the lazy schema, which cycles back to itself
     const wrapped = lazySchema.optional();
-    const parser = zod(
-      wrapped as z.Schema<unknown>,
-      { placeholder: null as unknown },
-    );
+    const parser = zod(wrapped as z.Schema<unknown>, {
+      placeholder: null as unknown,
+    });
     assert.notEqual(parser.metavar, "BOOLEAN");
   });
 });
@@ -1685,10 +1703,10 @@ describe("parse()—non-async errors are re-thrown", () => {
       throw new RangeError(`out of range: ${s}`);
     });
     const parser = zod(schema, { placeholder: "" });
-    assert.throws(
-      () => parser.parse("hello"),
-      { name: "RangeError", message: "out of range: hello" },
-    );
+    assert.throws(() => parser.parse("hello"), {
+      name: "RangeError",
+      message: "out of range: hello",
+    });
   });
 
   it("should propagate TypeError thrown inside safeParse", () => {
@@ -1696,10 +1714,10 @@ describe("parse()—non-async errors are re-thrown", () => {
       throw new TypeError("bad type");
     });
     const parser = zod(schema, { placeholder: "" });
-    assert.throws(
-      () => parser.parse("value"),
-      { name: "TypeError", message: "bad type" },
-    );
+    assert.throws(() => parser.parse("value"), {
+      name: "TypeError",
+      message: "bad type",
+    });
   });
 });
 
@@ -1719,14 +1737,11 @@ describe("Zod internal compatibility branches", () => {
         { placeholder: "" },
       );
 
-      assert.throws(
-        () => parser.parse("value"),
-        {
-          name: "TypeError",
-          message:
-            "Async Zod schemas (e.g., async refinements) are not supported by zod(). Use synchronous schemas instead.",
-        },
-      );
+      assert.throws(() => parser.parse("value"), {
+        name: "TypeError",
+        message:
+          "Async Zod schemas (e.g., async refinements) are not supported by zod(). Use synchronous schemas instead.",
+      });
     }
   });
 
@@ -1734,30 +1749,29 @@ describe("Zod internal compatibility branches", () => {
     const parser = zod(
       fakeZodSchema<string>(
         { typeName: "ZodEnum", values: ["debug", "info"] },
-        (input) => (
+        (input) =>
           input === "debug" || input === "info"
             ? { success: true, data: input }
-            : zodFailure("Invalid enum value.")
-        ),
+            : zodFailure("Invalid enum value."),
       ),
       { placeholder: "debug" },
     );
 
     assert.deepEqual(parser.choices, ["debug", "info"]);
-    assert.deepEqual([...parser.suggest?.("i") ?? []], [
-      { kind: "literal", text: "info" },
-    ]);
+    assert.deepEqual(
+      [...(parser.suggest?.("i") ?? [])],
+      [{ kind: "literal", text: "info" }],
+    );
   });
 
   it("should infer choices from Zod v3 native enum internals", () => {
     const parser = zod(
       fakeZodSchema<string>(
         { typeName: "ZodNativeEnum", values: { Debug: "debug", Info: "info" } },
-        (input) => (
+        (input) =>
           input === "debug" || input === "info"
             ? { success: true, data: input }
-            : zodFailure("Invalid native enum value.")
-        ),
+            : zodFailure("Invalid native enum value."),
       ),
       { placeholder: "debug" },
     );
@@ -1803,9 +1817,8 @@ describe("Zod internal compatibility branches", () => {
       { placeholder: 0 },
     );
     const numericLiteral = zod(
-      fakeZodSchema<number>(
-        { typeName: "ZodLiteral", values: [1] },
-        () => zodFailure("Invalid literal value."),
+      fakeZodSchema<number>({ typeName: "ZodLiteral", values: [1] }, () =>
+        zodFailure("Invalid literal value."),
       ),
       { placeholder: 1 },
     );
@@ -1824,10 +1837,10 @@ describe("Zod internal compatibility branches", () => {
 
   it("should use default validation message when a fake schema has no issues", () => {
     const parser = zod(
-      fakeZodSchema<string>(
-        { typeName: "ZodString" },
-        () => ({ success: false, error: new z.ZodError([]) }),
-      ),
+      fakeZodSchema<string>({ typeName: "ZodString" }, () => ({
+        success: false,
+        error: new z.ZodError([]),
+      })),
       { placeholder: "" },
     );
 
@@ -1944,10 +1957,12 @@ function fakeZodSchema<T>(
 function zodFailure(message: string): FakeZodResult<never> {
   return {
     success: false,
-    error: new z.ZodError([{
-      code: "custom",
-      message,
-      path: [],
-    }]),
+    error: new z.ZodError([
+      {
+        code: "custom",
+        message,
+        path: [],
+      },
+    ]),
   };
 }

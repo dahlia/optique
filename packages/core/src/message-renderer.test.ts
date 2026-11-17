@@ -8,16 +8,14 @@ it("assembles error labels with one formatter call and physical-line offsets", (
   const error = message`unchanged`;
   for (const colors of [false, true, { resetSuffix: "\x1b[4m" }]) {
     for (const body of ["body", "", "\nbody"]) {
-      for (
-        const [label, occupied, maxWidth, column, prefix] of [
-          ["Error:", 0, undefined, 7, "Error: "],
-          ["Error:", 2, 8, 7, "\nError: "],
-          ["", 2, 8, 2, ""],
-          ["Error\n", 2, 8, 0, "Error\n"],
-          ["AB\n한:", 6, 8, 4, "AB\n한: "],
-          ["\n", 9, 8, 0, "\n"],
-        ] as const
-      ) {
+      for (const [label, occupied, maxWidth, column, prefix] of [
+        ["Error:", 0, undefined, 7, "Error: "],
+        ["Error:", 2, 8, 7, "\nError: "],
+        ["", 2, 8, 2, ""],
+        ["Error\n", 2, 8, 0, "Error\n"],
+        ["AB\n한:", 6, 8, 4, "AB\n한: "],
+        ["\n", 9, 8, 0, "\n"],
+      ] as const) {
         let labels = 0;
         let calls = 0;
         const result = renderErrorMessage(error, {
@@ -60,17 +58,20 @@ it("assembles error labels with one formatter call and physical-line offsets", (
 
 it("validates external offsets before rendering or formatting errors", () => {
   for (const initialWidth of [-1, NaN, Infinity, 0.5]) {
-    assert.throws(() =>
-      renderErrorMessage(message`x`, {
-        initialWidth,
-        theme: {
-          errorLabel: () => {
-            throw new Error("Unexpected render.");
+    assert.throws(
+      () =>
+        renderErrorMessage(message`x`, {
+          initialWidth,
+          theme: {
+            errorLabel: () => {
+              throw new Error("Unexpected render.");
+            },
           },
-        },
-        messageFormatter: () => {
-          throw new Error("Unexpected format.");
-        },
-      }), initialWidth < 0 ? RangeError : TypeError);
+          messageFormatter: () => {
+            throw new Error("Unexpected format.");
+          },
+        }),
+      initialWidth < 0 ? RangeError : TypeError,
+    );
   }
 });

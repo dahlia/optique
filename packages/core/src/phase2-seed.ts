@@ -59,11 +59,7 @@ export function phase2SeedFromValueResult<T>(
  *
  * @internal
  */
-export function extractPhase2Seed<
-  M extends Mode,
-  TValue,
-  TState,
->(
+export function extractPhase2Seed<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   state: TState,
   exec?: ExecutionContext,
@@ -71,23 +67,27 @@ export function extractPhase2Seed<
   return dispatchByMode(
     parser.mode,
     () => {
-      const extractor = (parser as Parser<"sync", TValue, TState> & {
-        readonly [extractPhase2SeedKey]?: Phase2SeedExtractor<
-          "sync",
-          TState,
-          TValue
-        >;
-      })[extractPhase2SeedKey];
+      const extractor = (
+        parser as Parser<"sync", TValue, TState> & {
+          readonly [extractPhase2SeedKey]?: Phase2SeedExtractor<
+            "sync",
+            TState,
+            TValue
+          >;
+        }
+      )[extractPhase2SeedKey];
       return extractor == null ? null : extractor(state, exec);
     },
     async () => {
-      const extractor = (parser as Parser<"async", TValue, TState> & {
-        readonly [extractPhase2SeedKey]?: Phase2SeedExtractor<
-          "async",
-          TState,
-          TValue
-        >;
-      })[extractPhase2SeedKey];
+      const extractor = (
+        parser as Parser<"async", TValue, TState> & {
+          readonly [extractPhase2SeedKey]?: Phase2SeedExtractor<
+            "async",
+            TState,
+            TValue
+          >;
+        }
+      )[extractPhase2SeedKey];
       return extractor == null ? null : await extractor(state, exec);
     },
   );
@@ -99,11 +99,7 @@ export function extractPhase2Seed<
  *
  * @internal
  */
-export function completeOrExtractPhase2Seed<
-  M extends Mode,
-  TValue,
-  TState,
->(
+export function completeOrExtractPhase2Seed<M extends Mode, TValue, TState>(
   parser: Parser<M, TValue, TState>,
   state: TState,
   exec?: ExecutionContext,
@@ -125,9 +121,10 @@ export function completeOrExtractPhase2Seed<
       );
     },
     async () => {
-      const result = await (
-        parser as Parser<"async", TValue, TState>
-      ).complete(state, exec);
+      const result = await (parser as Parser<"async", TValue, TState>).complete(
+        state,
+        exec,
+      );
       if (result.success) {
         return phase2SeedFromValueResult(result);
       }

@@ -32,7 +32,8 @@ const runtime = globalThis as {
   };
 };
 const isBun = runtime.Bun !== undefined;
-const isNode = runtime.process?.release?.name === "node" &&
+const isNode =
+  runtime.process?.release?.name === "node" &&
   runtime.Deno === undefined &&
   !isBun;
 const usesBuiltOutput = isNode || isBun;
@@ -44,9 +45,7 @@ if (usingPolyfill) {
 
 function throwingTemporalType<
   T extends { readonly from: (...args: never[]) => unknown },
->(
-  originalType: T,
-): T {
+>(originalType: T): T {
   const clone = Object.create(originalType) as T;
   Object.defineProperty(clone, "from", {
     value() {
@@ -154,14 +153,7 @@ describe("duration", () => {
   });
 
   it("should reject invalid duration strings", () => {
-    const invalidInputs = [
-      "1H30M",
-      "P1D12H",
-      "invalid",
-      "",
-      "PT",
-      "P",
-    ];
+    const invalidInputs = ["1H30M", "P1D12H", "invalid", "", "PT", "P"];
 
     for (const input of invalidInputs) {
       const result = parser.parse(input);
@@ -323,21 +315,22 @@ describe("plainTime", () => {
     }
   });
 
-  it("should parse time strings with calendar annotations", {
-    // Deno's native Temporal rejects calendar annotations on PlainTime
-    skip: !usingPolyfill,
-  }, () => {
-    if (!usingPolyfill) return;
-    const inputs = [
-      "17:04:36[u-ca=gregory]",
-      "17:04:36[!u-ca=iso8601]",
-    ];
-    for (const input of inputs) {
-      const result = parser.parse(input);
-      assert.ok(result.success, `Failed to parse: ${input}`);
-      assert.ok(result.value instanceof Temporal.PlainTime);
-    }
-  });
+  it(
+    "should parse time strings with calendar annotations",
+    {
+      // Deno's native Temporal rejects calendar annotations on PlainTime
+      skip: !usingPolyfill,
+    },
+    () => {
+      if (!usingPolyfill) return;
+      const inputs = ["17:04:36[u-ca=gregory]", "17:04:36[!u-ca=iso8601]"];
+      for (const input of inputs) {
+        const result = parser.parse(input);
+        assert.ok(result.success, `Failed to parse: ${input}`);
+        assert.ok(result.value instanceof Temporal.PlainTime);
+      }
+    },
+  );
 
   it("should reject wider ISO forms", () => {
     const widerInputs = [
@@ -353,12 +346,7 @@ describe("plainTime", () => {
   });
 
   it("should reject invalid time strings", () => {
-    const invalidInputs = [
-      "25:04:36",
-      "17:60:36",
-      "invalid",
-      "",
-    ];
+    const invalidInputs = ["25:04:36", "17:60:36", "invalid", ""];
 
     for (const input of invalidInputs) {
       const result = parser.parse(input);
@@ -469,27 +457,28 @@ describe("plainYearMonth", () => {
     }
   });
 
-  it("should parse non-ISO calendar year-month strings", {
-    // Deno's native Temporal panics on non-ISO calendars for PlainYearMonth
-    skip: !usingPolyfill,
-  }, () => {
-    if (!usingPolyfill) return;
-    const inputs = [
-      "2020-01-01[u-ca=gregory]",
-      "20200123[u-ca=gregory]", // basic with calendar
-    ];
-    for (const input of inputs) {
-      const result = parser.parse(input);
-      assert.ok(result.success, `Failed to parse: ${input}`);
-      assert.ok(result.value instanceof Temporal.PlainYearMonth);
-    }
-  });
+  it(
+    "should parse non-ISO calendar year-month strings",
+    {
+      // Deno's native Temporal panics on non-ISO calendars for PlainYearMonth
+      skip: !usingPolyfill,
+    },
+    () => {
+      if (!usingPolyfill) return;
+      const inputs = [
+        "2020-01-01[u-ca=gregory]",
+        "20200123[u-ca=gregory]", // basic with calendar
+      ];
+      for (const input of inputs) {
+        const result = parser.parse(input);
+        assert.ok(result.success, `Failed to parse: ${input}`);
+        assert.ok(result.value instanceof Temporal.PlainYearMonth);
+      }
+    },
+  );
 
   it("should reject wider ISO forms", () => {
-    const widerInputs = [
-      "2020-01-23",
-      "2020-01-23T17:04:36",
-    ];
+    const widerInputs = ["2020-01-23", "2020-01-23T17:04:36"];
 
     for (const input of widerInputs) {
       const result = parser.parse(input);
@@ -546,28 +535,29 @@ describe("plainMonthDay", () => {
     }
   });
 
-  it("should parse non-ISO calendar month-day strings", {
-    // Deno's native Temporal panics on non-ISO calendars for PlainMonthDay
-    skip: !usingPolyfill,
-  }, () => {
-    if (!usingPolyfill) return;
-    const inputs = [
-      "1972-01-23[u-ca=gregory]",
-      "20200123[u-ca=gregory]", // basic with calendar
-      "+0100000123[u-ca=gregory]", // basic expanded year with calendar
-    ];
-    for (const input of inputs) {
-      const result = parser.parse(input);
-      assert.ok(result.success, `Failed to parse: ${input}`);
-      assert.ok(result.value instanceof Temporal.PlainMonthDay);
-    }
-  });
+  it(
+    "should parse non-ISO calendar month-day strings",
+    {
+      // Deno's native Temporal panics on non-ISO calendars for PlainMonthDay
+      skip: !usingPolyfill,
+    },
+    () => {
+      if (!usingPolyfill) return;
+      const inputs = [
+        "1972-01-23[u-ca=gregory]",
+        "20200123[u-ca=gregory]", // basic with calendar
+        "+0100000123[u-ca=gregory]", // basic expanded year with calendar
+      ];
+      for (const input of inputs) {
+        const result = parser.parse(input);
+        assert.ok(result.success, `Failed to parse: ${input}`);
+        assert.ok(result.value instanceof Temporal.PlainMonthDay);
+      }
+    },
+  );
 
   it("should reject wider ISO forms", () => {
-    const widerInputs = [
-      "2020-01-23",
-      "2020-01-23T17:04:36",
-    ];
+    const widerInputs = ["2020-01-23", "2020-01-23T17:04:36"];
 
     for (const input of widerInputs) {
       const result = parser.parse(input);
@@ -576,13 +566,7 @@ describe("plainMonthDay", () => {
   });
 
   it("should reject invalid month-day strings", () => {
-    const invalidInputs = [
-      "--13-01",
-      "--01-32",
-      "--00-15",
-      "invalid",
-      "",
-    ];
+    const invalidInputs = ["--13-01", "--01-32", "--00-15", "invalid", ""];
 
     for (const input of invalidInputs) {
       const result = parser.parse(input);
@@ -757,8 +741,9 @@ describe("timeZone", () => {
 
   it("should include UTC and GMT when missing from Intl results", () => {
     const original = Intl.supportedValuesOf;
-    Intl.supportedValuesOf =
-      (() => ["Asia/Seoul"]) as typeof Intl.supportedValuesOf;
+    Intl.supportedValuesOf = (() => [
+      "Asia/Seoul",
+    ]) as typeof Intl.supportedValuesOf;
     try {
       const parser = timeZone();
       const suggestions = Array.from(parser.suggest!(""));
@@ -1057,8 +1042,9 @@ describe("error customization", () => {
       assert.ok(!result.success);
       // Should use default error message
       assert.ok(
-        result.error.some((term) =>
-          term.type === "text" && term.text.includes("Invalid instant")
+        result.error.some(
+          (term) =>
+            term.type === "text" && term.text.includes("Invalid instant"),
         ),
       );
     });
@@ -1074,8 +1060,9 @@ describe("error customization", () => {
       assert.ok(!result.success);
       // Should use default error message
       assert.ok(
-        result.error.some((term) =>
-          term.type === "text" && term.text.includes("Invalid instant")
+        result.error.some(
+          (term) =>
+            term.type === "text" && term.text.includes("Invalid instant"),
         ),
       );
     });
@@ -1084,13 +1071,10 @@ describe("error customization", () => {
 
 describe("metavar validation", () => {
   it("should throw TypeError when instant() receives empty metavar", () => {
-    assert.throws(
-      () => instant({ metavar: "" as unknown as NonEmptyString }),
-      {
-        name: "TypeError",
-        message: "Expected a non-empty string.",
-      },
-    );
+    assert.throws(() => instant({ metavar: "" as unknown as NonEmptyString }), {
+      name: "TypeError",
+      message: "Expected a non-empty string.",
+    });
   });
 
   it("should throw TypeError when duration() receives empty metavar", () => {
@@ -1181,7 +1165,7 @@ describe("ValueParser suggest() methods", () => {
 
       const suggestions = Array.from(parser.suggest!("Asia/"));
       const texts = suggestions.map((s) =>
-        s.kind === "literal" ? s.text : s.pattern || ""
+        s.kind === "literal" ? s.text : s.pattern || "",
       );
 
       assert.ok(texts.includes("Asia/Tokyo"));
@@ -1195,13 +1179,13 @@ describe("ValueParser suggest() methods", () => {
 
       const utcSuggestions = Array.from(parser.suggest!("UTC"));
       const utcTexts = utcSuggestions.map((s) =>
-        s.kind === "literal" ? s.text : s.pattern || ""
+        s.kind === "literal" ? s.text : s.pattern || "",
       );
       assert.ok(utcTexts.includes("UTC"));
 
       const gmtSuggestions = Array.from(parser.suggest!("GMT"));
       const gmtTexts = gmtSuggestions.map((s) =>
-        s.kind === "literal" ? s.text : s.pattern || ""
+        s.kind === "literal" ? s.text : s.pattern || "",
       );
       assert.ok(gmtTexts.includes("GMT"));
     });
@@ -1211,7 +1195,7 @@ describe("ValueParser suggest() methods", () => {
 
       const suggestions = Array.from(parser.suggest!("america/"));
       const texts = suggestions.map((s) =>
-        s.kind === "literal" ? s.text : s.pattern || ""
+        s.kind === "literal" ? s.text : s.pattern || "",
       );
 
       assert.ok(texts.length > 0);
@@ -1223,7 +1207,7 @@ describe("ValueParser suggest() methods", () => {
 
       const suggestions = Array.from(parser.suggest!("Europe/"));
       const texts = suggestions.map((s) =>
-        s.kind === "literal" ? s.text : s.pattern || ""
+        s.kind === "literal" ? s.text : s.pattern || "",
       );
 
       assert.ok(texts.includes("Europe/London"));
@@ -1423,35 +1407,26 @@ describe("async mode integration", () => {
 });
 
 describe("Temporal API unavailability", () => {
-  for (
-    const [name, factory, sample] of [
-      ["instant", instant, "2020-01-23T17:04:36Z"],
-      ["duration", duration, "PT1H"],
-      [
-        "zonedDateTime",
-        zonedDateTime,
-        "2020-01-23T17:04:36+01:00[Europe/Paris]",
-      ],
-      ["plainDate", plainDate, "2020-01-23"],
-      ["plainTime", plainTime, "17:04:36"],
-      ["plainDateTime", plainDateTime, "2020-01-23T17:04:36"],
-      ["plainYearMonth", plainYearMonth, "2020-01"],
-      ["plainMonthDay", plainMonthDay, "--01-23"],
-      ["timeZone", timeZone, "UTC"],
-    ] as const
-  ) {
+  for (const [name, factory, sample] of [
+    ["instant", instant, "2020-01-23T17:04:36Z"],
+    ["duration", duration, "PT1H"],
+    ["zonedDateTime", zonedDateTime, "2020-01-23T17:04:36+01:00[Europe/Paris]"],
+    ["plainDate", plainDate, "2020-01-23"],
+    ["plainTime", plainTime, "17:04:36"],
+    ["plainDateTime", plainDateTime, "2020-01-23T17:04:36"],
+    ["plainYearMonth", plainYearMonth, "2020-01"],
+    ["plainMonthDay", plainMonthDay, "--01-23"],
+    ["timeZone", timeZone, "UTC"],
+  ] as const) {
     it(`${name}().parse() should throw TypeError when Temporal is unavailable`, () => {
       const saved = globalThis.Temporal;
       (globalThis as Record<string, unknown>).Temporal = undefined;
       try {
         const parser = factory();
-        assert.throws(
-          () => parser.parse(sample),
-          {
-            name: "TypeError",
-            message: /Temporal API is not available/,
-          },
-        );
+        assert.throws(() => parser.parse(sample), {
+          name: "TypeError",
+          message: /Temporal API is not available/,
+        });
       } finally {
         globalThis.Temporal = saved;
       }
@@ -1474,12 +1449,12 @@ describe("default error messages include the input value", () => {
       const result = parser.parse(input);
       assert.ok(!result.success);
       assert.ok(
-        result.error.some((term) =>
-          term.type === "value" && term.value === input
+        result.error.some(
+          (term) => term.type === "value" && term.value === input,
         ),
-        `Expected input ${
-          JSON.stringify(input)
-        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+        `Expected input ${JSON.stringify(
+          input,
+        )} to appear as a value term in error: ${JSON.stringify(result.error)}`,
       );
     }
   });
@@ -1490,12 +1465,12 @@ describe("default error messages include the input value", () => {
       const result = parser.parse(input);
       assert.ok(!result.success);
       assert.ok(
-        result.error.some((term) =>
-          term.type === "value" && term.value === input
+        result.error.some(
+          (term) => term.type === "value" && term.value === input,
         ),
-        `Expected input ${
-          JSON.stringify(input)
-        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+        `Expected input ${JSON.stringify(
+          input,
+        )} to appear as a value term in error: ${JSON.stringify(result.error)}`,
       );
     }
   });
@@ -1506,12 +1481,12 @@ describe("default error messages include the input value", () => {
       const result = parser.parse(input);
       assert.ok(!result.success);
       assert.ok(
-        result.error.some((term) =>
-          term.type === "value" && term.value === input
+        result.error.some(
+          (term) => term.type === "value" && term.value === input,
         ),
-        `Expected input ${
-          JSON.stringify(input)
-        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+        `Expected input ${JSON.stringify(
+          input,
+        )} to appear as a value term in error: ${JSON.stringify(result.error)}`,
       );
     }
   });
@@ -1522,12 +1497,12 @@ describe("default error messages include the input value", () => {
       const result = parser.parse(input);
       assert.ok(!result.success);
       assert.ok(
-        result.error.some((term) =>
-          term.type === "value" && term.value === input
+        result.error.some(
+          (term) => term.type === "value" && term.value === input,
         ),
-        `Expected input ${
-          JSON.stringify(input)
-        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+        `Expected input ${JSON.stringify(
+          input,
+        )} to appear as a value term in error: ${JSON.stringify(result.error)}`,
       );
     }
   });
@@ -1544,12 +1519,12 @@ describe("default error messages include the input value", () => {
       const result = parser.parse(input);
       assert.ok(!result.success);
       assert.ok(
-        result.error.some((term) =>
-          term.type === "value" && term.value === input
+        result.error.some(
+          (term) => term.type === "value" && term.value === input,
         ),
-        `Expected input ${
-          JSON.stringify(input)
-        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+        `Expected input ${JSON.stringify(
+          input,
+        )} to appear as a value term in error: ${JSON.stringify(result.error)}`,
       );
     }
   });
@@ -1560,12 +1535,12 @@ describe("default error messages include the input value", () => {
       const result = parser.parse(input);
       assert.ok(!result.success);
       assert.ok(
-        result.error.some((term) =>
-          term.type === "value" && term.value === input
+        result.error.some(
+          (term) => term.type === "value" && term.value === input,
         ),
-        `Expected input ${
-          JSON.stringify(input)
-        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+        `Expected input ${JSON.stringify(
+          input,
+        )} to appear as a value term in error: ${JSON.stringify(result.error)}`,
       );
     }
   });
@@ -1576,12 +1551,12 @@ describe("default error messages include the input value", () => {
       const result = parser.parse(input);
       assert.ok(!result.success);
       assert.ok(
-        result.error.some((term) =>
-          term.type === "value" && term.value === input
+        result.error.some(
+          (term) => term.type === "value" && term.value === input,
         ),
-        `Expected input ${
-          JSON.stringify(input)
-        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+        `Expected input ${JSON.stringify(
+          input,
+        )} to appear as a value term in error: ${JSON.stringify(result.error)}`,
       );
     }
   });
@@ -1592,12 +1567,12 @@ describe("default error messages include the input value", () => {
       const result = parser.parse(input);
       assert.ok(!result.success);
       assert.ok(
-        result.error.some((term) =>
-          term.type === "value" && term.value === input
+        result.error.some(
+          (term) => term.type === "value" && term.value === input,
         ),
-        `Expected input ${
-          JSON.stringify(input)
-        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+        `Expected input ${JSON.stringify(
+          input,
+        )} to appear as a value term in error: ${JSON.stringify(result.error)}`,
       );
     }
   });
@@ -1609,12 +1584,12 @@ describe("default error messages include the input value", () => {
       const result = parser.parse(input);
       assert.ok(!result.success);
       assert.ok(
-        result.error.some((term) =>
-          term.type === "value" && term.value === input
+        result.error.some(
+          (term) => term.type === "value" && term.value === input,
         ),
-        `Expected input ${
-          JSON.stringify(input)
-        } to appear as a value term in error: ${JSON.stringify(result.error)}`,
+        `Expected input ${JSON.stringify(
+          input,
+        )} to appear as a value term in error: ${JSON.stringify(result.error)}`,
       );
     }
   });
@@ -1684,42 +1659,48 @@ describe("placeholder values", () => {
   });
 
   const canShadowTemporal = canShadowTemporalConstructors();
-  it("placeholder getters fall back to undefined when Temporal.from throws", {
-    skip: !canShadowTemporal,
-  }, () => {
-    if (!canShadowTemporal) return;
+  it(
+    "placeholder getters fall back to undefined when Temporal.from throws",
+    {
+      skip: !canShadowTemporal,
+    },
+    () => {
+      if (!canShadowTemporal) return;
 
-    const originalTemporal = globalThis.Temporal;
+      const originalTemporal = globalThis.Temporal;
 
-    try {
-      Object.defineProperty(globalThis, "Temporal", {
-        value: {
-          ...originalTemporal,
-          Instant: throwingTemporalType(originalTemporal.Instant),
-          Duration: throwingTemporalType(originalTemporal.Duration),
-          ZonedDateTime: throwingTemporalType(originalTemporal.ZonedDateTime),
-          PlainDate: throwingTemporalType(originalTemporal.PlainDate),
-          PlainTime: throwingTemporalType(originalTemporal.PlainTime),
-          PlainDateTime: throwingTemporalType(originalTemporal.PlainDateTime),
-          PlainYearMonth: throwingTemporalType(originalTemporal.PlainYearMonth),
-          PlainMonthDay: throwingTemporalType(originalTemporal.PlainMonthDay),
-        },
-        configurable: true,
-      });
+      try {
+        Object.defineProperty(globalThis, "Temporal", {
+          value: {
+            ...originalTemporal,
+            Instant: throwingTemporalType(originalTemporal.Instant),
+            Duration: throwingTemporalType(originalTemporal.Duration),
+            ZonedDateTime: throwingTemporalType(originalTemporal.ZonedDateTime),
+            PlainDate: throwingTemporalType(originalTemporal.PlainDate),
+            PlainTime: throwingTemporalType(originalTemporal.PlainTime),
+            PlainDateTime: throwingTemporalType(originalTemporal.PlainDateTime),
+            PlainYearMonth: throwingTemporalType(
+              originalTemporal.PlainYearMonth,
+            ),
+            PlainMonthDay: throwingTemporalType(originalTemporal.PlainMonthDay),
+          },
+          configurable: true,
+        });
 
-      assert.equal(instant().placeholder, undefined);
-      assert.equal(duration().placeholder, undefined);
-      assert.equal(zonedDateTime().placeholder, undefined);
-      assert.equal(plainDate().placeholder, undefined);
-      assert.equal(plainTime().placeholder, undefined);
-      assert.equal(plainDateTime().placeholder, undefined);
-      assert.equal(plainYearMonth().placeholder, undefined);
-      assert.equal(plainMonthDay().placeholder, undefined);
-    } finally {
-      Object.defineProperty(globalThis, "Temporal", {
-        value: originalTemporal,
-        configurable: true,
-      });
-    }
-  });
+        assert.equal(instant().placeholder, undefined);
+        assert.equal(duration().placeholder, undefined);
+        assert.equal(zonedDateTime().placeholder, undefined);
+        assert.equal(plainDate().placeholder, undefined);
+        assert.equal(plainTime().placeholder, undefined);
+        assert.equal(plainDateTime().placeholder, undefined);
+        assert.equal(plainYearMonth().placeholder, undefined);
+        assert.equal(plainMonthDay().placeholder, undefined);
+      } finally {
+        Object.defineProperty(globalThis, "Temporal", {
+          value: originalTemporal,
+          configurable: true,
+        });
+      }
+    },
+  );
 });

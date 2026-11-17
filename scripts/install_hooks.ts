@@ -23,8 +23,11 @@ fi
 
 for (const [name, content] of Object.entries(hooks)) {
   // Git resolves linked worktrees and core.hooksPath; .git need not be a directory.
-  const path = command("git", ["rev-parse", "--git-path", `hooks/${name}`])
-    .trim();
+  const path = command("git", [
+    "rev-parse",
+    "--git-path",
+    `hooks/${name}`,
+  ]).trim();
   await mkdir(dirname(path), { recursive: true });
   try {
     // Never replace user hooks (or follow an existing hook symlink).
@@ -41,11 +44,11 @@ for (const [name, content] of Object.entries(hooks)) {
 
 // Sacho init rewrites its merge-driver configuration.  Leave an existing
 // local or inherited driver alone, including a contributor's custom driver.
-const sachoConfig = spawnSync("git", [
-  "config",
-  "--get",
-  "merge.sacho.driver",
-], { encoding: "utf8", timeout: 10_000 });
+const sachoConfig = spawnSync(
+  "git",
+  ["config", "--get", "merge.sacho.driver"],
+  { encoding: "utf8", timeout: 10_000 },
+);
 if (sachoConfig.error) throw sachoConfig.error;
 if (sachoConfig.status === 1) {
   command("sacho", ["init", "--no-interactive"]);

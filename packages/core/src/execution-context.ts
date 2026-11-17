@@ -34,10 +34,10 @@ export function mergeChildExec(
     dependencyRuntime: child.dependencyRuntime ?? parent.dependencyRuntime,
     dependencyRegistry: child.dependencyRegistry ?? parent.dependencyRegistry,
     commandPath: child.commandPath ?? parent.commandPath,
-    preCompletedByParser: child.preCompletedByParser ??
-      parent.preCompletedByParser,
-    excludedSourceFields: child.excludedSourceFields ??
-      parent.excludedSourceFields,
+    preCompletedByParser:
+      child.preCompletedByParser ?? parent.preCompletedByParser,
+    excludedSourceFields:
+      child.excludedSourceFields ?? parent.excludedSourceFields,
   });
 }
 
@@ -53,8 +53,8 @@ export function withChildContext<TParentState, TChildState>(
   usage?: Usage,
 ): ParserContext<TChildState> {
   const exec = withChildExecPath(context.exec, segment);
-  const dependencyRegistry = context.dependencyRegistry ??
-    exec?.dependencyRegistry;
+  const dependencyRegistry =
+    context.dependencyRegistry ?? exec?.dependencyRegistry;
   return {
     ...context,
     ...getChildOptionScope(context, segment, exec?.path),
@@ -62,11 +62,12 @@ export function withChildContext<TParentState, TChildState>(
     ...(usage != null ? { usage } : {}),
     ...(exec != null
       ? {
-        exec: dependencyRegistry === exec.dependencyRegistry
-          ? exec
-          : { ...exec, dependencyRegistry },
-        dependencyRegistry,
-      }
+          exec:
+            dependencyRegistry === exec.dependencyRegistry
+              ? exec
+              : { ...exec, dependencyRegistry },
+          dependencyRegistry,
+        }
       : {}),
   };
 }

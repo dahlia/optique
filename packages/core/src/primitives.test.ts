@@ -700,12 +700,10 @@ describe("option", () => {
 
     it("should not include the separator in the Boolean flag value error", () => {
       // https://github.com/dahlia/optique/issues/966
-      for (
-        const [name, input] of [
-          ["--no-pager", "--no-pager=1"],
-          ["/Q", "/Q:1"],
-        ] as const
-      ) {
+      for (const [name, input] of [
+        ["--no-pager", "--no-pager=1"],
+        ["/Q", "/Q:1"],
+      ] as const) {
         const parser = option(name);
         const result = parser.parse({
           buffer: [input],
@@ -769,80 +767,114 @@ describe("option", () => {
       const parser = option("-f", "--format", choice(["json", "yaml"]), {
         description,
       });
-      const suggestions = Array.from(parser.suggest({
-        buffer: [],
-        state: parser.initialState,
-        usage: parser.usage,
-        optionsTerminated: false,
-      }, "--f"));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: parser.initialState,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "--f",
+        ),
+      );
 
-      assert.deepEqual(suggestions, [{
-        kind: "literal",
-        text: "--format",
-        description,
-      }]);
+      assert.deepEqual(suggestions, [
+        {
+          kind: "literal",
+          text: "--format",
+          description,
+        },
+      ]);
     });
 
     it("should suggest only short options for '-' prefix", () => {
       const parser = option("-v", "--verbose", string());
-      const suggestions = Array.from(parser.suggest({
-        buffer: [],
-        state: parser.initialState,
-        usage: parser.usage,
-        optionsTerminated: false,
-      }, "-"));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: parser.initialState,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "-",
+        ),
+      );
 
       assert.deepEqual(suggestions, [{ kind: "literal", text: "-v" }]);
     });
 
     it("should suggest value candidates on empty buffer", () => {
       const parser = option("--env", choice(["dev", "prod"]));
-      const suggestions = Array.from(parser.suggest({
-        buffer: [],
-        state: parser.initialState,
-        usage: parser.usage,
-        optionsTerminated: false,
-      }, "p"));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: parser.initialState,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "p",
+        ),
+      );
 
       assert.deepEqual(suggestions, [{ kind: "literal", text: "prod" }]);
     });
 
     it("should not suggest option names while completing a value", () => {
       const parser = option("--mode", choice(["dev", "prod", "preview"]));
-      const suggestions = Array.from(parser.suggest({
-        buffer: ["--mode"],
-        state: parser.initialState,
-        usage: parser.usage,
-        optionsTerminated: false,
-      }, "--"));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: ["--mode"],
+            state: parser.initialState,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "--",
+        ),
+      );
 
       assert.deepEqual(suggestions, []);
     });
 
     it("should fall back file suggestions to literal in --opt=value format", () => {
       const parser = option("--file", fileSuggestingParser());
-      const suggestions = Array.from(parser.suggest({
-        buffer: [],
-        state: parser.initialState,
-        usage: parser.usage,
-        optionsTerminated: false,
-      }, "--file=a"));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: parser.initialState,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "--file=a",
+        ),
+      );
 
-      assert.deepEqual(suggestions, [{
-        kind: "literal",
-        text: "--file=*.txt",
-        description: undefined,
-      }]);
+      assert.deepEqual(suggestions, [
+        {
+          kind: "literal",
+          text: "--file=*.txt",
+          description: undefined,
+        },
+      ]);
     });
 
     it("should return no suggestions when value parser has no suggest", () => {
       const parser = option("--name", noSuggestParser());
-      const suggestions = Array.from(parser.suggest({
-        buffer: ["--name"],
-        state: parser.initialState,
-        usage: parser.usage,
-        optionsTerminated: false,
-      }, ""));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: ["--name"],
+            state: parser.initialState,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "",
+        ),
+      );
 
       assert.deepEqual(suggestions, []);
     });
@@ -854,70 +886,78 @@ describe("option", () => {
       });
       const suggestions: Suggestion[] = [];
 
-      for await (
-        const suggestion of parser.suggest({
+      for await (const suggestion of parser.suggest(
+        {
           buffer: [],
           state: parser.initialState,
           usage: parser.usage,
           optionsTerminated: false,
-        }, "--l")
-      ) {
+        },
+        "--l",
+      )) {
         suggestions.push(suggestion);
       }
 
-      assert.deepEqual(suggestions, [{
-        kind: "literal",
-        text: "--log",
-        description,
-      }]);
+      assert.deepEqual(suggestions, [
+        {
+          kind: "literal",
+          text: "--log",
+          description,
+        },
+      ]);
     });
 
     it("should suggest async values and short-only '-' behavior", async () => {
       const parser = option("-l", "--log", asyncFileSuggestingParser());
 
       const optionSuggestions: Suggestion[] = [];
-      for await (
-        const suggestion of parser.suggest({
+      for await (const suggestion of parser.suggest(
+        {
           buffer: [],
           state: parser.initialState,
           usage: parser.usage,
           optionsTerminated: false,
-        }, "-")
-      ) {
+        },
+        "-",
+      )) {
         optionSuggestions.push(suggestion);
       }
       assert.deepEqual(optionSuggestions, [{ kind: "literal", text: "-l" }]);
 
       const valueSuggestions: Suggestion[] = [];
-      for await (
-        const suggestion of parser.suggest({
+      for await (const suggestion of parser.suggest(
+        {
           buffer: [],
           state: undefined,
           usage: parser.usage,
           optionsTerminated: false,
-        }, "--log=x")
-      ) {
+        },
+        "--log=x",
+      )) {
         valueSuggestions.push(suggestion);
       }
-      assert.deepEqual(valueSuggestions, [{
-        kind: "literal",
-        text: "--log=*.log",
-        description: undefined,
-      }]);
+      assert.deepEqual(valueSuggestions, [
+        {
+          kind: "literal",
+          text: "--log=*.log",
+          description: undefined,
+        },
+      ]);
     });
 
     it("should suggest plus-prefixed async option names", async () => {
       const parser = option("+log", asyncFileSuggestingParser());
 
       const suggestions: Suggestion[] = [];
-      for await (
-        const suggestion of parser.suggest({
+      for await (const suggestion of parser.suggest(
+        {
           buffer: [],
           state: parser.initialState,
           usage: parser.usage,
           optionsTerminated: false,
-        }, "+")
-      ) {
+        },
+        "+",
+      )) {
         suggestions.push(suggestion);
       }
 
@@ -949,14 +989,15 @@ describe("option", () => {
       };
       const parser = option("--mode", asyncModeParser);
       const suggestions: Suggestion[] = [];
-      for await (
-        const suggestion of parser.suggest({
+      for await (const suggestion of parser.suggest(
+        {
           buffer: ["--mode"],
           state: parser.initialState,
           usage: parser.usage,
           optionsTerminated: false,
-        }, "--")
-      ) {
+        },
+        "--",
+      )) {
         suggestions.push(suggestion);
       }
 
@@ -1251,10 +1292,11 @@ describe("option", () => {
         maxLen: option("-max_len", integer()),
         dict: option("-dict", string()),
       });
-      const result = parseSync(
-        parser,
-        ["-seed=42", "-max_len=1000", "-dict=words.txt"],
-      );
+      const result = parseSync(parser, [
+        "-seed=42",
+        "-max_len=1000",
+        "-dict=words.txt",
+      ]);
       assert.ok(result.success);
       assert.deepEqual(result.value, {
         seed: 42,
@@ -1487,9 +1529,9 @@ describe("option() error customization", () => {
       errors: {
         noMatch: (invalidOption, suggestions) => {
           if (suggestions.length > 0) {
-            return message`Option ${text(invalidOption)} not recognized. Try: ${
-              text(suggestions.join(", "))
-            }`;
+            return message`Option ${text(invalidOption)} not recognized. Try: ${text(
+              suggestions.join(", "),
+            )}`;
           }
           return message`Option ${text(invalidOption)} not recognized.`;
         },
@@ -1611,18 +1653,25 @@ describe("flag", () => {
     it("should include descriptions in flag suggestions", () => {
       const description = message`Enable verbose output`;
       const parser = flag("-v", "--verbose", { description });
-      const suggestions = Array.from(parser.suggest({
-        buffer: [],
-        state: parser.initialState,
-        usage: parser.usage,
-        optionsTerminated: false,
-      }, "--v"));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: parser.initialState,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "--v",
+        ),
+      );
 
-      assert.deepEqual(suggestions, [{
-        kind: "literal",
-        text: "--verbose",
-        description,
-      }]);
+      assert.deepEqual(suggestions, [
+        {
+          kind: "literal",
+          text: "--verbose",
+          description,
+        },
+      ]);
     });
   });
 
@@ -1668,12 +1717,17 @@ describe("flag", () => {
     it("should suggest plus-prefixed flag names", () => {
       const parser = flag("+debug");
 
-      const suggestions = Array.from(parser.suggest({
-        buffer: [],
-        state: parser.initialState,
-        usage: parser.usage,
-        optionsTerminated: false,
-      }, "+"));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: parser.initialState,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "+",
+        ),
+      );
 
       assert.deepEqual(suggestions, [{ kind: "literal", text: "+debug" }]);
     });
@@ -1869,10 +1923,12 @@ describe("flag", () => {
 
     it("should have correct usage", () => {
       const parser = flag("-f", "--force");
-      assert.deepEqual(parser.usage, [{
-        type: "option",
-        names: ["-f", "--force"],
-      }]);
+      assert.deepEqual(parser.usage, [
+        {
+          type: "option",
+          names: ["-f", "--force"],
+        },
+      ]);
     });
   });
 });
@@ -1937,10 +1993,12 @@ describe("negatableFlag()", () => {
   });
 
   it("should return undefined when wrapped in optional", () => {
-    const parser = optional(negatableFlag({
-      positive: "--color",
-      negative: "--no-color",
-    }));
+    const parser = optional(
+      negatableFlag({
+        positive: "--color",
+        negative: "--no-color",
+      }),
+    );
 
     const result = parseSync(parser, []);
 
@@ -1987,12 +2045,15 @@ describe("negatableFlag()", () => {
   });
 
   it("should expose all names in one documentation entry", () => {
-    const parser = negatableFlag({
-      positive: ["--color"],
-      negative: ["--no-color"],
-    }, {
-      description: message`Control colored output.`,
-    });
+    const parser = negatableFlag(
+      {
+        positive: ["--color"],
+        negative: ["--no-color"],
+      },
+      {
+        description: message`Control colored output.`,
+      },
+    );
 
     const fragments = parser.getDocFragments(
       { kind: "unavailable" },
@@ -2023,15 +2084,17 @@ describe("negatableFlag()", () => {
       negative: ["-C", "--no-color"],
     });
 
-    const suggestions = Array.from(parser.suggest(
-      {
-        buffer: [],
-        state: parser.initialState,
-        optionsTerminated: false,
-        usage: parser.usage,
-      },
-      "--",
-    ));
+    const suggestions = Array.from(
+      parser.suggest(
+        {
+          buffer: [],
+          state: parser.initialState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "--",
+      ),
+    );
 
     assert.deepEqual(suggestions, [
       { kind: "literal", text: "--color" },
@@ -2040,47 +2103,57 @@ describe("negatableFlag()", () => {
   });
 
   it("should respect hidden options in docs and suggestions", () => {
-    const parser = negatableFlag({
-      positive: "--color",
-      negative: "--no-color",
-    }, {
-      hidden: true,
-    });
+    const parser = negatableFlag(
+      {
+        positive: "--color",
+        negative: "--no-color",
+      },
+      {
+        hidden: true,
+      },
+    );
 
     const fragments = parser.getDocFragments(
       { kind: "unavailable" },
       undefined,
     );
-    const suggestions = Array.from(parser.suggest(
-      {
-        buffer: [],
-        state: parser.initialState,
-        optionsTerminated: false,
-        usage: parser.usage,
-      },
-      "--",
-    ));
+    const suggestions = Array.from(
+      parser.suggest(
+        {
+          buffer: [],
+          state: parser.initialState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "--",
+      ),
+    );
 
     assert.deepEqual(fragments.fragments, []);
     assert.deepEqual(suggestions, []);
   });
 
   it("should render positive and negative flags on one help line", () => {
-    const parser = negatableFlag({
-      positive: "--color",
-      negative: "--no-color",
-    }, {
-      description: message`Control colored output.`,
-    });
+    const parser = negatableFlag(
+      {
+        positive: "--color",
+        negative: "--no-color",
+      },
+      {
+        description: message`Control colored output.`,
+      },
+    );
     const fragments = parser.getDocFragments(
       { kind: "unavailable" },
       undefined,
     );
 
     const output = formatDocPage("myapp", {
-      sections: [{
-        entries: fragments.fragments.filter((f) => f.type === "entry"),
-      }],
+      sections: [
+        {
+          entries: fragments.fragments.filter((f) => f.type === "entry"),
+        },
+      ],
     });
 
     assert.match(output, /--color, --no-color\s+Control colored output\./);
@@ -2274,26 +2347,29 @@ describe("negatableFlag()", () => {
   });
 
   it("should customize every error branch", () => {
-    const parser = negatableFlag({
-      positive: "--color",
-      negative: "--no-color",
-    }, {
-      errors: {
-        missing: (positiveNames, negativeNames) =>
-          message`missing ${text(positiveNames.join(","))} ${
-            text(negativeNames.join(","))
-          }`,
-        optionsTerminated: message`terminated`,
-        endOfInput: message`empty`,
-        duplicate: (token) => message`duplicate ${text(token)}`,
-        conflict: (previous, token) =>
-          message`conflict ${text(previous)} ${text(token)}`,
-        unexpectedValue: (name, value) =>
-          message`unexpected ${text(name)} ${text(value)}`,
-        noMatch: (invalid, suggestions) =>
-          message`nomatch ${text(invalid)} ${text(suggestions.join(","))}`,
+    const parser = negatableFlag(
+      {
+        positive: "--color",
+        negative: "--no-color",
       },
-    });
+      {
+        errors: {
+          missing: (positiveNames, negativeNames) =>
+            message`missing ${text(positiveNames.join(","))} ${text(
+              negativeNames.join(","),
+            )}`,
+          optionsTerminated: message`terminated`,
+          endOfInput: message`empty`,
+          duplicate: (token) => message`duplicate ${text(token)}`,
+          conflict: (previous, token) =>
+            message`conflict ${text(previous)} ${text(token)}`,
+          unexpectedValue: (name, value) =>
+            message`unexpected ${text(name)} ${text(value)}`,
+          noMatch: (invalid, suggestions) =>
+            message`nomatch ${text(invalid)} ${text(suggestions.join(","))}`,
+        },
+      },
+    );
 
     const missing = parser.complete(undefined);
     const terminated = parser.parse({
@@ -2367,20 +2443,23 @@ describe("negatableFlag()", () => {
   });
 
   it("should support static custom errors for every error branch", () => {
-    const parser = negatableFlag({
-      positive: "--color",
-      negative: "--no-color",
-    }, {
-      errors: {
-        missing: message`static missing`,
-        optionsTerminated: message`static terminated`,
-        endOfInput: message`static empty`,
-        duplicate: message`static duplicate`,
-        conflict: message`static conflict`,
-        unexpectedValue: message`static unexpected`,
-        noMatch: message`static no match`,
+    const parser = negatableFlag(
+      {
+        positive: "--color",
+        negative: "--no-color",
       },
-    });
+      {
+        errors: {
+          missing: message`static missing`,
+          optionsTerminated: message`static terminated`,
+          endOfInput: message`static empty`,
+          duplicate: message`static duplicate`,
+          conflict: message`static conflict`,
+          unexpectedValue: message`static unexpected`,
+          noMatch: message`static no match`,
+        },
+      },
+    );
 
     const cases = [
       parser.complete(undefined),
@@ -2440,52 +2519,62 @@ describe("negatableFlag()", () => {
   });
 
   it('should keep docs and suggestions for hidden: "usage"', () => {
-    const parser = negatableFlag({
-      positive: "--color",
-      negative: "--no-color",
-    }, {
-      hidden: "usage",
-    });
+    const parser = negatableFlag(
+      {
+        positive: "--color",
+        negative: "--no-color",
+      },
+      {
+        hidden: "usage",
+      },
+    );
 
     const fragments = parser.getDocFragments(
       { kind: "unavailable" },
       undefined,
     );
-    const suggestions = Array.from(parser.suggest(
-      {
-        buffer: [],
-        state: parser.initialState,
-        optionsTerminated: false,
-        usage: parser.usage,
-      },
-      "--",
-    ));
+    const suggestions = Array.from(
+      parser.suggest(
+        {
+          buffer: [],
+          state: parser.initialState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "--",
+      ),
+    );
 
     assert.equal(fragments.fragments.length, 1);
     assert.equal(suggestions.length, 2);
   });
 
   it('should hide docs but keep suggestions for hidden: "help"', () => {
-    const parser = negatableFlag({
-      positive: "--color",
-      negative: "--no-color",
-    }, {
-      hidden: "help",
-    });
+    const parser = negatableFlag(
+      {
+        positive: "--color",
+        negative: "--no-color",
+      },
+      {
+        hidden: "help",
+      },
+    );
 
     const fragments = parser.getDocFragments(
       { kind: "unavailable" },
       undefined,
     );
-    const suggestions = Array.from(parser.suggest(
-      {
-        buffer: [],
-        state: parser.initialState,
-        optionsTerminated: false,
-        usage: parser.usage,
-      },
-      "--",
-    ));
+    const suggestions = Array.from(
+      parser.suggest(
+        {
+          buffer: [],
+          state: parser.initialState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "--",
+      ),
+    );
 
     assert.deepEqual(fragments.fragments, []);
     assert.equal(suggestions.length, 2);
@@ -2497,15 +2586,17 @@ describe("negatableFlag()", () => {
       negative: ["-C", "--no-color"],
     });
 
-    const suggestions = Array.from(parser.suggest(
-      {
-        buffer: [],
-        state: parser.initialState,
-        optionsTerminated: false,
-        usage: parser.usage,
-      },
-      "-",
-    ));
+    const suggestions = Array.from(
+      parser.suggest(
+        {
+          buffer: [],
+          state: parser.initialState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "-",
+      ),
+    );
 
     assert.deepEqual(suggestions, [
       { kind: "literal", text: "-c" },
@@ -2519,15 +2610,17 @@ describe("negatableFlag()", () => {
       negative: "+no-color",
     });
 
-    const suggestions = Array.from(parser.suggest(
-      {
-        buffer: [],
-        state: parser.initialState,
-        optionsTerminated: false,
-        usage: parser.usage,
-      },
-      "+",
-    ));
+    const suggestions = Array.from(
+      parser.suggest(
+        {
+          buffer: [],
+          state: parser.initialState,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "+",
+      ),
+    );
 
     assert.deepEqual(suggestions, [
       { kind: "literal", text: "+color" },
@@ -2612,13 +2705,11 @@ describe("negatableFlag()", () => {
 });
 
 describe("flag() error customization", () => {
-  for (
-    const [name, separator] of [
-      ["--verbose", "="],
-      ["-verbose", "="],
-      ["/verbose", ":"],
-    ] as const
-  ) {
+  for (const [name, separator] of [
+    ["--verbose", "="],
+    ["-verbose", "="],
+    ["/verbose", ":"],
+  ] as const) {
     it(`should use a static unexpectedValue error for ${name}`, () => {
       const error = message`Verbose takes no value.`;
       const parser = flag(name, { errors: { unexpectedValue: error } });
@@ -2638,15 +2729,15 @@ describe("flag() error customization", () => {
         const parser = flag("-v", "--verbose", "-verbose", "/verbose", {
           errors: {
             unexpectedValue: (name, input) => {
-              return message`${optionName(name)} takes no value, got ${
-                value(input)
-              }.`;
+              return message`${optionName(name)} takes no value, got ${value(
+                input,
+              )}.`;
             },
           },
         });
-        const error = message`${optionName(name)} takes no value, got ${
-          value(input)
-        }.`;
+        const error = message`${optionName(name)} takes no value, got ${value(
+          input,
+        )}.`;
 
         const result = parse(parser, [`${name}${separator}${input}`]);
 
@@ -2666,9 +2757,9 @@ describe("flag() error customization", () => {
       assert.deepEqual(result, {
         success: false,
         consumed: 1,
-        error: message`Flag ${
-          optionName(name)
-        } does not accept a value, but got: ${"yes"}.`,
+        error: message`Flag ${optionName(
+          name,
+        )} does not accept a value, but got: ${"yes"}.`,
       });
     });
   }
@@ -2722,9 +2813,9 @@ describe("flag() error customization", () => {
 
     assert.deepEqual(result, {
       success: false,
-      error: message`${optionName("--verbosity")} takes no value, got ${
-        value("1")
-      }.`,
+      error: message`${optionName("--verbosity")} takes no value, got ${value(
+        "1",
+      )}.`,
     });
   });
 
@@ -2876,9 +2967,9 @@ describe("flag() error customization", () => {
       errors: {
         noMatch: (invalidOption, suggestions) => {
           if (suggestions.length > 0) {
-            return message`Flag ${text(invalidOption)} unknown. Did you mean ${
-              text(suggestions[0])
-            }?`;
+            return message`Flag ${text(invalidOption)} unknown. Did you mean ${text(
+              suggestions[0],
+            )}?`;
           }
           return message`Flag ${text(invalidOption)} unknown.`;
         },
@@ -3716,11 +3807,13 @@ describe("command", () => {
 
     const docs = parser.getDocFragments({ kind: "unavailable" });
 
-    assert.deepEqual(docs.fragments, [{
-      type: "entry",
-      term: { type: "command", name: "install", aliases: ["i", "add"] },
-      description: message`Install a package.`,
-    }]);
+    assert.deepEqual(docs.fragments, [
+      {
+        type: "entry",
+        term: { type: "command", name: "install", aliases: ["i", "add"] },
+        description: message`Install a package.`,
+      },
+    ]);
   });
 
   it("should forward showAliases to command list entries", () => {
@@ -3732,12 +3825,14 @@ describe("command", () => {
 
       const docs = parser.getDocFragments({ kind: "unavailable" });
 
-      assert.deepEqual(docs.fragments, [{
-        type: "entry",
-        term: { type: "command", name: "install", aliases: ["i"] },
-        description: undefined,
-        showAliases,
-      }]);
+      assert.deepEqual(docs.fragments, [
+        {
+          type: "entry",
+          term: { type: "command", name: "install", aliases: ["i"] },
+          description: undefined,
+          showAliases,
+        },
+      ]);
     }
   });
 
@@ -3746,12 +3841,14 @@ describe("command", () => {
 
     const docs = parser.getDocFragments({ kind: "unavailable" });
 
-    assert.deepEqual(docs.fragments, [{
-      type: "entry",
-      term: { type: "command", name: "install" },
-      description: undefined,
-      showAliases: true,
-    }]);
+    assert.deepEqual(docs.fragments, [
+      {
+        type: "entry",
+        term: { type: "command", name: "install" },
+        description: undefined,
+        showAliases: true,
+      },
+    ]);
   });
 
   it("should not expose hidden aliases on command list entries", () => {
@@ -3762,11 +3859,13 @@ describe("command", () => {
 
     const docs = parser.getDocFragments({ kind: "unavailable" });
 
-    assert.deepEqual(docs.fragments, [{
-      type: "entry",
-      term: { type: "command", name: "help" },
-      description: undefined,
-    }]);
+    assert.deepEqual(docs.fragments, [
+      {
+        type: "entry",
+        term: { type: "command", name: "help" },
+        description: undefined,
+      },
+    ]);
   });
 
   it("should keep showAliases out of the usage term", () => {
@@ -4221,63 +4320,48 @@ describe("command", () => {
   });
 
   it("should throw TypeError for empty command name", () => {
-    assert.throws(
-      () => command("", constant("empty" as const)),
-      { name: "TypeError", message: "Command name must not be empty." },
-    );
+    assert.throws(() => command("", constant("empty" as const)), {
+      name: "TypeError",
+      message: "Command name must not be empty.",
+    });
   });
 
   it("should throw TypeError for whitespace-only command name", () => {
-    assert.throws(
-      () => command("   ", constant("ws" as const)),
-      {
-        name: "TypeError",
-        message: 'Command name must not be whitespace-only: "   ".',
-      },
-    );
+    assert.throws(() => command("   ", constant("ws" as const)), {
+      name: "TypeError",
+      message: 'Command name must not be whitespace-only: "   ".',
+    });
   });
 
   it("should throw TypeError for command name with embedded whitespace", () => {
-    assert.throws(
-      () => command("bad cmd", constant("sp" as const)),
-      {
-        name: "TypeError",
-        message: 'Command name must not contain whitespace: "bad cmd".',
-      },
-    );
+    assert.throws(() => command("bad cmd", constant("sp" as const)), {
+      name: "TypeError",
+      message: 'Command name must not contain whitespace: "bad cmd".',
+    });
   });
 
   it("should throw TypeError for command name with newline", () => {
-    assert.throws(
-      () => command("bad\nname", constant("nl" as const)),
-      {
-        name: "TypeError",
-        message:
-          'Command name must not contain control characters: "bad\\nname".',
-      },
-    );
+    assert.throws(() => command("bad\nname", constant("nl" as const)), {
+      name: "TypeError",
+      message:
+        'Command name must not contain control characters: "bad\\nname".',
+    });
   });
 
   it("should throw TypeError for command name with C0 control character", () => {
-    assert.throws(
-      () => command("bad\x00name", constant("c0" as const)),
-      {
-        name: "TypeError",
-        message:
-          'Command name must not contain control characters: "bad\\x00name".',
-      },
-    );
+    assert.throws(() => command("bad\x00name", constant("c0" as const)), {
+      name: "TypeError",
+      message:
+        'Command name must not contain control characters: "bad\\x00name".',
+    });
   });
 
   it("should throw TypeError for command name with C1 control character", () => {
-    assert.throws(
-      () => command("bad\x80name", constant("c1" as const)),
-      {
-        name: "TypeError",
-        message:
-          'Command name must not contain control characters: "bad\\x80name".',
-      },
-    );
+    assert.throws(() => command("bad\x80name", constant("c1" as const)), {
+      name: "TypeError",
+      message:
+        'Command name must not contain control characters: "bad\\x80name".',
+    });
   });
 
   describe("getDocFragments", () => {
@@ -4378,9 +4462,10 @@ describe("command", () => {
         "parsing" as const,
         innerParser.initialState,
       ];
-      const fragments = parser.getDocFragments(
-        { kind: "available" as const, state: parsingState },
-      );
+      const fragments = parser.getDocFragments({
+        kind: "available" as const,
+        state: parsingState,
+      });
 
       // Should delegate to inner parser
       assert.ok(fragments.fragments.length > 0);
@@ -4410,10 +4495,7 @@ describe("command", () => {
     // When command("file", or(add, remove)) is given "add" as input,
     // it should say "Expected command file, but got add."
     // It should NOT suggest "add" because "add" is only valid *inside* "file".
-    const addCmd = command(
-      "add",
-      object({ force: optional(flag("--force")) }),
-    );
+    const addCmd = command("add", object({ force: optional(flag("--force")) }));
     const removeCmd = command(
       "remove",
       object({ force: optional(flag("--force")) }),
@@ -4568,10 +4650,10 @@ describe("command", () => {
         return context.dependencyRegistry?.has(dependencyId)
           ? { success: true as const, next: context, consumed: [] }
           : {
-            success: false as const,
-            consumed: 0,
-            error: message`missing dependency`,
-          };
+              success: false as const,
+              consumed: 0,
+              error: message`missing dependency`,
+            };
       },
       complete() {
         return { success: true as const, value: "ok" };
@@ -4638,20 +4720,25 @@ describe("command", () => {
     } as const satisfies Parser<"sync", string, undefined>;
     const parser = command("deploy", inner);
 
-    const suggestions = [...parser.suggest({
-      buffer: [],
-      state: ["matched", "deploy"],
-      optionsTerminated: false,
-      usage: parser.usage,
-      exec: {
-        usage: parser.usage,
-        phase: "suggest",
-        path: ["root"],
-        trace: undefined,
-        dependencyRegistry: staleRegistry,
-      },
-      dependencyRegistry: freshRegistry,
-    }, "")];
+    const suggestions = [
+      ...parser.suggest(
+        {
+          buffer: [],
+          state: ["matched", "deploy"],
+          optionsTerminated: false,
+          usage: parser.usage,
+          exec: {
+            usage: parser.usage,
+            phase: "suggest",
+            path: ["root"],
+            trace: undefined,
+            dependencyRegistry: staleRegistry,
+          },
+          dependencyRegistry: freshRegistry,
+        },
+        "",
+      ),
+    ];
 
     assert.deepEqual(suggestions, [{ kind: "literal", text: "fresh" }]);
     assert.ok(childRegistry);
@@ -4679,9 +4766,10 @@ describe("command", () => {
           success: true as const,
           next: {
             ...context,
-            exec: context.exec == null
-              ? undefined
-              : { ...context.exec, dependencyRegistry: freshRegistry },
+            exec:
+              context.exec == null
+                ? undefined
+                : { ...context.exec, dependencyRegistry: freshRegistry },
             dependencyRegistry: freshRegistry,
           },
           consumed: [],
@@ -4692,25 +4780,22 @@ describe("command", () => {
         return exec?.dependencyRegistry?.has(dependencyId)
           ? { success: true as const, value: "ok" }
           : {
-            success: false as const,
-            error: message`Missing forwarded exec.`,
-          };
+              success: false as const,
+              error: message`Missing forwarded exec.`,
+            };
       },
       suggest: function* () {},
       getDocFragments: () => ({ fragments: [] }),
     } as const satisfies Parser<"sync", string, undefined>;
     const parser = command("deploy", inner);
 
-    const result = parser.complete(
-      ["matched", "deploy"],
-      {
-        usage: parser.usage,
-        phase: "complete",
-        path: ["root"],
-        trace: undefined,
-        dependencyRegistry: staleRegistry,
-      },
-    );
+    const result = parser.complete(["matched", "deploy"], {
+      usage: parser.usage,
+      phase: "complete",
+      path: ["root"],
+      trace: undefined,
+      dependencyRegistry: staleRegistry,
+    });
 
     assert.ok(result.success);
     assert.strictEqual(completeExec?.dependencyRegistry, freshRegistry);
@@ -4735,9 +4820,10 @@ describe("command", () => {
           success: true as const,
           next: {
             ...context,
-            exec: context.exec == null
-              ? undefined
-              : { ...context.exec, dependencyRegistry: freshRegistry },
+            exec:
+              context.exec == null
+                ? undefined
+                : { ...context.exec, dependencyRegistry: freshRegistry },
             dependencyRegistry: freshRegistry,
           },
           consumed: [],
@@ -4749,9 +4835,9 @@ describe("command", () => {
           exec?.dependencyRegistry?.has(dependencyId)
             ? { success: true as const, value: "ok" }
             : {
-              success: false as const,
-              error: message`Missing forwarded exec.`,
-            },
+                success: false as const,
+                error: message`Missing forwarded exec.`,
+              },
         );
       },
       suggest() {
@@ -4765,16 +4851,13 @@ describe("command", () => {
     } as const satisfies Parser<"async", string, undefined>;
     const parser = command("deploy", inner);
 
-    const result = await parser.complete(
-      ["matched", "deploy"],
-      {
-        usage: parser.usage,
-        phase: "complete",
-        path: ["root"],
-        trace: undefined,
-        dependencyRegistry: staleRegistry,
-      },
-    );
+    const result = await parser.complete(["matched", "deploy"], {
+      usage: parser.usage,
+      phase: "complete",
+      path: ["root"],
+      trace: undefined,
+      dependencyRegistry: staleRegistry,
+    });
 
     assert.ok(result.success);
     assert.strictEqual(completeExec?.dependencyRegistry, freshRegistry);
@@ -4974,15 +5057,15 @@ describe("command() error customization", () => {
     if (!result.success) assert.equal(formatMessage(result.error), "");
     assert.ok(
       !capturedSuggestions.includes("add"),
-      `"add" should not appear in notMatched suggestions, got: [${
-        capturedSuggestions.join(", ")
-      }]`,
+      `"add" should not appear in notMatched suggestions, got: [${capturedSuggestions.join(
+        ", ",
+      )}]`,
     );
     assert.ok(
       !capturedSuggestions.includes("remove"),
-      `"remove" should not appear in notMatched suggestions, got: [${
-        capturedSuggestions.join(", ")
-      }]`,
+      `"remove" should not appear in notMatched suggestions, got: [${capturedSuggestions.join(
+        ", ",
+      )}]`,
     );
   });
 
@@ -5016,15 +5099,15 @@ describe("command() error customization", () => {
     // "file" should be suggested (typo correction), "add" should not
     assert.ok(
       capturedSuggestions.includes("file"),
-      `"file" should appear in suggestions (typo for "file"), got: [${
-        capturedSuggestions.join(", ")
-      }]`,
+      `"file" should appear in suggestions (typo for "file"), got: [${capturedSuggestions.join(
+        ", ",
+      )}]`,
     );
     assert.ok(
       !capturedSuggestions.includes("add"),
-      `"add" (sub-command) should not appear in suggestions, got: [${
-        capturedSuggestions.join(", ")
-      }]`,
+      `"add" (sub-command) should not appear in suggestions, got: [${capturedSuggestions.join(
+        ", ",
+      )}]`,
     );
   });
 });
@@ -5036,18 +5119,25 @@ describe("command() with brief option", () => {
       brief,
       description: message`Deploy with full configuration options.`,
     });
-    const suggestions = Array.from(parser.suggest({
-      buffer: [],
-      state: parser.initialState,
-      usage: parser.usage,
-      optionsTerminated: false,
-    }, "dep"));
+    const suggestions = Array.from(
+      parser.suggest(
+        {
+          buffer: [],
+          state: parser.initialState,
+          usage: parser.usage,
+          optionsTerminated: false,
+        },
+        "dep",
+      ),
+    );
 
-    assert.deepEqual(suggestions, [{
-      kind: "literal",
-      text: "deploy",
-      description: brief,
-    }]);
+    assert.deepEqual(suggestions, [
+      {
+        kind: "literal",
+        text: "deploy",
+        description: brief,
+      },
+    ]);
   });
 
   it("should include brief in async command suggestions", async () => {
@@ -5062,22 +5152,25 @@ describe("command() with brief option", () => {
     );
     const suggestions: Suggestion[] = [];
 
-    for await (
-      const suggestion of parser.suggest({
+    for await (const suggestion of parser.suggest(
+      {
         buffer: [],
         state: parser.initialState,
         usage: parser.usage,
         optionsTerminated: false,
-      }, "dep")
-    ) {
+      },
+      "dep",
+    )) {
       suggestions.push(suggestion);
     }
 
-    assert.deepEqual(suggestions, [{
-      kind: "literal",
-      text: "deploy",
-      description: brief,
-    }]);
+    assert.deepEqual(suggestions, [
+      {
+        kind: "literal",
+        text: "deploy",
+        description: brief,
+      },
+    ]);
   });
 
   it("should use brief for command list when both brief and description are provided", () => {
@@ -5088,8 +5181,7 @@ describe("command() with brief option", () => {
       }),
       {
         brief: message`Deploy the application`,
-        description:
-          message`Deploy the application to the specified environment with full configuration options and validation.`,
+        description: message`Deploy the application to the specified environment with full configuration options and validation.`,
       },
     );
 
@@ -5142,8 +5234,7 @@ describe("command() with brief option", () => {
         }),
         {
           brief: message`Show an item`,
-          description:
-            message`Display detailed information about an item including metadata and history.`,
+          description: message`Display detailed information about an item including metadata and history.`,
         },
       ),
       command(
@@ -5153,8 +5244,7 @@ describe("command() with brief option", () => {
         }),
         {
           brief: message`Edit an item`,
-          description:
-            message`Open an editor to modify the contents and properties of an item.`,
+          description: message`Open an editor to modify the contents and properties of an item.`,
         },
       ),
     );
@@ -5172,24 +5262,18 @@ describe("command() with brief option", () => {
     assert.equal(commandEntries.length, 2);
 
     // Check first command (show)
-    const showEntry = commandEntries.find((e) =>
-      e.term.type === "command" && e.term.name === "show"
+    const showEntry = commandEntries.find(
+      (e) => e.term.type === "command" && e.term.name === "show",
     );
     assert.ok(showEntry);
-    assert.deepEqual(
-      showEntry.description,
-      message`Show an item`,
-    );
+    assert.deepEqual(showEntry.description, message`Show an item`);
 
     // Check second command (edit)
-    const editEntry = commandEntries.find((e) =>
-      e.term.type === "command" && e.term.name === "edit"
+    const editEntry = commandEntries.find(
+      (e) => e.term.type === "command" && e.term.name === "edit",
     );
     assert.ok(editEntry);
-    assert.deepEqual(
-      editEntry.description,
-      message`Edit an item`,
-    );
+    assert.deepEqual(editEntry.description, message`Edit an item`);
   });
 
   it("should use full description when command is matched", () => {
@@ -5200,8 +5284,7 @@ describe("command() with brief option", () => {
       }),
       {
         brief: message`Deploy the application`,
-        description:
-          message`Deploy the application to the specified environment.`,
+        description: message`Deploy the application to the specified environment.`,
       },
     );
 
@@ -5272,10 +5355,8 @@ describe("command() with brief option", () => {
       }),
       {
         brief: message`Restore from backup`,
-        description:
-          message`Restore data from a backup archive with verification and validation.`,
-        footer:
-          message`Examples:\n  myapp restore backup.tar.gz\n  myapp restore --verify backup.tar.gz`,
+        description: message`Restore data from a backup archive with verification and validation.`,
+        footer: message`Examples:\n  myapp restore backup.tar.gz\n  myapp restore --verify backup.tar.gz`,
       },
     );
 
@@ -5313,8 +5394,7 @@ describe("command() with brief option", () => {
       object({ env: option("-e", "--env", string()) }),
       {
         brief: message`Deploy the application`,
-        description:
-          message`Deploy the application to the specified environment.`,
+        description: message`Deploy the application to the specified environment.`,
       },
     );
 
@@ -5334,11 +5414,9 @@ describe("command() with brief option", () => {
   });
 
   it("should propagate brief but not description when only brief is set and command is matched", () => {
-    const parser = command(
-      "file",
-      object({}),
-      { brief: message`File operations` },
-    );
+    const parser = command("file", object({}), {
+      brief: message`File operations`,
+    });
 
     const matchedState = ["matched", "file"] as ["matched", string];
     const fragments = parser.getDocFragments({
@@ -5417,21 +5495,19 @@ describe("joined option classification", () => {
   }
 
   it("should preserve non-option positional spellings", () => {
-    for (
-      const token of [
-        "-",
-        "-.5",
-        "-name.ext",
-        "-name:value",
-        "-=v",
-        "--=v",
-        "--=",
-        "+x=v",
-        "/X:v",
-        "--naïve=1",
-        "--unknown\n",
-      ]
-    ) {
+    for (const token of [
+      "-",
+      "-.5",
+      "-name.ext",
+      "-name:value",
+      "-=v",
+      "--=v",
+      "--=",
+      "+x=v",
+      "/X:v",
+      "--naïve=1",
+      "--unknown\n",
+    ]) {
       assert.deepEqual(parseSync(argument(string()), [token]), {
         success: true,
         value: token,
@@ -5496,14 +5572,14 @@ describe("joined option classification", () => {
     for (const capture of [false, true]) {
       const parser = capture
         ? object({
-          debug: option("--debug"),
-          paths: multiple(argument(string())),
-          extra: passThrough({ format: "nextToken" }),
-        })
+            debug: option("--debug"),
+            paths: multiple(argument(string())),
+            extra: passThrough({ format: "nextToken" }),
+          })
         : object({
-          debug: option("--debug"),
-          paths: multiple(argument(string())),
-        });
+            debug: option("--debug"),
+            paths: multiple(argument(string())),
+          });
       assert.deepEqual(parseSync(parser, ["--debug=1"]), expected);
     }
   });
@@ -5775,12 +5851,7 @@ describe("passThrough", () => {
       const result = parser.parse(context);
       assert.ok(result.success);
       if (result.success) {
-        assert.deepEqual(result.next.state, [
-          "--foo",
-          "bar",
-          "--baz",
-          "qux",
-        ]);
+        assert.deepEqual(result.next.state, ["--foo", "bar", "--baz", "qux"]);
         assert.deepEqual(result.next.buffer, []);
         assert.deepEqual(result.consumed, ["--foo", "bar", "--baz", "qux"]);
       }
@@ -6173,10 +6244,7 @@ describe("passThrough", () => {
 
   describe("with tuple() combinator", () => {
     it("should work in tuple position", () => {
-      const parser = tuple([
-        option("--debug"),
-        passThrough(),
-      ]);
+      const parser = tuple([option("--debug"), passThrough()]);
 
       const result = parseSync(parser, ["--debug", "--foo=bar", "--baz=qux"]);
       assert.ok(result.success);
@@ -6286,17 +6354,14 @@ describe("passThrough", () => {
 
   describe("with conditional() combinator", () => {
     it("should work with conditional branches", () => {
-      const parser = conditional(
-        option("--mode", choice(["local", "proxy"])),
-        {
-          local: object({
-            port: option("-p", "--port", integer()),
-          }),
-          proxy: object({
-            extra: passThrough({ format: "nextToken" }),
-          }),
-        },
-      );
+      const parser = conditional(option("--mode", choice(["local", "proxy"])), {
+        local: object({
+          port: option("-p", "--port", integer()),
+        }),
+        proxy: object({
+          extra: passThrough({ format: "nextToken" }),
+        }),
+      });
 
       const result1 = parseSync(parser, ["--mode", "local", "-p", "8080"]);
       assert.ok(result1.success);
@@ -6670,15 +6735,17 @@ describe("hidden option", () => {
 
     it("should return empty suggestions when hidden", () => {
       const parser = option("--secret", string(), { hidden: true });
-      const suggestions = Array.from(parser.suggest(
-        {
-          buffer: [],
-          state: undefined,
-          usage: parser.usage,
-          optionsTerminated: false,
-        },
-        "--sec",
-      ));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: undefined,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "--sec",
+        ),
+      );
       assert.deepEqual(suggestions, []);
     });
 
@@ -6702,15 +6769,17 @@ describe("hidden option", () => {
       );
       assert.equal(fragments.fragments.length, 1);
 
-      const suggestions = Array.from(parser.suggest(
-        {
-          buffer: [],
-          state: undefined,
-          usage: parser.usage,
-          optionsTerminated: false,
-        },
-        "--sec",
-      ));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: undefined,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "--sec",
+        ),
+      );
       assert.equal(suggestions.length, 1);
     });
 
@@ -6726,15 +6795,17 @@ describe("hidden option", () => {
       );
       assert.deepEqual(fragments.fragments, []);
 
-      const suggestions = Array.from(parser.suggest(
-        {
-          buffer: [],
-          state: undefined,
-          usage: parser.usage,
-          optionsTerminated: false,
-        },
-        "--sec",
-      ));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: undefined,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "--sec",
+        ),
+      );
       assert.equal(suggestions.length, 1);
     });
 
@@ -6750,15 +6821,17 @@ describe("hidden option", () => {
       );
       assert.deepEqual(fragments.fragments, []);
 
-      const suggestions = Array.from(parser.suggest(
-        {
-          buffer: [],
-          state: undefined,
-          usage: parser.usage,
-          optionsTerminated: false,
-        },
-        "--sec",
-      ));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: undefined,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "--sec",
+        ),
+      );
       assert.equal(suggestions.length, 1);
     });
 
@@ -6782,24 +6855,18 @@ describe("hidden option", () => {
     });
 
     it("should throw TypeError for option name with control characters", () => {
-      assert.throws(
-        () => option("--foo\x00", string()),
-        {
-          name: "TypeError",
-          message:
-            'Option name must not contain control characters: "--foo\\x00".',
-        },
-      );
+      assert.throws(() => option("--foo\x00", string()), {
+        name: "TypeError",
+        message:
+          'Option name must not contain control characters: "--foo\\x00".',
+      });
     });
 
     it("should throw TypeError for option name with whitespace", () => {
-      assert.throws(
-        () => option("--foo bar", string()),
-        {
-          name: "TypeError",
-          message: 'Option name must not contain whitespace: "--foo bar".',
-        },
-      );
+      assert.throws(() => option("--foo bar", string()), {
+        name: "TypeError",
+        message: 'Option name must not contain whitespace: "--foo bar".',
+      });
     });
 
     it("should throw TypeError for option name without valid prefix", () => {
@@ -6814,13 +6881,10 @@ describe("hidden option", () => {
     });
 
     it("should throw TypeError for options terminator as option name", () => {
-      assert.throws(
-        () => option("--", string()),
-        {
-          name: "TypeError",
-          message: 'Option name must not be the options terminator "--".',
-        },
-      );
+      assert.throws(() => option("--", string()), {
+        name: "TypeError",
+        message: 'Option name must not be the options terminator "--".',
+      });
     });
 
     it("should throw TypeError when no option names are provided", () => {
@@ -6856,15 +6920,17 @@ describe("hidden option", () => {
 
     it("should return empty suggestions when hidden", () => {
       const parser = flag("--debug", { hidden: true });
-      const suggestions = Array.from(parser.suggest(
-        {
-          buffer: [],
-          state: undefined,
-          usage: parser.usage,
-          optionsTerminated: false,
-        },
-        "--deb",
-      ));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: undefined,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "--deb",
+        ),
+      );
       assert.deepEqual(suggestions, []);
     });
 
@@ -6875,15 +6941,17 @@ describe("hidden option", () => {
         undefined,
       );
       assert.equal(fragments.fragments.length, 1);
-      const suggestions = Array.from(parser.suggest(
-        {
-          buffer: [],
-          state: undefined,
-          usage: parser.usage,
-          optionsTerminated: false,
-        },
-        "--deb",
-      ));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: undefined,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "--deb",
+        ),
+      );
       assert.equal(suggestions.length, 1);
     });
 
@@ -6894,15 +6962,17 @@ describe("hidden option", () => {
         undefined,
       );
       assert.deepEqual(fragments.fragments, []);
-      const suggestions = Array.from(parser.suggest(
-        {
-          buffer: [],
-          state: undefined,
-          usage: parser.usage,
-          optionsTerminated: false,
-        },
-        "--deb",
-      ));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: undefined,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "--deb",
+        ),
+      );
       assert.equal(suggestions.length, 1);
     });
 
@@ -6926,24 +6996,18 @@ describe("hidden option", () => {
     });
 
     it("should throw TypeError for flag name with control characters", () => {
-      assert.throws(
-        () => flag("--debug\x00"),
-        {
-          name: "TypeError",
-          message:
-            'Flag name must not contain control characters: "--debug\\x00".',
-        },
-      );
+      assert.throws(() => flag("--debug\x00"), {
+        name: "TypeError",
+        message:
+          'Flag name must not contain control characters: "--debug\\x00".',
+      });
     });
 
     it("should throw TypeError for flag name with whitespace", () => {
-      assert.throws(
-        () => flag("--de bug"),
-        {
-          name: "TypeError",
-          message: 'Flag name must not contain whitespace: "--de bug".',
-        },
-      );
+      assert.throws(() => flag("--de bug"), {
+        name: "TypeError",
+        message: 'Flag name must not contain whitespace: "--de bug".',
+      });
     });
 
     it("should throw TypeError for flag name without valid prefix", () => {
@@ -6958,13 +7022,10 @@ describe("hidden option", () => {
     });
 
     it("should throw TypeError for options terminator as flag name", () => {
-      assert.throws(
-        () => flag("--"),
-        {
-          name: "TypeError",
-          message: 'Flag name must not be the options terminator "--".',
-        },
-      );
+      assert.throws(() => flag("--"), {
+        name: "TypeError",
+        message: 'Flag name must not be the options terminator "--".',
+      });
     });
 
     it("should throw TypeError when no flag names are provided", () => {
@@ -7000,15 +7061,17 @@ describe("hidden option", () => {
 
     it("should return empty suggestions when hidden", () => {
       const parser = argument(string(), { hidden: true });
-      const suggestions = Array.from(parser.suggest(
-        {
-          buffer: [],
-          state: undefined,
-          usage: parser.usage,
-          optionsTerminated: false,
-        },
-        "",
-      ));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: undefined,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "",
+        ),
+      );
       assert.deepEqual(suggestions, []);
     });
 
@@ -7030,15 +7093,17 @@ describe("hidden option", () => {
       );
       assert.deepEqual(fragments.fragments, []);
 
-      const suggestions = Array.from(parser.suggest(
-        {
-          buffer: [],
-          state: undefined,
-          usage: parser.usage,
-          optionsTerminated: false,
-        },
-        "",
-      ));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: undefined,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "",
+        ),
+      );
       assert.equal(suggestions.length, 1);
     });
   });
@@ -7103,15 +7168,17 @@ describe("hidden option", () => {
         object({ value: option("--value", string()) }),
         { hidden: true },
       );
-      const suggestions = Array.from(parser.suggest(
-        {
-          buffer: [],
-          state: undefined,
-          usage: parser.usage,
-          optionsTerminated: false,
-        },
-        "sec",
-      ));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: undefined,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "sec",
+        ),
+      );
       assert.deepEqual(suggestions, []);
     });
 
@@ -7131,15 +7198,17 @@ describe("hidden option", () => {
       );
       assert.equal(fragments.fragments.length, 1);
 
-      const suggestions = Array.from(parser.suggest(
-        {
-          buffer: [],
-          state: undefined,
-          usage: parser.usage,
-          optionsTerminated: false,
-        },
-        "sec",
-      ));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: undefined,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "sec",
+        ),
+      );
       assert.equal(suggestions.length, 1);
     });
 
@@ -7159,15 +7228,17 @@ describe("hidden option", () => {
       );
       assert.deepEqual(fragments.fragments, []);
 
-      const suggestions = Array.from(parser.suggest(
-        {
-          buffer: [],
-          state: undefined,
-          usage: parser.usage,
-          optionsTerminated: false,
-        },
-        "sec",
-      ));
+      const suggestions = Array.from(
+        parser.suggest(
+          {
+            buffer: [],
+            state: undefined,
+            usage: parser.usage,
+            optionsTerminated: false,
+          },
+          "sec",
+        ),
+      );
       assert.equal(suggestions.length, 1);
     });
 
@@ -7204,17 +7275,17 @@ describe("hidden option", () => {
         .flatMap((f) => f.entries);
 
       const fragmentDescriptions = entries.map((entry) =>
-        entry.description ? formatMessage(entry.description) : ""
+        entry.description ? formatMessage(entry.description) : "",
       );
 
       assert.ok(
         fragmentDescriptions.some((d) =>
-          d.includes("the argument to the command")
+          d.includes("the argument to the command"),
         ),
       );
       assert.ok(
         fragmentDescriptions.some((d) =>
-          d.includes("an option for the command")
+          d.includes("an option for the command"),
         ),
       );
     });
@@ -7394,9 +7465,7 @@ describe("branch coverage: primitives edge cases", () => {
       optionsTerminated: false,
       usage: parser.usage,
     };
-    const suggestions = [
-      ...(parser.suggest(ctx, "") as Iterable<Suggestion>),
-    ];
+    const suggestions = [...(parser.suggest(ctx, "") as Iterable<Suggestion>)];
     // The noSuggest parser has no suggest(), so getSuggestionsWithDependency
     // takes the early-return branch and we get no value suggestions.
     assert.deepEqual(suggestions, []);
@@ -7411,9 +7480,7 @@ describe("branch coverage: primitives edge cases", () => {
       optionsTerminated: false,
       usage: parser.usage,
     };
-    const suggestions = [
-      ...(parser.suggest(ctx, "") as Iterable<Suggestion>),
-    ];
+    const suggestions = [...(parser.suggest(ctx, "") as Iterable<Suggestion>)];
     assert.deepEqual(suggestions, []);
   });
 
@@ -7423,14 +7490,15 @@ describe("branch coverage: primitives edge cases", () => {
       hidden: true,
     });
     const suggestions: Suggestion[] = [];
-    for await (
-      const s of parser.suggest({
+    for await (const s of parser.suggest(
+      {
         buffer: [] as readonly string[],
         state: undefined,
         optionsTerminated: false,
         usage: parser.usage,
-      }, "--") as AsyncIterable<Suggestion>
-    ) {
+      },
+      "--",
+    ) as AsyncIterable<Suggestion>) {
       suggestions.push(s);
     }
     assert.deepEqual(suggestions, []);
@@ -7441,22 +7509,23 @@ describe("branch coverage: primitives edge cases", () => {
   it("option suggest: async --opt= completion with file-kind suggestion", async () => {
     const parser = option("--out", asyncFileSuggestingParser());
     const suggestions: Suggestion[] = [];
-    for await (
-      const s of parser.suggest({
+    for await (const s of parser.suggest(
+      {
         buffer: [] as readonly string[],
         state: undefined,
         optionsTerminated: false,
         usage: parser.usage,
-      }, "--out=") as AsyncIterable<Suggestion>
-    ) {
+      },
+      "--out=",
+    ) as AsyncIterable<Suggestion>) {
       suggestions.push(s);
     }
     // File-kind suggestion is converted to literal with option= prefix
     assert.ok(suggestions.length > 0);
     assert.ok(suggestions.every((s) => s.kind === "literal"));
     assert.ok(
-      suggestions.some((s) =>
-        s.kind === "literal" && s.text.startsWith("--out=")
+      suggestions.some(
+        (s) => s.kind === "literal" && s.text.startsWith("--out="),
       ),
     );
   });
@@ -7471,14 +7540,15 @@ describe("branch coverage: primitives edge cases", () => {
     );
     assert.equal(asyncCmd.mode, "async");
     const suggestions: Suggestion[] = [];
-    for await (
-      const s of asyncCmd.suggest({
+    for await (const s of asyncCmd.suggest(
+      {
         buffer: [] as readonly string[],
         state: ["matched", "deploy"] as ["matched", string],
         optionsTerminated: false,
         usage: asyncCmd.usage,
-      }, "--") as AsyncIterable<Suggestion>
-    ) {
+      },
+      "--",
+    ) as AsyncIterable<Suggestion>) {
       suggestions.push(s);
     }
     // Should get suggestions from the inner parser in "matched" state
@@ -7490,8 +7560,8 @@ describe("branch coverage: primitives edge cases", () => {
     const asyncCmd = command("deploy", inner);
     assert.equal(asyncCmd.mode, "async");
     const suggestions: Suggestion[] = [];
-    for await (
-      const s of asyncCmd.suggest({
+    for await (const s of asyncCmd.suggest(
+      {
         buffer: [] as readonly string[],
         state: ["parsing", inner.initialState] as [
           "parsing",
@@ -7499,8 +7569,9 @@ describe("branch coverage: primitives edge cases", () => {
         ],
         optionsTerminated: false,
         usage: asyncCmd.usage,
-      }, "--") as AsyncIterable<Suggestion>
-    ) {
+      },
+      "--",
+    ) as AsyncIterable<Suggestion>) {
       suggestions.push(s);
     }
     assert.ok(Array.isArray(suggestions));
@@ -7544,9 +7615,10 @@ describe("branch coverage: primitives edge cases", () => {
     const asyncCmd = command("run", asyncInner);
     assert.equal(asyncCmd.mode, "async");
     const state: ["matched", string] = ["matched", "run"];
-    const result = await (asyncCmd.complete(state) as Promise<
-      { success: boolean; value?: string }
-    >);
+    const result = await (asyncCmd.complete(state) as Promise<{
+      success: boolean;
+      value?: string;
+    }>);
     assert.ok(result.success);
     if (result.success) {
       assert.equal(result.value, "async-done");
@@ -7661,12 +7733,15 @@ describe("branch coverage: primitives edge cases", () => {
     };
     const parser = option("--name", parserWithFlakySuggest);
     const suggestions = [
-      ...(parser.suggest({
-        buffer: ["--name"] as readonly string[],
-        state: undefined,
-        optionsTerminated: false,
-        usage: parser.usage,
-      }, "") as Iterable<Suggestion>),
+      ...(parser.suggest(
+        {
+          buffer: ["--name"] as readonly string[],
+          state: undefined,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "",
+      ) as Iterable<Suggestion>),
     ];
     assert.deepEqual(suggestions, []);
   });
@@ -7695,14 +7770,15 @@ describe("branch coverage: primitives edge cases", () => {
     };
     const parser = option("--name", parserWithFlakySuggest);
     const suggestions: Suggestion[] = [];
-    for await (
-      const s of parser.suggest({
+    for await (const s of parser.suggest(
+      {
         buffer: ["--name"] as readonly string[],
         state: undefined,
         optionsTerminated: false,
         usage: parser.usage,
-      }, "") as AsyncIterable<Suggestion>
-    ) {
+      },
+      "",
+    ) as AsyncIterable<Suggestion>) {
       suggestions.push(s);
     }
     assert.deepEqual(suggestions, []);
@@ -7711,17 +7787,20 @@ describe("branch coverage: primitives edge cases", () => {
   it("option suggest sync: --opt= with file suggestion uses literal fallback", () => {
     const parser = option("--out", fileSuggestingParser());
     const suggestions = [
-      ...(parser.suggest({
-        buffer: [] as readonly string[],
-        state: undefined,
-        optionsTerminated: false,
-        usage: parser.usage,
-      }, "--out=") as Iterable<Suggestion>),
+      ...(parser.suggest(
+        {
+          buffer: [] as readonly string[],
+          state: undefined,
+          optionsTerminated: false,
+          usage: parser.usage,
+        },
+        "--out=",
+      ) as Iterable<Suggestion>),
     ];
     assert.ok(suggestions.some((s) => s.kind === "literal"));
     assert.ok(
-      suggestions.some((s) =>
-        s.kind === "literal" && s.text.startsWith("--out=")
+      suggestions.some(
+        (s) => s.kind === "literal" && s.text.startsWith("--out="),
       ),
     );
   });
@@ -7763,9 +7842,10 @@ describe("branch coverage: primitives edge cases", () => {
       dependencyRegistry: registry,
     };
     const suggestions: Suggestion[] = [];
-    for await (
-      const s of parser.suggest(ctx, "") as AsyncIterable<Suggestion>
-    ) {
+    for await (const s of parser.suggest(
+      ctx,
+      "",
+    ) as AsyncIterable<Suggestion>) {
       suggestions.push(s);
     }
     assert.ok(suggestions.length > 0);
@@ -7809,14 +7889,15 @@ describe("branch coverage: primitives edge cases", () => {
       })(),
     };
     const suggestions: Suggestion[] = [];
-    for await (
-      const s of parser.suggest(ctx, "") as AsyncIterable<Suggestion>
-    ) {
+    for await (const s of parser.suggest(
+      ctx,
+      "",
+    ) as AsyncIterable<Suggestion>) {
       suggestions.push(s);
     }
     assert.ok(
-      suggestions.some((s) =>
-        s.kind === "literal" && s.text.startsWith("from-")
+      suggestions.some(
+        (s) => s.kind === "literal" && s.text.startsWith("from-"),
       ),
     );
   });
@@ -7965,14 +8046,15 @@ describe("branch coverage: primitives edge cases", () => {
 
     const asyncArg = argument(asyncFileSuggestingParser());
     const suggestions: Suggestion[] = [];
-    for await (
-      const s of asyncArg.suggest({
+    for await (const s of asyncArg.suggest(
+      {
         buffer: [] as readonly string[],
         state: undefined,
         optionsTerminated: false,
         usage: asyncArg.usage,
-      }, "") as AsyncIterable<Suggestion>
-    ) {
+      },
+      "",
+    ) as AsyncIterable<Suggestion>) {
       suggestions.push(s);
     }
     assert.ok(Array.isArray(suggestions));
@@ -7985,14 +8067,15 @@ describe("branch coverage: primitives edge cases", () => {
       { description: message`Deploy command`, hidden: true },
     );
     const hiddenSuggestions: Suggestion[] = [];
-    for await (
-      const s of asyncCmdWithDescription.suggest({
+    for await (const s of asyncCmdWithDescription.suggest(
+      {
         buffer: [] as readonly string[],
         state: undefined,
         optionsTerminated: false,
         usage: asyncCmdWithDescription.usage,
-      }, "de") as AsyncIterable<Suggestion>
-    ) {
+      },
+      "de",
+    ) as AsyncIterable<Suggestion>) {
       hiddenSuggestions.push(s);
     }
     assert.deepEqual(hiddenSuggestions, []);
@@ -8003,19 +8086,20 @@ describe("branch coverage: primitives edge cases", () => {
       { description: message`Deploy command` },
     );
     const visibleSuggestions: Suggestion[] = [];
-    for await (
-      const s of visibleAsyncCmd.suggest({
+    for await (const s of visibleAsyncCmd.suggest(
+      {
         buffer: [] as readonly string[],
         state: undefined,
         optionsTerminated: false,
         usage: visibleAsyncCmd.usage,
-      }, "de") as AsyncIterable<Suggestion>
-    ) {
+      },
+      "de",
+    ) as AsyncIterable<Suggestion>) {
       visibleSuggestions.push(s);
     }
     assert.ok(
-      visibleSuggestions.some((s) =>
-        s.kind === "literal" && s.text === "deploy"
+      visibleSuggestions.some(
+        (s) => s.kind === "literal" && s.text === "deploy",
       ),
     );
 
@@ -8144,15 +8228,16 @@ describe("branch coverage: primitives edge cases", () => {
     });
     const parser = option("--target", derived);
     const suggestions: Suggestion[] = [];
-    for await (
-      const s of parser.suggest({
+    for await (const s of parser.suggest(
+      {
         buffer: ["--target"] as readonly string[],
         state: undefined,
         optionsTerminated: false,
         usage: parser.usage,
         dependencyRegistry: new DependencyRegistry(),
-      }, "") as AsyncIterable<Suggestion>
-    ) {
+      },
+      "",
+    ) as AsyncIterable<Suggestion>) {
       suggestions.push(s);
     }
     assert.ok(Array.isArray(suggestions));
@@ -8187,17 +8272,24 @@ describe("branch coverage: primitives edge cases", () => {
       },
     };
     const syncOption = option("--file", syncFileNoPattern);
-    const syncJoinedSuggestions = Array.from(syncOption.suggest({
-      buffer: [] as readonly string[],
-      state: undefined,
-      optionsTerminated: false,
-      usage: syncOption.usage,
-    }, "--file=abc"));
-    assert.deepEqual(syncJoinedSuggestions, [{
-      kind: "literal",
-      text: "--file=",
-      description: undefined,
-    }]);
+    const syncJoinedSuggestions = Array.from(
+      syncOption.suggest(
+        {
+          buffer: [] as readonly string[],
+          state: undefined,
+          optionsTerminated: false,
+          usage: syncOption.usage,
+        },
+        "--file=abc",
+      ),
+    );
+    assert.deepEqual(syncJoinedSuggestions, [
+      {
+        kind: "literal",
+        text: "--file=",
+        description: undefined,
+      },
+    ]);
 
     const dep = dependency(string({ metavar: "MODE" }));
     const sparseDefaultsDerived = deriveFromSync({
@@ -8207,13 +8299,18 @@ describe("branch coverage: primitives edge cases", () => {
       factory: (_mode: string) => string({ metavar: "TARGET" }),
     });
     const syncDerivedOption = option("--target", sparseDefaultsDerived);
-    const syncFallbackSuggestions = Array.from(syncDerivedOption.suggest({
-      buffer: ["--target"] as readonly string[],
-      state: undefined,
-      optionsTerminated: false,
-      usage: syncDerivedOption.usage,
-      dependencyRegistry: new DependencyRegistry(),
-    }, ""));
+    const syncFallbackSuggestions = Array.from(
+      syncDerivedOption.suggest(
+        {
+          buffer: ["--target"] as readonly string[],
+          state: undefined,
+          optionsTerminated: false,
+          usage: syncDerivedOption.usage,
+          dependencyRegistry: new DependencyRegistry(),
+        },
+        "",
+      ),
+    );
     assert.ok(Array.isArray(syncFallbackSuggestions));
 
     const asyncFileNoPattern: ValueParser<"async", string> = {
@@ -8236,31 +8333,35 @@ describe("branch coverage: primitives edge cases", () => {
     };
     const asyncOption = option("--log", asyncFileNoPattern);
     const asyncJoinedSuggestions: Suggestion[] = [];
-    for await (
-      const suggestion of asyncOption.suggest({
+    for await (const suggestion of asyncOption.suggest(
+      {
         buffer: [] as readonly string[],
         state: undefined,
         optionsTerminated: false,
         usage: asyncOption.usage,
-      }, "--log=x")
-    ) {
+      },
+      "--log=x",
+    )) {
       asyncJoinedSuggestions.push(suggestion);
     }
-    assert.deepEqual(asyncJoinedSuggestions, [{
-      kind: "literal",
-      text: "--log=",
-      description: undefined,
-    }]);
+    assert.deepEqual(asyncJoinedSuggestions, [
+      {
+        kind: "literal",
+        text: "--log=",
+        description: undefined,
+      },
+    ]);
 
     const asyncValueSuggestions: Suggestion[] = [];
-    for await (
-      const suggestion of asyncOption.suggest({
+    for await (const suggestion of asyncOption.suggest(
+      {
         buffer: [] as readonly string[],
         state: undefined,
         optionsTerminated: false,
         usage: asyncOption.usage,
-      }, "")
-    ) {
+      },
+      "",
+    )) {
       asyncValueSuggestions.push(suggestion);
     }
     assert.deepEqual(asyncValueSuggestions, [{ kind: "file", type: "any" }]);
@@ -8289,14 +8390,16 @@ describe("branch coverage: primitives edge cases", () => {
     const pendingComplete = completeOption.complete(undefined);
     assert.ok(!pendingComplete.success);
 
-    const deferredOptionFail = completeOption.complete(
-      { success: false, error: message`bad mode` },
-    );
+    const deferredOptionFail = completeOption.complete({
+      success: false,
+      error: message`bad mode`,
+    });
     assert.ok(!deferredOptionFail.success);
 
-    const depOptionFail = completeOption.complete(
-      { success: false, error: message`source failed` },
-    );
+    const depOptionFail = completeOption.complete({
+      success: false,
+      error: message`source failed`,
+    });
     assert.ok(!depOptionFail.success);
 
     const plainOptionFail = completeOption.complete({
@@ -8324,14 +8427,16 @@ describe("branch coverage: primitives edge cases", () => {
     assert.ok(!duplicateBundledFlagResult.success);
 
     const completeArgument = argument(string({ metavar: "NAME" }));
-    const deferredArgFail = completeArgument.complete(
-      { success: false, error: message`bad argument` },
-    );
+    const deferredArgFail = completeArgument.complete({
+      success: false,
+      error: message`bad argument`,
+    });
     assert.ok(!deferredArgFail.success);
 
-    const depArgFail = completeArgument.complete(
-      { success: false, error: message`dependency failed` },
-    );
+    const depArgFail = completeArgument.complete({
+      success: false,
+      error: message`dependency failed`,
+    });
     assert.ok(!depArgFail.success);
 
     const plainArgFail = completeArgument.complete({
@@ -8341,9 +8446,11 @@ describe("branch coverage: primitives edge cases", () => {
     assert.ok(!plainArgFail.success);
 
     const cmd = command("deploy", argument(string({ metavar: "TARGET" })));
-    const invalidStateResult = (cmd.parse as (
-      context: ParserContext<unknown>,
-    ) => ReturnType<typeof cmd.parse>)({
+    const invalidStateResult = (
+      cmd.parse as (
+        context: ParserContext<unknown>,
+      ) => ReturnType<typeof cmd.parse>
+    )({
       buffer: [] as readonly string[],
       state: ["invalid"],
       optionsTerminated: false,
@@ -8392,21 +8499,24 @@ describe("branch coverage: primitives edge cases", () => {
     });
     const asyncFallbackOption = option("--target", asyncDerivedWithoutDefaults);
     const asyncFallbackSuggestions: Suggestion[] = [];
-    for await (
-      const suggestion of asyncFallbackOption.suggest({
+    for await (const suggestion of asyncFallbackOption.suggest(
+      {
         buffer: ["--target"] as readonly string[],
         state: undefined,
         optionsTerminated: false,
         usage: asyncFallbackOption.usage,
         dependencyRegistry: new DependencyRegistry(),
-      }, "")
-    ) {
+      },
+      "",
+    )) {
       asyncFallbackSuggestions.push(suggestion);
     }
-    assert.deepEqual(asyncFallbackSuggestions, [{
-      kind: "literal",
-      text: "fallback-",
-    }]);
+    assert.deepEqual(asyncFallbackSuggestions, [
+      {
+        kind: "literal",
+        text: "fallback-",
+      },
+    ]);
 
     const asyncLiteralSuggestingOption = option(
       "--name",
@@ -8426,9 +8536,7 @@ describe("branch coverage: primitives edge cases", () => {
           },
           suggest(prefix: string): AsyncIterable<Suggestion> {
             return {
-              async *[Symbol.asyncIterator](): AsyncIterableIterator<
-                Suggestion
-              > {
+              async *[Symbol.asyncIterator](): AsyncIterableIterator<Suggestion> {
                 yield { kind: "literal", text: `${prefix}-x` };
               },
             };
@@ -8437,34 +8545,38 @@ describe("branch coverage: primitives edge cases", () => {
       }),
     );
     const asyncJoinedLiteralSuggestions: Suggestion[] = [];
-    for await (
-      const suggestion of asyncLiteralSuggestingOption.suggest({
+    for await (const suggestion of asyncLiteralSuggestingOption.suggest(
+      {
         buffer: [] as readonly string[],
         state: undefined,
         optionsTerminated: false,
         usage: asyncLiteralSuggestingOption.usage,
-      }, "--name=ab")
-    ) {
+      },
+      "--name=ab",
+    )) {
       asyncJoinedLiteralSuggestions.push(suggestion);
     }
-    assert.deepEqual(asyncJoinedLiteralSuggestions, [{
-      kind: "literal",
-      text: "--name=ab-x",
-      description: undefined,
-    }]);
+    assert.deepEqual(asyncJoinedLiteralSuggestions, [
+      {
+        kind: "literal",
+        text: "--name=ab-x",
+        description: undefined,
+      },
+    ]);
 
     const hiddenAsyncArgument = argument(asyncFileSuggestingParser(), {
       hidden: true,
     });
     const hiddenAsyncArgumentSuggestions: Suggestion[] = [];
-    for await (
-      const suggestion of hiddenAsyncArgument.suggest({
+    for await (const suggestion of hiddenAsyncArgument.suggest(
+      {
         buffer: [] as readonly string[],
         state: undefined,
         optionsTerminated: false,
         usage: hiddenAsyncArgument.usage,
-      }, "")
-    ) {
+      },
+      "",
+    )) {
       hiddenAsyncArgumentSuggestions.push(suggestion);
     }
     assert.deepEqual(hiddenAsyncArgumentSuggestions, []);
@@ -8482,11 +8594,9 @@ describe("branch coverage: primitives edge cases", () => {
       assert.equal(formatMessage(endOfInputCustom.error), "custom end");
     }
 
-    const missingValueCustom = option(
-      "--mode",
-      string({ metavar: "MODE" }),
-      { errors: { endOfInput: message`custom missing value` } },
-    ).parse({
+    const missingValueCustom = option("--mode", string({ metavar: "MODE" }), {
+      errors: { endOfInput: message`custom missing value` },
+    }).parse({
       buffer: ["--mode"] as readonly string[],
       state: undefined,
       optionsTerminated: false,
@@ -8552,13 +8662,11 @@ describe("branch coverage: primitives edge cases", () => {
     });
     assert.ok(plainSuccess.success);
 
-    for (
-      const [error, expected] of [
-        [message`dep-fail`, "bad dep-fail"],
-        [message`plain-fail`, "bad plain-fail"],
-        [message`deferred-fail`, "bad deferred-fail"],
-      ] as const
-    ) {
+    for (const [error, expected] of [
+      [message`dep-fail`, "bad dep-fail"],
+      [message`plain-fail`, "bad plain-fail"],
+      [message`deferred-fail`, "bad deferred-fail"],
+    ] as const) {
       const failure = argWithCustomInvalid.complete({
         success: false,
         error,
@@ -8581,23 +8689,18 @@ describe("branch coverage: primitives edge cases", () => {
       assert.equal(formatMessage(missingOption.error), "missing --port");
     }
 
-    for (
-      const [error, expected] of [
-        [message`not-int`, "invalid not-int"],
-        [message`dep-not-int`, "invalid dep-not-int"],
-        [message`plain-not-int`, "invalid plain-not-int"],
-      ] as const
-    ) {
+    for (const [error, expected] of [
+      [message`not-int`, "invalid not-int"],
+      [message`dep-not-int`, "invalid dep-not-int"],
+      [message`plain-not-int`, "invalid plain-not-int"],
+    ] as const) {
       const invalidOptionFailure = optionWithCustomErrors.complete({
         success: false,
         error,
       });
       assert.ok(!invalidOptionFailure.success);
       if (!invalidOptionFailure.success) {
-        assert.equal(
-          formatMessage(invalidOptionFailure.error),
-          expected,
-        );
+        assert.equal(formatMessage(invalidOptionFailure.error), expected);
       }
     }
 
@@ -8621,8 +8724,8 @@ describe("branch coverage: primitives edge cases", () => {
     const staticDuplicateBundledOption = option("-a", "--all", {
       errors: { duplicate: message`all was already set` },
     });
-    const staticDuplicateBundledOptionResult = staticDuplicateBundledOption
-      .parse({
+    const staticDuplicateBundledOptionResult =
+      staticDuplicateBundledOption.parse({
         buffer: ["-abc"] as readonly string[],
         state: { success: true, value: true },
         optionsTerminated: false,
@@ -8689,9 +8792,11 @@ describe("branch coverage: primitives edge cases", () => {
     const cmd = command("deploy", argument(string({ metavar: "TARGET" })), {
       errors: { invalidState: message`custom invalid state` },
     });
-    const invalidStateResult = (cmd.parse as (
-      context: ParserContext<unknown>,
-    ) => ReturnType<typeof cmd.parse>)({
+    const invalidStateResult = (
+      cmd.parse as (
+        context: ParserContext<unknown>,
+      ) => ReturnType<typeof cmd.parse>
+    )({
       buffer: [] as readonly string[],
       state: ["broken"],
       optionsTerminated: false,
@@ -8791,10 +8896,7 @@ describe("leadingNames", () => {
   });
 
   it("should not include inner parser names for command()", () => {
-    const parser = command(
-      "tool",
-      command("help", object({})),
-    );
+    const parser = command("tool", command("help", object({})));
     assert.deepEqual(parser.leadingNames, new Set(["tool"]));
   });
 
@@ -8869,14 +8971,14 @@ describe("validateValue on primitives (#414)", () => {
       assert.ok(typeof parser.validateValue === "function");
       const trueResult = parser.validateValue!(true);
       assert.ok(
-        trueResult && typeof trueResult === "object" &&
-          "success" in trueResult,
+        trueResult && typeof trueResult === "object" && "success" in trueResult,
       );
       assert.ok(trueResult.success);
 
       const falseResult = parser.validateValue!(false);
       assert.ok(
-        falseResult && typeof falseResult === "object" &&
+        falseResult &&
+          typeof falseResult === "object" &&
           "success" in falseResult,
       );
       assert.ok(falseResult.success);
@@ -8894,7 +8996,8 @@ describe("validateValue on primitives (#414)", () => {
 
       const stringResult = parser.validateValue!("yes" as never);
       assert.ok(
-        stringResult && typeof stringResult === "object" &&
+        stringResult &&
+          typeof stringResult === "object" &&
           "success" in stringResult,
       );
       assert.ok(!stringResult.success);
@@ -8912,7 +9015,8 @@ describe("validateValue on primitives (#414)", () => {
 
       const numberResult = parser.validateValue!(1 as never);
       assert.ok(
-        numberResult && typeof numberResult === "object" &&
+        numberResult &&
+          typeof numberResult === "object" &&
           "success" in numberResult,
       );
       assert.ok(!numberResult.success);
@@ -9040,8 +9144,7 @@ describe("validateValue on primitives (#414)", () => {
 
       const trueResult = parser.validateValue!(true);
       assert.ok(
-        trueResult && typeof trueResult === "object" &&
-          "success" in trueResult,
+        trueResult && typeof trueResult === "object" && "success" in trueResult,
       );
       assert.ok(trueResult.success);
       if (trueResult.success) {
@@ -9050,7 +9153,8 @@ describe("validateValue on primitives (#414)", () => {
 
       const falseResult = parser.validateValue!(false);
       assert.ok(
-        falseResult && typeof falseResult === "object" &&
+        falseResult &&
+          typeof falseResult === "object" &&
           "success" in falseResult,
       );
       assert.ok(falseResult.success);
@@ -9069,7 +9173,8 @@ describe("validateValue on primitives (#414)", () => {
 
       const stringResult = parser.validateValue!("yes" as never);
       assert.ok(
-        stringResult && typeof stringResult === "object" &&
+        stringResult &&
+          typeof stringResult === "object" &&
           "success" in stringResult,
       );
       assert.ok(!stringResult.success);
@@ -9091,8 +9196,7 @@ describe("validateValue on primitives (#414)", () => {
 
       const nullResult = parser.validateValue!(null as never);
       assert.ok(
-        nullResult && typeof nullResult === "object" &&
-          "success" in nullResult,
+        nullResult && typeof nullResult === "object" && "success" in nullResult,
       );
       assert.ok(!nullResult.success);
     });

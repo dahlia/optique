@@ -92,7 +92,8 @@ describe("captureRun()", () => {
       kind: "exited",
       exitCode: 0,
       // The parser accepts no arguments, so --help can be omitted.
-      stdout: "Usage: tool [--help]\n\n" +
+      stdout:
+        "Usage: tool [--help]\n\n" +
         "  --help                      Show help information.\n\n",
       stderr: "",
     });
@@ -187,7 +188,8 @@ describe("captureRun()", () => {
       kind: "exited",
       exitCode: 7,
       stdout: "",
-      stderr: "Usage: tool --help\n" +
+      stderr:
+        "Usage: tool --help\n" +
         "       tool STRING\n" +
         "Error: Expected an argument, but got end of input.\n",
     });
@@ -205,13 +207,10 @@ describe("captureRun()", () => {
     };
 
     // Act and assert
-    await assert.rejects(
-      captureRun(parser, { args: [] }),
-      (error) => {
-        assert.equal(error, failure);
-        return true;
-      },
-    );
+    await assert.rejects(captureRun(parser, { args: [] }), (error) => {
+      assert.equal(error, failure);
+      return true;
+    });
   });
 
   it("should rethrow asynchronous parser rejections by identity", async () => {
@@ -220,13 +219,10 @@ describe("captureRun()", () => {
     const parser = argument(rejectingString(failure));
 
     // Act and assert
-    await assert.rejects(
-      captureRun(parser, { args: ["value"] }),
-      (error) => {
-        assert.equal(error, failure);
-        return true;
-      },
-    );
+    await assert.rejects(captureRun(parser, { args: ["value"] }), (error) => {
+      assert.equal(error, failure);
+      return true;
+    });
   });
 
   it("should rethrow option callback errors by identity", async () => {
@@ -483,10 +479,9 @@ describe("captureRun()", () => {
   });
 
   it("should preserve runAsync option and context typing", () => {
-    interface RequiredContext extends
-      SourceContext<{
-        readonly resolvePath: (parsed: ParserValuePlaceholder) => string;
-      }> {}
+    interface RequiredContext extends SourceContext<{
+      readonly resolvePath: (parsed: ParserValuePlaceholder) => string;
+    }> {}
 
     const context: RequiredContext = {
       id: Symbol("required-context"),
@@ -521,25 +516,22 @@ describe("captureRun()", () => {
       captureRun(program, { args: ["Ada"], contexts: [context] });
 
       const dynamicContexts: readonly SourceContext<unknown>[] = [context];
-      const dynamic: Promise<
-        CapturedRunResult<{ readonly name: string }>
-      > = captureRun(program, {
-        args: ["Ada"],
-        contexts: dynamicContexts,
-      });
+      const dynamic: Promise<CapturedRunResult<{ readonly name: string }>> =
+        captureRun(program, {
+          args: ["Ada"],
+          contexts: dynamicContexts,
+        });
       void dynamic;
 
       const options: CaptureRunOptions = { args: ["Ada"] };
-      const exact: Promise<
-        CapturedRunResult<{ readonly name: string }>
-      > = captureRun(program, options);
+      const exact: Promise<CapturedRunResult<{ readonly name: string }>> =
+        captureRun(program, options);
       void exact;
 
       const wrap = (forwarded?: CaptureRunOptions) =>
         captureRun(program, forwarded);
-      const optional: Promise<
-        CapturedRunResult<{ readonly name: string }>
-      > = wrap(options);
+      const optional: Promise<CapturedRunResult<{ readonly name: string }>> =
+        wrap(options);
       void optional;
 
       const extra: CaptureRunOptions & {
@@ -559,15 +551,16 @@ describe("captureRun()", () => {
         },
       });
 
-      const union: CapturedRunResult<string> = Math.random() > 0.5
-        ? {
-          kind: "returned",
-          value: "value",
-          exitCode: 0,
-          stdout: "",
-          stderr: "",
-        }
-        : { kind: "exited", exitCode: 2, stdout: "", stderr: "" };
+      const union: CapturedRunResult<string> =
+        Math.random() > 0.5
+          ? {
+              kind: "returned",
+              value: "value",
+              exitCode: 0,
+              stdout: "",
+              stderr: "",
+            }
+          : { kind: "exited", exitCode: 2, stdout: "", stderr: "" };
       if (union.kind === "returned") {
         const value: string = union.value;
         void value;

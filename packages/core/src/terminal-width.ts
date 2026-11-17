@@ -27,8 +27,9 @@ export function withAutomaticWidth<T extends object>(
  * @internal
  */
 export function hasAutomaticWidth(options: object): boolean {
-  return automaticWidth in options &&
-    typeof options[automaticWidth] === "function";
+  return (
+    automaticWidth in options && typeof options[automaticWidth] === "function"
+  );
 }
 
 /**
@@ -42,7 +43,8 @@ export function reportAutomaticWidth(
   width: number | undefined,
 ): void {
   if (
-    automaticWidth in options && typeof options[automaticWidth] === "function"
+    automaticWidth in options &&
+    typeof options[automaticWidth] === "function"
   ) {
     options[automaticWidth](width);
   }
@@ -72,11 +74,14 @@ export function minimumUsageWidth(
       ),
     ].map((token) => token.width),
   );
-  const atomicWidth = usage.reduce((widest, term) =>
-    Math.max(
-      widest,
-      measureText(formatUsageTerm(term, { theme, maxWidth: 1 })).maxLineWidth,
-    ), 0);
+  const atomicWidth = usage.reduce(
+    (widest, term) =>
+      Math.max(
+        widest,
+        measureText(formatUsageTerm(term, { theme, maxWidth: 1 })).maxLineWidth,
+      ),
+    0,
+  );
   return Math.max(
     measureText(label).maxLineWidth,
     labelWidth +

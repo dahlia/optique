@@ -64,14 +64,12 @@ describe("runChecked", () => {
     assert.equal(result.error, null);
   });
   it("should reject wrong status, missing output and one-byte drift", () => {
-    for (
-      const script of [
-        "process.exit(7)",
-        "",
-        "console.log('OK')",
-        "console.error('ok')",
-      ]
-    ) {
+    for (const script of [
+      "process.exit(7)",
+      "",
+      "console.log('OK')",
+      "console.error('ok')",
+    ]) {
       assert.throws(
         () => runChecked(command(script), expected),
         /status|output/i,
@@ -148,32 +146,39 @@ describe("inputIdentity", () => {
 describe("validateDenoGraph", () => {
   it("should allow recognized builtins beside local mapped modules", () => {
     const cwd = fileURLToPath(new URL("../../", import.meta.url));
-    validateDenoGraph({
-      modules: [{
-        specifier: new URL(`file://${cwd}/deno.json`).href,
-        kind: "esm",
-      }, { specifier: "node:process", kind: "node" }],
-    }, [cwd]);
+    validateDenoGraph(
+      {
+        modules: [
+          {
+            specifier: new URL(`file://${cwd}/deno.json`).href,
+            kind: "esm",
+          },
+          { specifier: "node:process", kind: "node" },
+        ],
+      },
+      [cwd],
+    );
   });
   it("should reject remote, npm, graph errors and escaping files", () => {
-    for (
-      const specifier of [
-        "https://example.com/x.js",
-        "npm:evil",
-        "file:///outside.js",
-        "node:invented",
-      ]
-    ) {
+    for (const specifier of [
+      "https://example.com/x.js",
+      "npm:evil",
+      "file:///outside.js",
+      "node:invented",
+    ]) {
       assert.throws(() =>
         validateDenoGraph({ modules: [{ specifier, kind: "esm" }] }, [
           process.cwd(),
-        ])
+        ]),
       );
     }
     assert.throws(() =>
-      validateDenoGraph({
-        modules: [{ specifier: "node:process", error: "bad" }],
-      }, [process.cwd()])
+      validateDenoGraph(
+        {
+          modules: [{ specifier: "node:process", error: "bad" }],
+        },
+        [process.cwd()],
+      ),
     );
   });
 });
@@ -223,16 +228,20 @@ describe("withStableInputs", () => {
     try {
       writeFileSync(join(root, "LICENSE"), "source");
       const before = inputIdentity(root);
-      const result = withStableInputs(root, (identity) => {
-        mkdirSync(join(root, "benchmarks/startup/results"), {
-          recursive: true,
-        });
-        writeFileSync(
-          join(root, "benchmarks/startup/results/run.json"),
-          "output",
-        );
-        return identity;
-      }, before.hash);
+      const result = withStableInputs(
+        root,
+        (identity) => {
+          mkdirSync(join(root, "benchmarks/startup/results"), {
+            recursive: true,
+          });
+          writeFileSync(
+            join(root, "benchmarks/startup/results/run.json"),
+            "output",
+          );
+          return identity;
+        },
+        before.hash,
+      );
       assert.deepEqual(result, before);
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -275,9 +284,11 @@ describe("buildInputIdentity", () => {
       mkdirSync(join(root, "benchmarks/startup/results"), { recursive: true });
       writeFileSync(join(root, "benchmarks/startup/harness.ts"), "source");
       const initial = buildInputIdentity(root).hash;
-      for (
-        const file of ["results/run-1.json", "README.md", "contract.test.ts"]
-      ) {
+      for (const file of [
+        "results/run-1.json",
+        "README.md",
+        "contract.test.ts",
+      ]) {
         writeFileSync(join(root, "benchmarks/startup", file), "changed");
         assert.equal(buildInputIdentity(root).hash, initial, file);
       }
@@ -387,20 +398,27 @@ describe("portableArtifact", () => {
   it("should sanitize nested validation URLs and preserve portable/system paths", () => {
     const root = "/tmp/contributor/checkouts/project/";
     assert.deepEqual(
-      portableArtifact({
-        graph: [{
-          specifier:
-            "file:///tmp/contributor/checkouts/project/packages/core/src/index.ts",
-        }],
-        path: "/tmp/contributor/checkouts/project/tmp/consumer",
-        command: "/usr/bin/git",
-        token: "${REPO_ROOT}/fixture.js",
-        state: null,
-      }, root),
+      portableArtifact(
+        {
+          graph: [
+            {
+              specifier:
+                "file:///tmp/contributor/checkouts/project/packages/core/src/index.ts",
+            },
+          ],
+          path: "/tmp/contributor/checkouts/project/tmp/consumer",
+          command: "/usr/bin/git",
+          token: "${REPO_ROOT}/fixture.js",
+          state: null,
+        },
+        root,
+      ),
       {
-        graph: [{
-          specifier: "file://${REPO_ROOT}/packages/core/src/index.ts",
-        }],
+        graph: [
+          {
+            specifier: "file://${REPO_ROOT}/packages/core/src/index.ts",
+          },
+        ],
         path: "${REPO_ROOT}/tmp/consumer",
         command: "/usr/bin/git",
         token: "${REPO_ROOT}/fixture.js",

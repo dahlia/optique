@@ -36,15 +36,16 @@ console.log(
 
 function snapshot(): Record<string, string> {
   const entries: Record<string, string> = {};
-  for (
-    const path of globSync([
+  for (const path of globSync(
+    [
       "node_modules",
       "packages/*/node_modules",
       "examples/*/node_modules",
       "docs/node_modules",
       "benchmarks/startup/node_modules",
-    ], { cwd: root })
-  ) {
+    ],
+    { cwd: root },
+  )) {
     const directory = join(root, path);
     scan(directory);
     entries[`${path}/.deno`] = String(existsSync(join(directory, ".deno")));

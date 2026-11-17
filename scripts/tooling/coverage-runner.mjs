@@ -14,18 +14,21 @@ if (process.argv.length > (smoke ? 3 : 2)) {
   throw new TypeError("Unexpected coverage arguments.");
 }
 const plans = smoke
-  ? [{
-    directory: "packages/temporal",
-    script: "node --test src/index.test.ts",
-  }]
+  ? [
+      {
+        directory: "packages/temporal",
+        script: "node --test src/index.test.ts",
+      },
+    ]
   : testPlans(root);
 mkdirSync(resolve(root, "coverage/junit"), { recursive: true });
 const controller = new AbortController();
 const cancel = () => controller.abort();
 process.once("SIGINT", cancel);
 process.once("SIGTERM", cancel);
-const preload =
-  pathToFileURL(resolve(root, "scripts/tooling/source-hook.mjs")).href;
+const preload = pathToFileURL(
+  resolve(root, "scripts/tooling/source-hook.mjs"),
+).href;
 const env = {
   ...process.env,
   NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import=${preload}`,

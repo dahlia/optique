@@ -19,9 +19,11 @@ export function resolveExecutable(
       return candidate;
     } catch (error) {
       if (
-        !(error instanceof Error) || !("code" in error) ||
+        !(error instanceof Error) ||
+        !("code" in error) ||
         !["ENOENT", "ENOTDIR", "EACCES", "ELOOP"].includes(String(error.code))
-      ) throw error;
+      )
+        throw error;
     }
   }
   throw new TypeError(`Executable was not found on PATH: ${name}`);

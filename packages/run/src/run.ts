@@ -285,16 +285,16 @@ export interface RunOptions {
     | "command"
     | "option"
     | "both"
-    | ((
-      | {
-        readonly command: true | CommandSubConfig;
-        readonly option?: true | OptionSubConfig;
-      }
-      | {
-        readonly option: true | OptionSubConfig;
-        readonly command?: true | CommandSubConfig;
-      }
-    ));
+    | (
+        | {
+            readonly command: true | CommandSubConfig;
+            readonly option?: true | OptionSubConfig;
+          }
+        | {
+            readonly option: true | OptionSubConfig;
+            readonly command?: true | CommandSubConfig;
+          }
+      );
 
   /**
    * Version configuration. Determines how version is made available:
@@ -310,19 +310,16 @@ export interface RunOptions {
    */
   readonly version?:
     | string
-    | (
-      & { readonly value: string }
-      & (
+    | ({ readonly value: string } & (
         | {
-          readonly command: true | CommandSubConfig;
-          readonly option?: true | OptionSubConfig;
-        }
+            readonly command: true | CommandSubConfig;
+            readonly option?: true | OptionSubConfig;
+          }
         | {
-          readonly option: true | OptionSubConfig;
-          readonly command?: true | CommandSubConfig;
-        }
-      )
-    );
+            readonly option: true | OptionSubConfig;
+            readonly command?: true | CommandSubConfig;
+          }
+      ));
 
   /**
    * Completion configuration. Determines how shell completion is made
@@ -344,8 +341,7 @@ export interface RunOptions {
     | "command"
     | "option"
     | "both"
-    | (
-      & {
+    | ({
         readonly shells?: Record<string, ShellCompletion>;
         /**
          * Custom messages for missing or unsupported completion shells.
@@ -354,18 +350,16 @@ export interface RunOptions {
         readonly errors?: NonNullable<
           CoreRunOptions<never, never>["completion"]
         >["errors"];
-      }
-      & (
+      } & (
         | {
-          readonly command: true | CommandSubConfig;
-          readonly option?: true | OptionSubConfig;
-        }
+            readonly command: true | CommandSubConfig;
+            readonly option?: true | OptionSubConfig;
+          }
         | {
-          readonly option: true | OptionSubConfig;
-          readonly command?: true | CommandSubConfig;
-        }
-      )
-    );
+            readonly option: true | OptionSubConfig;
+            readonly command?: true | CommandSubConfig;
+          }
+      ));
 
   /**
    * What to display above error messages:
@@ -473,8 +467,7 @@ type ProgramHelpMetadata = {
  * fall back to the no-context overloads.
  */
 type RejectEmptyContexts<TContexts extends readonly SourceContext<unknown>[]> =
-  TContexts extends readonly [] ? never
-    : unknown;
+  TContexts extends readonly [] ? never : unknown;
 
 /**
  * Represents a context tuple that is statically known to contain at least one
@@ -489,17 +482,22 @@ type NonEmptySourceContexts = readonly [
  * Rejects option shapes that may carry a non-empty `contexts` array so plain
  * Program overloads do not bypass the context-aware overloads.
  */
-type ContextsFromOptions<TOptions> = [Exclude<TOptions, undefined>] extends
-  [never] ? undefined
+type ContextsFromOptions<TOptions> = [Exclude<TOptions, undefined>] extends [
+  never,
+]
+  ? undefined
   : Exclude<TOptions, undefined> extends {
-    readonly contexts?: infer TContexts extends
-      | readonly SourceContext<unknown>[]
-      | undefined;
-  } ? TContexts
-  : undefined;
+        readonly contexts?: infer TContexts extends
+          | readonly SourceContext<unknown>[]
+          | undefined;
+      }
+    ? TContexts
+    : undefined;
 
-type RejectContextfulOptions<TOptions> = [ContextsFromOptions<TOptions>] extends
-  [undefined | readonly []] ? unknown
+type RejectContextfulOptions<TOptions> = [
+  ContextsFromOptions<TOptions>,
+] extends [undefined | readonly []]
+  ? unknown
   : never;
 
 /**
@@ -509,26 +507,30 @@ type RejectContextfulOptions<TOptions> = [ContextsFromOptions<TOptions>] extends
  */
 type RejectUnknownRunOptionKeys<TOptions> = [TOptions] extends [undefined]
   ? unknown
-  : Exclude<keyof TOptions, keyof RunOptions> extends never ? unknown
-  : never;
+  : Exclude<keyof TOptions, keyof RunOptions> extends never
+    ? unknown
+    : never;
 
 /**
  * Accepts only values typed exactly as `RunOptions`, which are widened to the
  * conservative fallback overloads because they may hide context presence.
  */
 type AcceptExactRunOptions<TOptions> = [TOptions] extends [RunOptions]
-  ? [RunOptions] extends [TOptions] ? unknown
-  : never
+  ? [RunOptions] extends [TOptions]
+    ? unknown
+    : never
   : never;
 
 /**
  * Accepts only values typed exactly as `RunOptions | undefined`, which model
  * optional forwarding wrappers without widening generic Program overloads.
  */
-type AcceptExactOptionalRunOptions<TOptions> = [TOptions] extends
-  [RunOptions | undefined]
-  ? [RunOptions | undefined] extends [TOptions] ? unknown
-  : never
+type AcceptExactOptionalRunOptions<TOptions> = [TOptions] extends [
+  RunOptions | undefined,
+]
+  ? [RunOptions | undefined] extends [TOptions]
+    ? unknown
+    : never
   : never;
 
 function getProgramHelpMetadata(
@@ -558,9 +560,10 @@ function resolveProgramInput<
   if ("parser" in parserOrProgram && "metadata" in parserOrProgram) {
     return {
       parser: parserOrProgram.parser as T,
-      options: options.programName == null
-        ? { ...options, programName: parserOrProgram.metadata.name }
-        : options,
+      options:
+        options.programName == null
+          ? { ...options, programName: parserOrProgram.metadata.name }
+          : options,
       programMetadata: getProgramHelpMetadata(parserOrProgram.metadata),
     };
   }
@@ -668,10 +671,10 @@ export function run<
   const TContexts extends NonEmptySourceContexts,
 >(
   parser: T,
-  options:
-    & RunOptions
-    & { readonly contexts: TContexts }
-    & ContextOptionsParam<TContexts, InferValue<T>>,
+  options: RunOptions & { readonly contexts: TContexts } & ContextOptionsParam<
+      TContexts,
+      InferValue<T>
+    >,
 ): Promise<InferValue<T>>;
 
 // Overload: parser with dynamic non-empty-or-empty contexts
@@ -680,11 +683,10 @@ export function run<
   const TContexts extends readonly SourceContext<unknown>[],
 >(
   parser: T,
-  options:
-    & RunOptions
-    & { readonly contexts: TContexts }
-    & RejectEmptyContexts<TContexts>
-    & ContextOptionsParam<TContexts, InferValue<T>>,
+  options: RunOptions & {
+    readonly contexts: TContexts;
+  } & RejectEmptyContexts<TContexts> &
+    ContextOptionsParam<TContexts, InferValue<T>>,
 ): ModeValue<InferMode<T>, InferValue<T>> | Promise<InferValue<T>>;
 
 // Overload: Program with statically non-empty contexts—returns Promise
@@ -694,10 +696,10 @@ export function run<
   const TContexts extends NonEmptySourceContexts,
 >(
   program: Program<M, T>,
-  options:
-    & RunOptions
-    & { readonly contexts: TContexts }
-    & ContextOptionsParam<TContexts, T>,
+  options: RunOptions & { readonly contexts: TContexts } & ContextOptionsParam<
+      TContexts,
+      T
+    >,
 ): Promise<T>;
 
 // Overload: sync Program with dynamic non-empty-or-empty contexts
@@ -706,11 +708,10 @@ export function run<
   const TContexts extends readonly SourceContext<unknown>[],
 >(
   program: Program<"sync", T>,
-  options:
-    & RunOptions
-    & { readonly contexts: TContexts }
-    & RejectEmptyContexts<TContexts>
-    & ContextOptionsParam<TContexts, T>,
+  options: RunOptions & {
+    readonly contexts: TContexts;
+  } & RejectEmptyContexts<TContexts> &
+    ContextOptionsParam<TContexts, T>,
 ): T | Promise<T>;
 
 // Overload: async Program with dynamic non-empty-or-empty contexts
@@ -719,20 +720,18 @@ export function run<
   const TContexts extends readonly SourceContext<unknown>[],
 >(
   program: Program<"async", T>,
-  options:
-    & RunOptions
-    & { readonly contexts: TContexts }
-    & RejectEmptyContexts<TContexts>
-    & ContextOptionsParam<TContexts, T>,
+  options: RunOptions & {
+    readonly contexts: TContexts;
+  } & RejectEmptyContexts<TContexts> &
+    ContextOptionsParam<TContexts, T>,
 ): Promise<T>;
 
 // Overload: Program with sync parser
 export function run<T, const TOptions extends RunOptions | undefined>(
   program: Program<"sync", T>,
-  options?:
-    & TOptions
-    & RejectContextfulOptions<TOptions>
-    & RejectUnknownRunOptionKeys<TOptions>,
+  options?: TOptions &
+    RejectContextfulOptions<TOptions> &
+    RejectUnknownRunOptionKeys<TOptions>,
 ): T;
 
 // Overload: Program with sync parser and exact RunOptions
@@ -744,10 +743,9 @@ export function run<T, TOptions extends RunOptions>(
 // Overload: Program with async parser
 export function run<T, const TOptions extends RunOptions | undefined>(
   program: Program<"async", T>,
-  options?:
-    & TOptions
-    & RejectContextfulOptions<TOptions>
-    & RejectUnknownRunOptionKeys<TOptions>,
+  options?: TOptions &
+    RejectContextfulOptions<TOptions> &
+    RejectUnknownRunOptionKeys<TOptions>,
 ): Promise<T>;
 
 // Overload: Program with async parser and exact RunOptions
@@ -813,10 +811,10 @@ export function runSync<
   TContexts extends readonly SourceContext<unknown>[],
 >(
   parser: T,
-  options:
-    & RunOptions
-    & { readonly contexts: TContexts }
-    & ContextOptionsParam<TContexts, InferValue<T>>,
+  options: RunOptions & { readonly contexts: TContexts } & ContextOptionsParam<
+      TContexts,
+      InferValue<T>
+    >,
 ): InferValue<T>;
 
 // Overload: Program with contexts
@@ -825,20 +823,18 @@ export function runSync<
   const TContexts extends readonly SourceContext<unknown>[],
 >(
   program: Program<"sync", T>,
-  options:
-    & RunOptions
-    & { readonly contexts: TContexts }
-    & RejectEmptyContexts<TContexts>
-    & ContextOptionsParam<TContexts, T>,
+  options: RunOptions & {
+    readonly contexts: TContexts;
+  } & RejectEmptyContexts<TContexts> &
+    ContextOptionsParam<TContexts, T>,
 ): T;
 
 // Overload: Program with sync parser
 export function runSync<T, const TOptions extends RunOptions | undefined>(
   program: Program<"sync", T>,
-  options?:
-    & TOptions
-    & RejectContextfulOptions<TOptions>
-    & RejectUnknownRunOptionKeys<TOptions>,
+  options?: TOptions &
+    RejectContextfulOptions<TOptions> &
+    RejectUnknownRunOptionKeys<TOptions>,
 ): T;
 
 // Overload: Program with sync parser and exact RunOptions
@@ -864,10 +860,10 @@ export function runSync<T extends Parser<"sync", unknown, unknown>>(
   parserOrProgram: T | Program<"sync", unknown>,
   options: RunOptions = {},
 ): InferValue<T> {
-  const parserToCheck = "parser" in parserOrProgram &&
-      "metadata" in parserOrProgram
-    ? parserOrProgram.parser
-    : parserOrProgram;
+  const parserToCheck =
+    "parser" in parserOrProgram && "metadata" in parserOrProgram
+      ? parserOrProgram.parser
+      : parserOrProgram;
   if (parserToCheck.mode !== "sync") {
     throw new TypeError(
       "Cannot use an async parser with runSync(). " +
@@ -930,10 +926,10 @@ export function runAsync<
   TContexts extends readonly SourceContext<unknown>[],
 >(
   parser: T,
-  options:
-    & RunOptions
-    & { readonly contexts: TContexts }
-    & ContextOptionsParam<TContexts, InferValue<T>>,
+  options: RunOptions & { readonly contexts: TContexts } & ContextOptionsParam<
+      TContexts,
+      InferValue<T>
+    >,
 ): Promise<InferValue<T>>;
 
 // Overload: Program with contexts
@@ -943,29 +939,26 @@ export function runAsync<
   const TContexts extends readonly SourceContext<unknown>[],
 >(
   program: Program<M, T>,
-  options:
-    & RunOptions
-    & { readonly contexts: TContexts }
-    & RejectEmptyContexts<TContexts>
-    & ContextOptionsParam<TContexts, T>,
+  options: RunOptions & {
+    readonly contexts: TContexts;
+  } & RejectEmptyContexts<TContexts> &
+    ContextOptionsParam<TContexts, T>,
 ): Promise<T>;
 
 // Overload: Program with sync parser
 export function runAsync<T, const TOptions extends RunOptions | undefined>(
   program: Program<"sync", T>,
-  options?:
-    & TOptions
-    & RejectContextfulOptions<TOptions>
-    & RejectUnknownRunOptionKeys<TOptions>,
+  options?: TOptions &
+    RejectContextfulOptions<TOptions> &
+    RejectUnknownRunOptionKeys<TOptions>,
 ): Promise<T>;
 
 // Overload: Program with async parser
 export function runAsync<T, const TOptions extends RunOptions | undefined>(
   program: Program<"async", T>,
-  options?:
-    & TOptions
-    & RejectContextfulOptions<TOptions>
-    & RejectUnknownRunOptionKeys<TOptions>,
+  options?: TOptions &
+    RejectContextfulOptions<TOptions> &
+    RejectUnknownRunOptionKeys<TOptions>,
 ): Promise<T>;
 
 // Overload: Program with exact RunOptions
@@ -1012,22 +1005,28 @@ function buildCoreOptions(
   args: readonly string[];
   coreOptions: CoreRunOptions<never, never>;
 } {
-  const programName = options.programName ??
-    path.basename(process.argv[1] ?? "cli");
+  const programName =
+    options.programName ?? path.basename(process.argv[1] ?? "cli");
   const args = options.args ?? process.argv.slice(2);
   // The default writers finish writing to pipes and files before returning,
   // so that exiting right afterward cannot truncate the output:
-  const stdout = options.stdout ?? ((line: string) => {
-    writeOutput("stdout", `${line}\n`);
-  });
-  const stderr = options.stderr ?? ((line: string) => {
-    writeOutput("stderr", `${line}\n`);
-  });
-  const onExit = options.onExit ??
-    ((exitCode: number) => process.exit(exitCode) as never);
-  const colors = options.colors ??
+  const stdout =
+    options.stdout ??
+    ((line: string) => {
+      writeOutput("stdout", `${line}\n`);
+    });
+  const stderr =
+    options.stderr ??
+    ((line: string) => {
+      writeOutput("stderr", `${line}\n`);
+    });
+  const onExit =
+    options.onExit ?? ((exitCode: number) => process.exit(exitCode) as never);
+  const colors =
+    options.colors ??
     detectColorSupport(process.stdout, readEnvironmentVariable);
-  const maxWidth = options.maxWidth ??
+  const maxWidth =
+    options.maxWidth ??
     detectTerminalWidth(process.stdout, readEnvironmentVariable);
   const termWidth = options.termWidth;
   const showDefault = options.showDefault;
@@ -1129,15 +1128,17 @@ function buildCoreOptions(
   };
 
   const helpRequest = getHelpRequest(options);
-  const requestedCoreOptions = helpRequest == null
-    ? coreOptions
-    : withHelpRequest(coreOptions, helpRequest);
+  const requestedCoreOptions =
+    helpRequest == null
+      ? coreOptions
+      : withHelpRequest(coreOptions, helpRequest);
   return {
     programName,
     args,
-    coreOptions: options.maxWidth == null
-      ? withAutomaticWidth(requestedCoreOptions)
-      : requestedCoreOptions,
+    coreOptions:
+      options.maxWidth == null
+        ? withAutomaticWidth(requestedCoreOptions)
+        : requestedCoreOptions,
   };
 }
 
@@ -1187,8 +1188,9 @@ type MissingKnownRunOptionsKeys = Exclude<
   keyof RunOptions,
   (typeof knownRunOptionsKeyList)[number]
 >;
-const _knownRunOptionsKeysAreExhaustive: MissingKnownRunOptionsKeys extends
-  never ? true : never = true;
+const _knownRunOptionsKeysAreExhaustive: MissingKnownRunOptionsKeys extends never
+  ? true
+  : never = true;
 void _knownRunOptionsKeysAreExhaustive;
 
 function runImpl<T extends Parser<Mode, unknown, unknown>>(

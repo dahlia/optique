@@ -313,9 +313,9 @@ export function instant(
         return {
           success: false,
           error: options.errors?.invalidFormat
-            ? (typeof options.errors.invalidFormat === "function"
+            ? typeof options.errors.invalidFormat === "function"
               ? options.errors.invalidFormat(input)
-              : options.errors.invalidFormat)
+              : options.errors.invalidFormat
             : message`Invalid instant: ${input}. Expected ISO 8601 format like ${"2020-01-23T17:04:36Z"}.`,
         };
       }
@@ -364,9 +364,9 @@ export function duration(
         return {
           success: false,
           error: options.errors?.invalidFormat
-            ? (typeof options.errors.invalidFormat === "function"
+            ? typeof options.errors.invalidFormat === "function"
               ? options.errors.invalidFormat(input)
-              : options.errors.invalidFormat)
+              : options.errors.invalidFormat
             : message`Invalid duration: ${input}. Expected ISO 8601 format like ${"PT1H30M"}.`,
         };
       }
@@ -400,9 +400,7 @@ export function zonedDateTime(
     metavar,
     get placeholder(): Temporal.ZonedDateTime {
       try {
-        return Temporal.ZonedDateTime.from(
-          "1970-01-01T00:00:00+00:00[UTC]",
-        );
+        return Temporal.ZonedDateTime.from("1970-01-01T00:00:00+00:00[UTC]");
       } catch {
         return undefined as unknown as Temporal.ZonedDateTime;
       }
@@ -416,9 +414,9 @@ export function zonedDateTime(
         return {
           success: false,
           error: options.errors?.invalidFormat
-            ? (typeof options.errors.invalidFormat === "function"
+            ? typeof options.errors.invalidFormat === "function"
               ? options.errors.invalidFormat(input)
-              : options.errors.invalidFormat)
+              : options.errors.invalidFormat
             : message`Invalid zoned datetime: ${input}. Expected ISO 8601 format with timezone like ${"2020-01-23T17:04:36+01:00[Europe/Paris]"}.`,
         };
       }
@@ -548,9 +546,9 @@ export function plainDate(
         return {
           success: false,
           error: options.errors?.invalidFormat
-            ? (typeof options.errors.invalidFormat === "function"
+            ? typeof options.errors.invalidFormat === "function"
               ? options.errors.invalidFormat(input)
-              : options.errors.invalidFormat)
+              : options.errors.invalidFormat
             : message`Invalid date: ${input}. Expected ISO 8601 format like ${"2020-01-23"}.`,
         };
       }
@@ -599,9 +597,9 @@ export function plainTime(
         return {
           success: false,
           error: options.errors?.invalidFormat
-            ? (typeof options.errors.invalidFormat === "function"
+            ? typeof options.errors.invalidFormat === "function"
               ? options.errors.invalidFormat(input)
-              : options.errors.invalidFormat)
+              : options.errors.invalidFormat
             : message`Invalid time: ${input}. Expected ISO 8601 format like ${"17:04:36"}.`,
         };
       }
@@ -650,9 +648,9 @@ export function plainDateTime(
         return {
           success: false,
           error: options.errors?.invalidFormat
-            ? (typeof options.errors.invalidFormat === "function"
+            ? typeof options.errors.invalidFormat === "function"
               ? options.errors.invalidFormat(input)
-              : options.errors.invalidFormat)
+              : options.errors.invalidFormat
             : message`Invalid datetime: ${input}. Expected ISO 8601 format like ${"2020-01-23T17:04:36"}.`,
         };
       }
@@ -701,9 +699,9 @@ export function plainYearMonth(
         return {
           success: false,
           error: options.errors?.invalidFormat
-            ? (typeof options.errors.invalidFormat === "function"
+            ? typeof options.errors.invalidFormat === "function"
               ? options.errors.invalidFormat(input)
-              : options.errors.invalidFormat)
+              : options.errors.invalidFormat
             : message`Invalid year-month: ${input}. Expected ISO 8601 format like ${"2020-01"}.`,
         };
       }
@@ -752,9 +750,9 @@ export function plainMonthDay(
         return {
           success: false,
           error: options.errors?.invalidFormat
-            ? (typeof options.errors.invalidFormat === "function"
+            ? typeof options.errors.invalidFormat === "function"
               ? options.errors.invalidFormat(input)
-              : options.errors.invalidFormat)
+              : options.errors.invalidFormat
             : message`Invalid month-day: ${input}. Expected ISO 8601 format like ${"01-23"}.`,
         };
       }
@@ -810,7 +808,7 @@ const singleSegmentTimeZoneList = [
   "W-SU",
 ] as const;
 
-type SingleSegmentTimeZone = typeof singleSegmentTimeZoneList[number];
+type SingleSegmentTimeZone = (typeof singleSegmentTimeZoneList)[number];
 
 const singleSegmentTimeZoneLookup: ReadonlyMap<string, SingleSegmentTimeZone> =
   new Map(
@@ -877,9 +875,9 @@ export function timeZone(
         return {
           success: false,
           error: options.errors?.invalidFormat
-            ? (typeof options.errors.invalidFormat === "function"
+            ? typeof options.errors.invalidFormat === "function"
               ? options.errors.invalidFormat(input)
-              : options.errors.invalidFormat)
+              : options.errors.invalidFormat
             : message`Invalid timezone identifier: ${input}. Must be a valid IANA timezone like "Asia/Seoul" or "UTC".`,
         };
       }

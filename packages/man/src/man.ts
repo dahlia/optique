@@ -90,9 +90,10 @@ export interface ManPageOptions {
   /**
    * Cross-references to include in the SEE ALSO section.
    */
-  readonly seeAlso?: ReadonlyArray<
-    { readonly name: string; readonly section: ManPageSection }
-  >;
+  readonly seeAlso?: ReadonlyArray<{
+    readonly name: string;
+    readonly section: ManPageSection;
+  }>;
 
   /**
    * Environment variables to document in the ENVIRONMENT section.
@@ -244,10 +245,12 @@ function hasSingleElidableTerm(terms: Usage): boolean {
   );
   if (visible.length !== 1) return false;
   const t = visible[0];
-  return t.type === "option" ||
+  return (
+    t.type === "option" ||
     t.type === "optional" ||
     (t.type === "multiple" && t.min < 1) ||
-    t.type === "passthrough";
+    t.type === "passthrough"
+  );
 }
 
 /**
@@ -295,13 +298,10 @@ function formatUsageTermAsRoffInternal(
 
       // Don't elide when the child is a multiple, to preserve
       // the grouping boundary between repetition layers.
-      const childIsMultiple = childrenElidable &&
-        hasSingleVisibleTermOfType(term.terms, "multiple");
+      const childIsMultiple =
+        childrenElidable && hasSingleVisibleTermOfType(term.terms, "multiple");
 
-      const inner = formatUsageAsRoffInternal(
-        term.terms,
-        childrenElidable,
-      );
+      const inner = formatUsageAsRoffInternal(term.terms, childrenElidable);
       if (inner === "") return "";
 
       // If this optional is already inside brackets and it wraps a single
@@ -319,18 +319,15 @@ function formatUsageTermAsRoffInternal(
 
       // Don't elide when the child is also a multiple, to preserve
       // the grouping boundary between repetition layers.
-      const childIsMultiple = childrenElidable &&
-        hasSingleVisibleTermOfType(term.terms, "multiple");
+      const childIsMultiple =
+        childrenElidable && hasSingleVisibleTermOfType(term.terms, "multiple");
 
       // A child term should elide its brackets if this multiple term
       // will wrap it in brackets, and the child is a single elidable
       // term.
-      const passInsideBrackets = wrapInBrackets && childrenElidable &&
-        !childIsMultiple;
-      const inner = formatUsageAsRoffInternal(
-        term.terms,
-        passInsideBrackets,
-      );
+      const passInsideBrackets =
+        wrapInBrackets && childrenElidable && !childIsMultiple;
+      const inner = formatUsageAsRoffInternal(term.terms, passInsideBrackets);
       if (inner === "") return "";
 
       if (wrapInBrackets) {
@@ -346,8 +343,8 @@ function formatUsageTermAsRoffInternal(
       // As in formatUsage(), an alternative whose leading command is hidden
       // is dropped as a whole, trailing terms included.
       const alternatives = term.terms
-        .filter((t) =>
-          !(t[0]?.type === "command" && isUsageHidden(t[0].hidden))
+        .filter(
+          (t) => !(t[0]?.type === "command" && isUsageHidden(t[0].hidden)),
         )
         .map((t) => formatUsageAsRoffInternal(t, false))
         .filter((s) => s !== "");
@@ -605,18 +602,22 @@ function formatDocSectionEntries(
     const envNames = options.showEnvironment
       ? [...new Set(entry.envVars ?? [])].filter((name) => name !== "")
       : [];
-    const envAnnotation = envNames.length === 0
-      ? ""
-      : `[env: ${
-        envNames.map((name) =>
-          formatMessageAsRoff([{ type: "envVar", envVar: name }])
-        ).join(", ")
-      }]`;
+    const envAnnotation =
+      envNames.length === 0
+        ? ""
+        : `[env: ${envNames
+            .map((name) =>
+              formatMessageAsRoff([{ type: "envVar", envVar: name }]),
+            )
+            .join(", ")}]`;
 
-    let body = entry.description == null ? "" : formatMessageAsRoff(
-      entry.description,
-      options.generatedEnvironment ? { quotes: false } : {},
-    );
+    let body =
+      entry.description == null
+        ? ""
+        : formatMessageAsRoff(
+            entry.description,
+            options.generatedEnvironment ? { quotes: false } : {},
+          );
     // Trim before escaping: a leading separator may conceal a roff request.
     // Keep later annotation prefixes exact, and preserve generated .PP macros
     // by escaping only the new plain-text components.
@@ -634,23 +635,22 @@ function formatDocSectionEntries(
       );
     }
     if (options.showDefault !== false && entry.default?.length) {
-      const config = typeof options.showDefault === "object"
-        ? options.showDefault
-        : {};
+      const config =
+        typeof options.showDefault === "object" ? options.showDefault : {};
       body += escapeRoff(annotationPrefix(config.prefix ?? " (default: "));
       body += formatMessageAsRoff(entry.default);
       body += escapeRoff(config.suffix ?? ")");
     }
     if (options.showChoices !== false && entry.choices?.length) {
-      const config = typeof options.showChoices === "object"
-        ? options.showChoices
-        : {};
-      const maxItems = options.showChoices === undefined
-        ? Infinity
-        : config.maxItems ?? 8;
-      body += escapeRoff(annotationPrefix(
-        (config.prefix ?? " (") + (config.label ?? "choices: "),
-      ));
+      const config =
+        typeof options.showChoices === "object" ? options.showChoices : {};
+      const maxItems =
+        options.showChoices === undefined ? Infinity : (config.maxItems ?? 8);
+      body += escapeRoff(
+        annotationPrefix(
+          (config.prefix ?? " (") + (config.label ?? "choices: "),
+        ),
+      );
       body += formatMessageAsRoff(truncateChoices(entry.choices, maxItems), {
         quotes: false,
       });
@@ -710,7 +710,8 @@ export function formatDocPageAsMan(
 ): string {
   if (
     typeof options.showChoices === "object" &&
-    options.showChoices.maxItems != null && options.showChoices.maxItems < 1
+    options.showChoices.maxItems != null &&
+    options.showChoices.maxItems < 1
   ) {
     throw new RangeError(
       `showChoices.maxItems must be at least 1, but got ${options.showChoices.maxItems}.`,
@@ -755,9 +756,9 @@ export function formatDocPageAsMan(
 
   if (hasVersion) {
     thParts.push(
-      `"${escapeHyphens(escapeRequestArg(options.name))} ${
-        escapeRequestArg(options.version)
-      }"`,
+      `"${escapeHyphens(escapeRequestArg(options.name))} ${escapeRequestArg(
+        options.version,
+      )}"`,
     );
   } else if (hasManual) {
     thParts.push('""');
@@ -773,9 +774,9 @@ export function formatDocPageAsMan(
   const brief = options.brief ?? page.brief;
   if (brief) {
     lines.push(
-      `${escapeHyphens(escapeRoff(options.name))} \\- ${
-        formatMessageAsRoff(brief)
-      }`,
+      `${escapeHyphens(escapeRoff(options.name))} \\- ${formatMessageAsRoff(
+        brief,
+      )}`,
     );
   } else {
     lines.push(escapeHyphens(escapeRoff(options.name)));
@@ -798,58 +799,55 @@ export function formatDocPageAsMan(
     lines.push(formatMessageAsRoff(description));
   }
 
-  const placement = typeof options.showEnvironment === "object"
-    ? options.showEnvironment.placement ?? "inline"
-    : options.showEnvironment
-    ? "inline"
-    : undefined;
+  const placement =
+    typeof options.showEnvironment === "object"
+      ? (options.showEnvironment.placement ?? "inline")
+      : options.showEnvironment
+        ? "inline"
+        : undefined;
   const inlineEnvironment = placement === "inline" || placement === "both";
 
   // Process DocPage sections
   for (const section of page.sections) {
     if (section.entries.length === 0) continue;
 
-    const content = formatDocSectionEntries(
-      section,
-      {
-        showEnvironment: inlineEnvironment,
-        showAliases: options.showAliases,
-        showDefault: options.showDefault,
-        showChoices: options.showChoices,
-      },
-    );
+    const content = formatDocSectionEntries(section, {
+      showEnvironment: inlineEnvironment,
+      showAliases: options.showAliases,
+      showDefault: options.showDefault,
+      showChoices: options.showChoices,
+    });
     if (content === "") continue;
 
-    const title = section.title?.toUpperCase() ??
-      inferSectionTitle(section.entries);
+    const title =
+      section.title?.toUpperCase() ?? inferSectionTitle(section.entries);
     lines.push(`.SH "${escapeRequestArg(title)}"`);
     lines.push(content);
   }
 
   // Manual environment documentation retains its existing precedence.
-  const automaticEnvironment = options.environment == null &&
-      placement != null
-    ? deriveEnvironmentSection(page, {
-      onlyUnreferenced: placement === "inline",
-      title: typeof options.showEnvironment === "object"
-        ? options.showEnvironment.sectionTitle
-        : undefined,
-    })
-    : undefined;
+  const automaticEnvironment =
+    options.environment == null && placement != null
+      ? deriveEnvironmentSection(page, {
+          onlyUnreferenced: placement === "inline",
+          title:
+            typeof options.showEnvironment === "object"
+              ? options.showEnvironment.sectionTitle
+              : undefined,
+        })
+      : undefined;
   const environment = options.environment ?? automaticEnvironment;
   if (environment != null && environment.entries.length > 0) {
-    const content = formatDocSectionEntries(
-      environment,
-      {
-        generatedEnvironment: automaticEnvironment != null,
-        showDefault: options.showDefault,
-        showChoices: options.showChoices,
-      },
-    );
+    const content = formatDocSectionEntries(environment, {
+      generatedEnvironment: automaticEnvironment != null,
+      showDefault: options.showDefault,
+      showChoices: options.showChoices,
+    });
     if (content !== "") {
-      const title = automaticEnvironment == null
-        ? "ENVIRONMENT"
-        : automaticEnvironment.title?.toUpperCase() ?? "ENVIRONMENT";
+      const title =
+        automaticEnvironment == null
+          ? "ENVIRONMENT"
+          : (automaticEnvironment.title?.toUpperCase() ?? "ENVIRONMENT");
       lines.push(
         title === "ENVIRONMENT"
           ? ".SH ENVIRONMENT"
@@ -920,9 +918,9 @@ export function formatDocPageAsMan(
     lines.push(".SH SEE ALSO");
     const refs = options.seeAlso.map((ref, i) => {
       const suffix = i < options.seeAlso!.length - 1 ? "," : "";
-      return `.BR "${
-        escapeHyphens(escapeRequestArg(ref.name))
-      }" (${ref.section})${suffix}`;
+      return `.BR "${escapeHyphens(
+        escapeRequestArg(ref.name),
+      )}" (${ref.section})${suffix}`;
     });
     lines.push(refs.join("\n"));
   }

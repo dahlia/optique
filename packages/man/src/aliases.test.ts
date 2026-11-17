@@ -16,13 +16,21 @@ const options: ManPageOptions = {
 
 function pageOf(entry: Partial<DocEntry> = {}): DocPage {
   return {
-    sections: [{
-      entries: [{
-        term: { type: "command", name: "install", aliases: ["i", "add-pkg"] },
-        description: message`Install a package.`,
-        ...entry,
-      }],
-    }],
+    sections: [
+      {
+        entries: [
+          {
+            term: {
+              type: "command",
+              name: "install",
+              aliases: ["i", "add-pkg"],
+            },
+            description: message`Install a package.`,
+            ...entry,
+          },
+        ],
+      },
+    ],
   };
 }
 
@@ -49,10 +57,7 @@ describe("man command alias documentation", () => {
       ...options,
       showAliases: { prefix: " [", suffix: "]", label: "aka " },
     });
-    assert.ok(
-      output.includes("Install a package. [aka i, add\\-pkg]"),
-      output,
-    );
+    assert.ok(output.includes("Install a package. [aka i, add\\-pkg]"), output);
   });
 
   it("honors per-entry overrides in both directions", () => {
@@ -91,13 +96,17 @@ describe("man command alias documentation", () => {
 
   it("ignores showAliases on non-command entries", () => {
     const page: DocPage = {
-      sections: [{
-        entries: [{
-          term: { type: "option", names: ["--verbose"] },
-          description: message`Be verbose.`,
-          showAliases: true,
-        }],
-      }],
+      sections: [
+        {
+          entries: [
+            {
+              term: { type: "option", names: ["--verbose"] },
+              description: message`Be verbose.`,
+              showAliases: true,
+            },
+          ],
+        },
+      ],
     };
     const output = formatDocPageAsMan(page, { ...options, showAliases: true });
     assert.ok(!output.includes("aliases"));
@@ -115,16 +124,14 @@ describe("man command alias documentation", () => {
     );
     const program = defineProgram({ parser, metadata: { name: "app" } });
     const config: ManPageOptions = { ...options, showAliases: true };
-    for (
-      const output of [
-        generateManPageSync(parser, config),
-        generateManPageSync(program, config),
-        ...await Promise.all([
-          generateManPageAsync(parser, config),
-          generateManPageAsync(program, config),
-        ]),
-      ]
-    ) {
+    for (const output of [
+      generateManPageSync(parser, config),
+      generateManPageSync(program, config),
+      ...(await Promise.all([
+        generateManPageAsync(parser, config),
+        generateManPageAsync(program, config),
+      ])),
+    ]) {
       assert.ok(output.includes("Install a package. (aliases: i)"), output);
     }
   });

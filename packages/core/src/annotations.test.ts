@@ -73,7 +73,8 @@ describe("getAnnotations", () => {
 
             const result = getAnnotations(state);
             if (
-              annotationValue != null && typeof annotationValue === "object"
+              annotationValue != null &&
+              typeof annotationValue === "object"
             ) {
               assert.equal(result, annotationValue as Annotations);
             } else {
@@ -416,10 +417,7 @@ describe("unwrapInjectedAnnotationWrapper", () => {
     ) as Record<PropertyKey, unknown>;
     wrapperObject.extra = true;
 
-    assert.equal(
-      unwrapInjectedAnnotationWrapper(wrapperObject),
-      wrapperObject,
-    );
+    assert.equal(unwrapInjectedAnnotationWrapper(wrapperObject), wrapperObject);
   });
 
   it("should return non-wrapper objects unchanged", () => {

@@ -59,10 +59,15 @@ describe("withAnnotatedInnerState()", () => {
       assert.equal(state, undefined);
     });
 
-    withAnnotatedInnerState(parent, undefined, (state) => {
-      assert.equal(getAnnotations(state)?.[key], "parent");
-      assert.equal(unwrapInjectedAnnotationState(state), undefined);
-    }, true);
+    withAnnotatedInnerState(
+      parent,
+      undefined,
+      (state) => {
+        assert.equal(getAnnotations(state)?.[key], "parent");
+        assert.equal(unwrapInjectedAnnotationState(state), undefined);
+      },
+      true,
+    );
   });
 
   it("should preserve state identity without parent annotations", () => {

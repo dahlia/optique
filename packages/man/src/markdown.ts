@@ -63,10 +63,12 @@ export interface MarkdownReferenceOptions extends ProgramMetadata {
 
 function validateToken(token: string): void {
   if (
-    typeof token !== "string" || token.length === 0 ||
+    typeof token !== "string" ||
+    token.length === 0 ||
     /* oxlint-disable no-control-regex -- Match control characters. */
     // deno-lint-ignore no-control-regex -- Reject control characters in tokens.
-    /[\s\x00-\x1f\x7f-\x9f]/u.test(token) || !token.isWellFormed()
+    /[\s\x00-\x1f\x7f-\x9f]/u.test(token) ||
+    !token.isWellFormed()
     /* oxlint-enable no-control-regex */
   ) {
     throw new TypeError(
@@ -91,8 +93,10 @@ function pathKey(path: readonly string[]): string {
  */
 export function getCommandReferenceAnchor(path: readonly string[]): string {
   const bytes = new TextEncoder().encode(pathKey(path));
-  return "optique-command." +
-    Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return (
+    "optique-command." +
+    Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")
+  );
 }
 
 function singleLine(input: string): string {
@@ -122,18 +126,22 @@ function code(input: string): string {
 }
 
 function prose(input: string): string {
-  return input.replace(/\r\n?/g, "\n").split("\n").map((line) => {
-    const escaped = singleLine(line).replace(
-      /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/g,
-      (char) => {
-        if (char === "&") return "&amp;";
-        if (char === "<") return "&lt;";
-        if (char === ">") return "&gt;";
-        return "\\" + char;
-      },
-    );
-    return escaped.replace(/^ +/, (spaces) => "&#32;".repeat(spaces.length));
-  }).join("\\\n");
+  return input
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => {
+      const escaped = singleLine(line).replace(
+        /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/g,
+        (char) => {
+          if (char === "&") return "&amp;";
+          if (char === "<") return "&lt;";
+          if (char === ">") return "&gt;";
+          return "\\" + char;
+        },
+      );
+      return escaped.replace(/^ +/, (spaces) => "&#32;".repeat(spaces.length));
+    })
+    .join("\\\n");
 }
 
 function formatMessageTerm(term: MessageTerm): string {
@@ -163,28 +171,30 @@ function formatMessageTerm(term: MessageTerm): string {
 
 function formatMessage(message: Message): string {
   let previousCode = false;
-  return message.map((term) => {
-    const content = formatMessageTerm(term);
-    const semanticCode = term.type !== "text" && term.type !== "lineBreak";
-    // Adjacent closing/opening backticks otherwise merge into one delimiter.
-    const separator = previousCode && semanticCode && content !== ""
-      ? "<!-- -->"
-      : "";
-    if (content !== "") previousCode = semanticCode;
-    return separator + content;
-  }).join("").replace(/(?:\\\n)+$/, "");
+  return message
+    .map((term) => {
+      const content = formatMessageTerm(term);
+      const semanticCode = term.type !== "text" && term.type !== "lineBreak";
+      // Adjacent closing/opening backticks otherwise merge into one delimiter.
+      const separator =
+        previousCode && semanticCode && content !== "" ? "<!-- -->" : "";
+      if (content !== "") previousCode = semanticCode;
+      return separator + content;
+    })
+    .join("")
+    .replace(/(?:\\\n)+$/, "");
 }
 
 function link(label: string, path: readonly string[]): string {
-  return `<a href="#${getCommandReferenceAnchor(path)}"><code>${
-    prose(singleLine(label))
-  }</code></a>`;
+  return `<a href="#${getCommandReferenceAnchor(path)}"><code>${prose(
+    singleLine(label),
+  )}</code></a>`;
 }
 
 function visibleAliases(entry: MarkdownCommandEntry): readonly string[] {
   const hidden = new Set(entry.hiddenAliases);
-  return [...new Set(entry.aliases)].filter((alias) =>
-    !hidden.has(alias) && alias !== entry.path.at(-1)
+  return [...new Set(entry.aliases)].filter(
+    (alias) => !hidden.has(alias) && alias !== entry.path.at(-1),
   );
 }
 
@@ -209,12 +219,16 @@ function validateEntries(
     const key = pathKey(entry.path);
     if (index.has(key)) throw new TypeError(`Duplicate command path: ${key}`);
     index.set(key, entry);
-    for (
-      const alias of [...entry.aliases ?? [], ...entry.hiddenAliases ?? []]
-    ) validateToken(alias);
+    for (const alias of [
+      ...(entry.aliases ?? []),
+      ...(entry.hiddenAliases ?? []),
+    ])
+      validateToken(alias);
     if (entry.path.length === 0) {
       if (
-        entry.aliases?.length || entry.hiddenAliases?.length || entry.hidden
+        entry.aliases?.length ||
+        entry.hiddenAliases?.length ||
+        entry.hidden
       ) {
         throw new TypeError(
           "The root page cannot have aliases or hidden visibility.",
@@ -222,13 +236,11 @@ function validateEntries(
       }
       continue;
     }
-    for (
-      const name of [
-        entry.path.at(-1)!,
-        ...entry.aliases ?? [],
-        ...entry.hiddenAliases ?? [],
-      ]
-    ) {
+    for (const name of [
+      entry.path.at(-1)!,
+      ...(entry.aliases ?? []),
+      ...(entry.hiddenAliases ?? []),
+    ]) {
       const spelling = pathKey([...entry.path.slice(0, -1), name]);
       const destination = spellings.get(spelling);
       if (destination != null && destination !== key) {
@@ -258,8 +270,8 @@ function validateCoverage(coverage: MarkdownReferenceCoverage): void {
   if (
     coverage == null ||
     !["all-visible", "partial"].includes(coverage.commands) ||
-    [coverage.help, coverage.version, coverage.completion].some((value) =>
-      value !== "included" && value !== "excluded"
+    [coverage.help, coverage.version, coverage.completion].some(
+      (value) => value !== "included" && value !== "excluded",
     )
   ) {
     throw new TypeError(
@@ -295,8 +307,8 @@ export function formatCommandReference(
   const index = validateEntries(entries);
   const visible = entries.filter((entry) => !hiddenInTree(entry, index));
   const unresolved =
-    options.unresolved?.filter((gap) =>
-      !hiddenInTree({ path: gap.path, page: { sections: [] } }, index)
+    options.unresolved?.filter(
+      (gap) => !hiddenInTree({ path: gap.path, page: { sections: [] } }, index),
     ) ?? [];
   for (const gap of unresolved) {
     pathKey(gap.path);
@@ -329,9 +341,9 @@ export function formatCommandReference(
   }
   if (missing.size > 0 && options.coverage.commands === "all-visible") {
     throw new TypeError(
-      `Missing command pages: ${
-        [...missing.values()].map((path) => JSON.stringify(path)).join(", ")
-      }`,
+      `Missing command pages: ${[...missing.values()]
+        .map((path) => JSON.stringify(path))
+        .join(", ")}`,
     );
   }
 
@@ -353,47 +365,59 @@ export function formatCommandReference(
   );
   output.push(
     "Runner inputs: " +
-      (["help", "version", "completion"] as const).map((feature) =>
-        `${feature}: ${
-          options.coverage[feature] === "included"
-            ? "included"
-            : "not documented here (if configured)"
-        }`
-      ).join("; ") + ".",
+      (["help", "version", "completion"] as const)
+        .map(
+          (feature) =>
+            `${feature}: ${
+              options.coverage[feature] === "included"
+                ? "included"
+                : "not documented here (if configured)"
+            }`,
+        )
+        .join("; ") +
+      ".",
   );
   if (missing.size > 0) {
     output.push(
-      "Missing command pages: " + [...missing.values()].map((path) =>
-        code([options.name, ...path].join(" "))
-      ).join(", ") + ".",
+      "Missing command pages: " +
+        [...missing.values()]
+          .map((path) => code([options.name, ...path].join(" ")))
+          .join(", ") +
+        ".",
     );
   }
   if (unresolved.length > 0) {
     output.push(
       "## Unresolved documentation",
-      unresolved.map((gap) =>
-        ` -  ${code([options.name, ...gap.path].join(" "))} (${gap.scope}): ${
-          code(gap.reason)
-        }`
-      ).join("\n"),
+      unresolved
+        .map(
+          (gap) =>
+            ` -  ${code([options.name, ...gap.path].join(" "))} (${gap.scope}): ${code(
+              gap.reason,
+            )}`,
+        )
+        .join("\n"),
     );
   }
   output.push("## Contents");
   output.push(
-    visible.map((entry) => {
-      const fullName = [options.name, ...entry.path].join(" ");
-      const aliases = (entry.showAliases ?? options.showAliases ?? false)
-        ? visibleAliases(entry).map((alias) =>
-          link(
-            [options.name, ...entry.path.slice(0, -1), alias].join(" "),
-            entry.path,
-          )
-        )
-        : [];
-      return ` -  ${link(fullName, entry.path)}${
-        aliases.length > 0 ? ` (aliases: ${aliases.join(", ")})` : ""
-      }`;
-    }).join("\n"),
+    visible
+      .map((entry) => {
+        const fullName = [options.name, ...entry.path].join(" ");
+        const aliases =
+          (entry.showAliases ?? options.showAliases ?? false)
+            ? visibleAliases(entry).map((alias) =>
+                link(
+                  [options.name, ...entry.path.slice(0, -1), alias].join(" "),
+                  entry.path,
+                ),
+              )
+            : [];
+        return ` -  ${link(fullName, entry.path)}${
+          aliases.length > 0 ? ` (aliases: ${aliases.join(", ")})` : ""
+        }`;
+      })
+      .join("\n"),
   );
 
   for (const entry of visible) {
@@ -403,7 +427,10 @@ export function formatCommandReference(
     addMessage(page.brief);
     if ((options.showUsage ?? page.showUsage ?? true) && page.usage != null) {
       const usage = formatUsage(options.name, page.usage, { colors: false })
-        .replace(/\r\n?/g, "\n").split("\n").map(singleLine).join("\n");
+        .replace(/\r\n?/g, "\n")
+        .split("\n")
+        .map(singleLine)
+        .join("\n");
       const fence = "~".repeat(
         Math.max(
           3,
@@ -424,13 +451,16 @@ export function formatCommandReference(
           colors: false,
         });
         if (label === "") continue;
-        const aliases = target != null &&
-            (item.showAliases ?? target.showAliases ?? options.showAliases ??
-              false)
-          ? visibleAliases(target).map((alias) => link(alias, target.path))
-          : [];
-        let content = " -  " +
-          (target == null ? code(label) : link(label, target.path));
+        const aliases =
+          target != null &&
+          (item.showAliases ??
+            target.showAliases ??
+            options.showAliases ??
+            false)
+            ? visibleAliases(target).map((alias) => link(alias, target.path))
+            : [];
+        let content =
+          " -  " + (target == null ? code(label) : link(label, target.path));
         if (aliases.length > 0) content += ` (aliases: ${aliases.join(", ")})`;
         const details: string[] = [];
         if (item.description != null) {
@@ -446,10 +476,13 @@ export function formatCommandReference(
           details.push("Environment: " + item.envVars.map(code).join(", "));
         }
         if (details.length > 0) {
-          content += "\n\n" +
-            details.join("\n\n").split("\n").map((line) => "    " + line).join(
-              "\n",
-            );
+          content +=
+            "\n\n" +
+            details
+              .join("\n\n")
+              .split("\n")
+              .map((line) => "    " + line)
+              .join("\n");
         }
         items.push(content);
       }
@@ -460,41 +493,45 @@ export function formatCommandReference(
         );
       }
     }
-    const bindings = page.environmentBindings?.filter((binding) =>
-      !isDocHidden(binding.hidden)
+    const bindings = page.environmentBindings?.filter(
+      (binding) => !isDocHidden(binding.hidden),
     );
     if (bindings?.length) {
       output.push(
         "### Environment",
-        bindings.map((binding) =>
-          ` -  ${code(binding.name)}${
-            binding.description == null ? "" : ": " +
-              formatMessage(binding.description).replaceAll("\n", "\n    ")
-          }`
-        ).join("\n"),
+        bindings
+          .map(
+            (binding) =>
+              ` -  ${code(binding.name)}${
+                binding.description == null
+                  ? ""
+                  : ": " +
+                    formatMessage(binding.description).replaceAll(
+                      "\n",
+                      "\n    ",
+                    )
+              }`,
+          )
+          .join("\n"),
       );
     }
-    for (
-      const [title, content] of [
-        ["Examples", page.examples],
-        ["Author", page.author],
-        ["Bugs", page.bugs],
-        ["Notes", page.footer],
-      ] as const
-    ) {
+    for (const [title, content] of [
+      ["Examples", page.examples],
+      ["Author", page.author],
+      ["Bugs", page.bugs],
+      ["Notes", page.footer],
+    ] as const) {
       if (content != null && content.length > 0) {
         output.push(`### ${title}`, formatMessage(content));
       }
     }
   }
-  for (
-    const [title, content] of [
-      ["Examples", options.examples],
-      ["Author", options.author],
-      ["Bugs", options.bugs],
-      ["Notes", options.footer],
-    ] as const
-  ) {
+  for (const [title, content] of [
+    ["Examples", options.examples],
+    ["Author", options.author],
+    ["Bugs", options.bugs],
+    ["Notes", options.footer],
+  ] as const) {
     if (content != null && content.length > 0) {
       output.push(`## ${title}`, formatMessage(content));
     }

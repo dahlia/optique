@@ -136,20 +136,27 @@ function key(path: readonly string[]): string {
   return JSON.stringify(path);
 }
 function prefix(parent: readonly string[], child: readonly string[]): boolean {
-  return parent.length <= child.length &&
-    parent.every((token, index) => token === child[index]);
+  return (
+    parent.length <= child.length &&
+    parent.every((token, index) => token === child[index])
+  );
 }
 function hasPath(parser: object, path: readonly string[]): boolean {
   const node = getDocNode(parser);
   if (
-    node == null || path.length === 0 || isDocHidden(node.hidden) ||
+    node == null ||
+    path.length === 0 ||
+    isDocHidden(node.hidden) ||
     ambiguousSequence(node)
   ) {
     return false;
   }
   if (node.kind === "command") {
-    return !isDocHidden(node.hidden) && node.name === path[0] &&
-      (path.length === 1 || hasPath(node.children![0], path.slice(1)));
+    return (
+      !isDocHidden(node.hidden) &&
+      node.name === path[0] &&
+      (path.length === 1 || hasPath(node.children![0], path.slice(1)))
+    );
   }
   return node.children?.some((child) => hasPath(child, path)) ?? false;
 }
@@ -159,16 +166,19 @@ function hasCommands(parser: object): boolean {
   return node.kind === "command" || node.children?.some(hasCommands) === true;
 }
 function ambiguousSequence(node: DocNode): boolean {
-  return node.kind === "seq" &&
-    (node.children?.filter(hasCommands).length ?? 0) > 1;
+  return (
+    node.kind === "seq" && (node.children?.filter(hasCommands).length ?? 0) > 1
+  );
 }
 function hideUsage(usage: Usage, pathTerms: readonly UsageTerm[]): Usage {
   return usage.map((term): UsageTerm => {
     if (pathTerms.includes(term)) return term;
     if (
-      term.type === "optional" || term.type === "multiple" ||
+      term.type === "optional" ||
+      term.type === "multiple" ||
       term.type === "sequence"
-    ) return { ...term, terms: hideUsage(term.terms, pathTerms) };
+    )
+      return { ...term, terms: hideUsage(term.terms, pathTerms) };
     if (term.type === "exclusive") {
       return {
         ...term,
@@ -176,16 +186,20 @@ function hideUsage(usage: Usage, pathTerms: readonly UsageTerm[]): Usage {
       };
     }
     if (
-      term.type === "option" || term.type === "argument" ||
-      term.type === "command" || term.type === "passthrough"
-    ) return { ...term, hidden: mergeHidden(term.hidden, "usage") };
+      term.type === "option" ||
+      term.type === "argument" ||
+      term.type === "command" ||
+      term.type === "passthrough"
+    )
+      return { ...term, hidden: mergeHidden(term.hidden, "usage") };
     return term;
   });
 }
 function leafTerm(usage: Usage): UsageTerm | undefined {
   for (const term of usage) {
     if (
-      term.type === "optional" || term.type === "multiple" ||
+      term.type === "optional" ||
+      term.type === "multiple" ||
       term.type === "sequence"
     ) {
       const found = leafTerm(term.terms);
@@ -198,8 +212,11 @@ function staticDefault(parser: object, value: unknown): Message | undefined {
   const node = getDocNode(parser);
   if (node == null) return undefined;
   if (node.kind !== "leaf") {
-    const preservesValue = node.kind === "command" || node.kind === "or" ||
-      node.kind === "optional" || node.kind === "default";
+    const preservesValue =
+      node.kind === "command" ||
+      node.kind === "or" ||
+      node.kind === "optional" ||
+      node.kind === "default";
     return preservesValue && node.children?.length === 1
       ? staticDefault(node.children[0], value)
       : undefined;
@@ -207,29 +224,35 @@ function staticDefault(parser: object, value: unknown): Message | undefined {
   if (node.boolean && typeof value === "boolean") {
     return [{ type: "text", text: String(value) }];
   }
-  const metadata = node.valueParser == null
-    ? undefined
-    : getDocValue(node.valueParser);
+  const metadata =
+    node.valueParser == null ? undefined : getDocValue(node.valueParser);
   if (
-    metadata == null || metadata.canFormatDefault === false ||
+    metadata == null ||
+    metadata.canFormatDefault === false ||
     typeof value !== metadata.kind
-  ) return undefined;
+  )
+    return undefined;
   if (
-    typeof value !== "string" && typeof value !== "number" &&
+    typeof value !== "string" &&
+    typeof value !== "number" &&
     typeof value !== "bigint"
-  ) return undefined;
-  return [{
-    type: "text",
-    text: metadata.preserveNegativeZero && Object.is(value, -0)
-      ? "-0"
-      : String(value),
-  }];
+  )
+    return undefined;
+  return [
+    {
+      type: "text",
+      text:
+        metadata.preserveNegativeZero && Object.is(value, -0)
+          ? "-0"
+          : String(value),
+    },
+  ];
 }
 function fragmentsEntries(
   fragments: readonly DocFragment[],
 ): readonly DocEntry[] {
   return fragments.flatMap((fragment) =>
-    fragment.type === "entry" ? [fragment] : fragment.entries
+    fragment.type === "entry" ? [fragment] : fragment.entries,
   );
 }
 function defaultFragments(
@@ -237,13 +260,15 @@ function defaultFragments(
   value: Message,
 ): readonly DocFragment[] {
   return fragments.map((fragment) =>
-    fragment.type === "entry" ? { ...fragment, default: value } : {
-      ...fragment,
-      entries: fragment.entries.map((entry) => ({
-        ...entry,
-        default: value,
-      })),
-    }
+    fragment.type === "entry"
+      ? { ...fragment, default: value }
+      : {
+          ...fragment,
+          entries: fragment.entries.map((entry) => ({
+            ...entry,
+            default: value,
+          })),
+        },
   );
 }
 function sections(fragments: readonly DocFragment[]): readonly DocSection[] {
@@ -280,9 +305,11 @@ function publicUsage(usage: Usage): Usage {
       return { ...term, terms: term.terms.map(publicUsage) };
     }
     if (
-      term.type === "optional" || term.type === "multiple" ||
+      term.type === "optional" ||
+      term.type === "multiple" ||
       term.type === "sequence"
-    ) return { ...term, terms: publicUsage(term.terms) };
+    )
+      return { ...term, terms: publicUsage(term.terms) };
     return cloneUsageTerm(term);
   });
 }
@@ -389,30 +416,36 @@ export function collectDocPages<M extends Mode, T, S>(
       if (term == null || ("hidden" in term && isDocHidden(term.hidden))) {
         return { ...emptyProjection, usage: node.usage };
       }
-      const metadata = node.valueParser == null
-        ? undefined
-        : getDocValue(node.valueParser);
+      const metadata =
+        node.valueParser == null ? undefined : getDocValue(node.valueParser);
       if (node.valueParser != null && metadata == null) {
         report(pagePath, "page", "value-metadata-unavailable");
       }
-      const choices: Message | undefined = metadata?.choices == null
-        ? undefined
-        : [{
-          type: "text",
-          text: metadata.choices.map((value) =>
-            metadata.preserveNegativeZero && Object.is(value, -0)
-              ? "-0"
-              : String(value)
-          ).join(", "),
-        }];
+      const choices: Message | undefined =
+        metadata?.choices == null
+          ? undefined
+          : [
+              {
+                type: "text",
+                text: metadata.choices
+                  .map((value) =>
+                    metadata.preserveNegativeZero && Object.is(value, -0)
+                      ? "-0"
+                      : String(value),
+                  )
+                  .join(", "),
+              },
+            ];
       return {
         usage: node.usage,
-        fragments: [{
-          type: "entry",
-          term,
-          description: node.description,
-          choices,
-        }],
+        fragments: [
+          {
+            type: "entry",
+            term,
+            description: node.description,
+            choices,
+          },
+        ],
       };
     }
     if (node.kind === "command") {
@@ -422,24 +455,28 @@ export function collectDocPages<M extends Mode, T, S>(
       if (target.length === 0) {
         return {
           usage: node.usage,
-          fragments: [{
-            type: "entry",
-            term: {
-              type: "command",
-              name: node.name!,
-              aliases: node.aliases,
-              hidden: node.hidden,
+          fragments: [
+            {
+              type: "entry",
+              term: {
+                type: "command",
+                name: node.name!,
+                aliases: node.aliases,
+                hidden: node.hidden,
+              },
+              description: node.brief ?? node.description,
+              showAliases: node.showAliases,
             },
-            description: node.brief ?? node.description,
-            showAliases: node.showAliases,
-          }],
+          ],
         };
       }
       if (target[0] !== node.name) return emptyProjection;
-      const selected = project(node.children![0], target.slice(1), [
-        ...path,
-        node.name!,
-      ], pagePath);
+      const selected = project(
+        node.children![0],
+        target.slice(1),
+        [...path, node.name!],
+        pagePath,
+      );
       let usage = selected.usage;
       let unresolvedUsage = selected.unresolvedUsage;
       if (target.length === 1 && node.usageLine != null) {
@@ -455,7 +492,7 @@ export function collectDocPages<M extends Mode, T, S>(
       return {
         ...selected,
         usage: [pathTerm, ...usage],
-        pathTerms: [pathTerm, ...selected.pathTerms ?? []],
+        pathTerms: [pathTerm, ...(selected.pathTerms ?? [])],
         unresolvedUsage,
         brief: selected.brief ?? node.brief,
         description: selected.description ?? node.description,
@@ -464,7 +501,8 @@ export function collectDocPages<M extends Mode, T, S>(
       };
     }
     if (
-      node.kind === "optional" || node.kind === "multiple" ||
+      node.kind === "optional" ||
+      node.kind === "multiple" ||
       node.kind === "default"
     ) {
       const inner = project(node.children![0], target, path, pagePath);
@@ -499,11 +537,11 @@ export function collectDocPages<M extends Mode, T, S>(
           node.kind === "optional"
             ? { type: "optional", terms: inner.usage }
             : {
-              ...node.usage.find((term) => term.type === "multiple"),
-              type: "multiple",
-              terms: inner.usage,
-              min: node.min ?? 0,
-            },
+                ...node.usage.find((term) => term.type === "multiple"),
+                type: "multiple",
+                terms: inner.usage,
+                min: node.min ?? 0,
+              },
         ],
       };
     }
@@ -521,7 +559,7 @@ export function collectDocPages<M extends Mode, T, S>(
         return project(selected[0], target, path, pagePath);
       }
       const projected = children.map((child) =>
-        project(child, [], path, pagePath)
+        project(child, [], path, pagePath),
       );
       return {
         usage: node.usage,
@@ -530,30 +568,41 @@ export function collectDocPages<M extends Mode, T, S>(
       };
     }
     const projected = children.map((child) =>
-      project(child, hasPath(child, target) ? target : [], path, pagePath)
+      project(child, hasPath(child, target) ? target : [], path, pagePath),
     );
     const fragments = projected.flatMap((child) => child.fragments);
     const pathTerms = projected.flatMap((child) => child.pathTerms ?? []);
-    const usage: Usage = node.kind === "seq"
-      ? [{ type: "sequence", terms: projected.flatMap((child) => child.usage) }]
-      : projected.flatMap((child) => child.usage);
+    const usage: Usage =
+      node.kind === "seq"
+        ? [
+            {
+              type: "sequence",
+              terms: projected.flatMap((child) => child.usage),
+            },
+          ]
+        : projected.flatMap((child) => child.usage);
     return {
       usage: node.hidden === "usage" ? hideUsage(usage, pathTerms) : usage,
       pathTerms,
-      fragments: node.label == null ? fragments : [
-        ...fragments.filter((fragment) =>
-          fragment.type === "section" && fragment.title != null
-        ),
-        {
-          type: "section",
-          title: node.label,
-          entries: fragmentsEntries(
-            fragments.filter((fragment) =>
-              fragment.type === "entry" || fragment.title == null
-            ),
-          ),
-        },
-      ],
+      fragments:
+        node.label == null
+          ? fragments
+          : [
+              ...fragments.filter(
+                (fragment) =>
+                  fragment.type === "section" && fragment.title != null,
+              ),
+              {
+                type: "section",
+                title: node.label,
+                entries: fragmentsEntries(
+                  fragments.filter(
+                    (fragment) =>
+                      fragment.type === "entry" || fragment.title == null,
+                  ),
+                ),
+              },
+            ],
       unresolvedUsage: projected.some((child) => child.unresolvedUsage),
       brief: projected.find((child) => child.brief != null)?.brief,
       description: projected.find((child) => child.description != null)
@@ -567,8 +616,8 @@ export function collectDocPages<M extends Mode, T, S>(
     const page = project(parser, path, [], path);
     entries.set(key(path), {
       path,
-      aliases: node?.aliases?.filter((alias) =>
-        !node.hiddenAliases?.includes(alias)
+      aliases: node?.aliases?.filter(
+        (alias) => !node.hiddenAliases?.includes(alias),
       ),
       hiddenAliases: node?.hiddenAliases?.slice(),
       hidden: node?.hidden,
@@ -578,9 +627,8 @@ export function collectDocPages<M extends Mode, T, S>(
         usage: page.unresolvedUsage ? undefined : publicUsage(page.usage),
         sections: sections(page.fragments),
         brief: page.brief == null ? undefined : cloneMessage(page.brief),
-        description: page.description == null
-          ? undefined
-          : cloneMessage(page.description),
+        description:
+          page.description == null ? undefined : cloneMessage(page.description),
         footer: page.footer == null ? undefined : cloneMessage(page.footer),
         showUsage: page.showUsage,
       },
@@ -593,24 +641,25 @@ export function collectDocPages<M extends Mode, T, S>(
       throw new TypeError(`Duplicate supplied command path: ${entryKey}`);
     }
     if (entry.aliases?.length || entry.hiddenAliases?.length) {
-      validateCommandNames([
-        ...entry.aliases ?? [],
-        ...entry.hiddenAliases ?? [],
-      ], "Documentation alias");
+      validateCommandNames(
+        [...(entry.aliases ?? []), ...(entry.hiddenAliases ?? [])],
+        "Documentation alias",
+      );
     }
     if (
-      entry.path.length === 0 && (
-        entry.aliases?.length || entry.hiddenAliases?.length || entry.hidden
-      )
+      entry.path.length === 0 &&
+      (entry.aliases?.length || entry.hiddenAliases?.length || entry.hidden)
     ) {
       throw new TypeError(
         "The root page cannot have aliases or hidden visibility.",
       );
     }
     if (
-      entry.coverage != null && entry.coverage !== "page" &&
+      entry.coverage != null &&
+      entry.coverage !== "page" &&
       entry.coverage !== "subtree"
-    ) throw new TypeError("Supplied coverage must be page or subtree.");
+    )
+      throw new TypeError("Supplied coverage must be page or subtree.");
     supplied.set(entryKey, entry);
     entries.set(entryKey, {
       ...entries.get(entryKey),
@@ -620,8 +669,8 @@ export function collectDocPages<M extends Mode, T, S>(
       coverage: entry.coverage ?? "page",
     });
   }
-  const visible = [...entries.values()].filter((entry) =>
-    !docHidden(entry, entries)
+  const visible = [...entries.values()].filter(
+    (entry) => !docHidden(entry, entries),
   );
   const unresolved = [...reports.values()].filter((gap) => {
     const enclosing = entries.get(key(gap.path));
@@ -633,21 +682,19 @@ export function collectDocPages<M extends Mode, T, S>(
     // authored documentation. Every known affected page needs a replacement.
     if (!supplied.has(key(gap.path))) return true;
     if (gap.scope === "page") return false;
-    return ![...supplied.values()].some((entry) =>
-      entry.coverage === "subtree" && prefix(entry.path, gap.path)
+    return ![...supplied.values()].some(
+      (entry) => entry.coverage === "subtree" && prefix(entry.path, gap.path),
     );
   });
   const missing = new Map<string, readonly string[]>();
   const spellings = new Map<string, string>();
   for (const entry of entries.values()) {
     if (entry.path.length === 0) continue;
-    for (
-      const spelling of [
-        entry.path.at(-1)!,
-        ...entry.aliases ?? [],
-        ...entry.hiddenAliases ?? [],
-      ]
-    ) {
+    for (const spelling of [
+      entry.path.at(-1)!,
+      ...(entry.aliases ?? []),
+      ...(entry.hiddenAliases ?? []),
+    ]) {
       const spellingKey = key([...entry.path.slice(0, -1), spelling]);
       const previous = spellings.get(spellingKey);
       if (previous != null && previous !== key(entry.path)) {
@@ -661,9 +708,9 @@ export function collectDocPages<M extends Mode, T, S>(
       const parent = entry.path.slice(0, length);
       if (!entries.has(key(parent))) missing.set(key(parent), parent);
     }
-    for (
-      const item of entry.page.sections.flatMap((section) => section.entries)
-    ) {
+    for (const item of entry.page.sections.flatMap(
+      (section) => section.entries,
+    )) {
       if (item.term.type !== "command" || isDocHidden(item.term.hidden)) {
         continue;
       }
@@ -683,9 +730,10 @@ export function collectDocPages<M extends Mode, T, S>(
         return target == null || !docHidden(target, entries);
       }),
     }));
-    return pageSections.some((section, index) =>
-        section.entries.length !== entry.page.sections[index].entries.length
-      )
+    return pageSections.some(
+      (section, index) =>
+        section.entries.length !== entry.page.sections[index].entries.length,
+    )
       ? { ...entry, page: { ...entry.page, sections: pageSections } }
       : entry;
   });

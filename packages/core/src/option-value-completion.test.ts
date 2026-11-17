@@ -35,10 +35,9 @@ it("keeps keyValue() insertion prefixes in joined Bash file values", () => {
       yield { kind: "file", type: "file", pattern: prefix };
     },
   };
-  const result = suggest(
-    option("--set", keyValue({ value: files })),
-    ["--set=output=b"],
-  );
+  const result = suggest(option("--set", keyValue({ value: files })), [
+    "--set=output=b",
+  ]);
   assert.equal(
     Array.from(bash.encodeSuggestions(result)).join(""),
     "__JOINED_FILE__:--set=:file::output=b:0:output=",
@@ -58,8 +57,9 @@ describe("attached short option file values", () => {
       { kind: "file", type: "file", pattern: "-fsrc/ma", prefix: "-f" },
     ]);
     assert.equal(
-      Array.from(bash.encodeSuggestions(suggest(option("-f", files), ["-fs"])))
-        .join(""),
+      Array.from(
+        bash.encodeSuggestions(suggest(option("-f", files), ["-fs"])),
+      ).join(""),
       "__FILE__:file::-fs:0:-f",
     );
   });
@@ -139,27 +139,32 @@ describe("option value completion prefixes", () => {
       const parser = option("--config", mode === "sync" ? sync : async);
       for (const api of ["suggest", "suggestAsync"] as const) {
         seen.length = 0;
-        const result = api === "suggest"
-          ? await suggest(parser, ["--config", "name=fo"])
-          : await suggestAsync(parser, ["--config", "name=fo"]);
+        const result =
+          api === "suggest"
+            ? await suggest(parser, ["--config", "name=fo"])
+            : await suggestAsync(parser, ["--config", "name=fo"]);
         assert.ok(seen.length > 0);
         assert.ok(seen.every((prefix) => prefix === "name=fo"));
-        assert.deepEqual(result, [{
-          kind: "file",
-          type: "file",
-          pattern: "name=fo",
-          extensions: [".toml"],
-          includeHidden: true,
-        }]);
+        assert.deepEqual(result, [
+          {
+            kind: "file",
+            type: "file",
+            pattern: "name=fo",
+            extensions: [".toml"],
+            includeHidden: true,
+          },
+        ]);
       }
     });
   }
   it("treats joined-looking tokens as values when an option awaits one", () => {
     const parser = option("--label", choice(["--other=foo"]));
-    assert.deepEqual(suggest(parser, ["--label", "--other=fo"]), [{
-      kind: "literal",
-      text: "--other=foo",
-    }]);
+    assert.deepEqual(suggest(parser, ["--label", "--other=fo"]), [
+      {
+        kind: "literal",
+        text: "--other=foo",
+      },
+    ]);
   });
 });
 
@@ -172,14 +177,16 @@ for (const mode of ["sync", "async"] as const) {
       "-m",
       "/mode",
       "+mode",
-      mode === "sync" ? values : {
-        ...values,
-        mode: "async" as const,
-        parse: (input: string) => Promise.resolve(values.parse(input)),
-        suggest: async function* (prefix: string) {
-          yield* values.suggest!(prefix);
-        },
-      },
+      mode === "sync"
+        ? values
+        : {
+            ...values,
+            mode: "async" as const,
+            parse: (input: string) => Promise.resolve(values.parse(input)),
+            suggest: async function* (prefix: string) {
+              yield* values.suggest!(prefix);
+            },
+          },
     );
     for (const prefix of ["--mode=", "-mode=", "/mode:"]) {
       const parsed = await parse(parser, [prefix + "dev"]);
@@ -229,11 +236,13 @@ for (const mode of ["sync", "async"] as const) {
     );
     const input = "/scope:file:name=f";
     const result = await suggest(parser, [input]);
-    assert.deepEqual(result, [{
-      kind: "literal",
-      text: input,
-      description: undefined,
-    }]);
+    assert.deepEqual(result, [
+      {
+        kind: "literal",
+        text: input,
+        description: undefined,
+      },
+    ]);
     assert.equal(
       Array.from(bash.encodeSuggestions(result)).join(""),
       "__JOINED_FILE__:/scope%3Afile%3A:file:toml::1",

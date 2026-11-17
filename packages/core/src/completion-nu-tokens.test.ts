@@ -165,142 +165,178 @@ describe("Nushell completion argument decoding", () => {
       "probe --first r#'a'#r#'b'# --second a",
       ["--first", "a'#r#'b", "--second", "a"],
     ],
-    ["probe --first r#'a\nb'# --second a", [
-      "--first",
-      "a\nb",
-      "--second",
-      "a",
-    ]],
+    [
+      "probe --first r#'a\nb'# --second a",
+      ["--first", "a\nb", "--second", "a"],
+    ],
     ['probe --first "a\nb" --second a', ["--first", "a\nb", "--second", "a"]],
   ];
 
   for (const [context, expected] of cases) {
-    it(`passes ${JSON.stringify(context)} as Nushell decodes it`, {
-      skip: !nuAvailable,
-    }, () => {
-      // Bun ignores the skip option, so we need an early return as well:
-      if (!nuAvailable) return;
-      const result = complete(context);
-      deepStrictEqual(result.args, ["complete", ...expected]);
-      deepStrictEqual(result.values, ["alpha", "beta"]);
-      // The expectation is what Nushell itself passes when running the line:
-      deepStrictEqual(execute(context), expected);
-    });
-  }
-
-  it("completes an option after an empty quoted argument through the hook", {
-    skip: !nuAvailable,
-  }, () => {
-    if (!nuAvailable) return;
-    // These are the spans Nushell passes to the external completer when
-    // the user presses Tab after `probe --first "" --second a`.
-    const result = runWithScript(
-      "do $env.config.completions.external.completer " +
-        "($env.OPTIQUE_SPANS | from json)",
+    it(
+      `passes ${JSON.stringify(context)} as Nushell decodes it`,
       {
-        OPTIQUE_SPANS: JSON.stringify([
-          "probe",
-          "--first",
-          '""',
-          "--second",
-          "a",
-        ]),
+        skip: !nuAvailable,
+      },
+      () => {
+        // Bun ignores the skip option, so we need an early return as well:
+        if (!nuAvailable) return;
+        const result = complete(context);
+        deepStrictEqual(result.args, ["complete", ...expected]);
+        deepStrictEqual(result.values, ["alpha", "beta"]);
+        // The expectation is what Nushell itself passes when running the line:
+        deepStrictEqual(execute(context), expected);
       },
     );
-    deepStrictEqual(result.args, ["complete", "--first", "", "--second", "a"]);
-    deepStrictEqual(result.values, ["alpha", "beta"]);
-  });
+  }
 
-  it("adds an empty word after unquoted trailing whitespace", {
-    skip: !nuAvailable,
-  }, () => {
-    if (!nuAvailable) return;
-    for (const whitespace of [" ", "\t", "\r", "\n"]) {
-      const result = complete(`probe --first "" --second${whitespace}`);
+  it(
+    "completes an option after an empty quoted argument through the hook",
+    {
+      skip: !nuAvailable,
+    },
+    () => {
+      if (!nuAvailable) return;
+      // These are the spans Nushell passes to the external completer when
+      // the user presses Tab after `probe --first "" --second a`.
+      const result = runWithScript(
+        "do $env.config.completions.external.completer " +
+          "($env.OPTIQUE_SPANS | from json)",
+        {
+          OPTIQUE_SPANS: JSON.stringify([
+            "probe",
+            "--first",
+            '""',
+            "--second",
+            "a",
+          ]),
+        },
+      );
       deepStrictEqual(result.args, [
         "complete",
         "--first",
         "",
         "--second",
-        "",
+        "a",
       ]);
-    }
-  });
+      deepStrictEqual(result.values, ["alpha", "beta"]);
+    },
+  );
 
-  it("completes the quoted word itself while a quote is still open", {
-    skip: !nuAvailable,
-  }, () => {
-    if (!nuAvailable) return;
-    const cases: readonly (readonly [string, string])[] = [
-      ['probe --first "a ', "a "],
-      ["probe --first 'a ", "a "],
-      ["probe --first `a ", "a "],
-      ['probe --first "a\\" ', 'a" '],
-      ["probe --first r#'a b", "a b"],
-      ["probe --first r##'a'# ", "a'# "],
-      ['probe --first "a\\', "a\\"],
-    ];
-    for (const [context, word] of cases) {
-      const result = complete(context);
-      deepStrictEqual(result.args, ["complete", "--first", word], context);
-    }
-  });
+  it(
+    "adds an empty word after unquoted trailing whitespace",
+    {
+      skip: !nuAvailable,
+    },
+    () => {
+      if (!nuAvailable) return;
+      for (const whitespace of [" ", "\t", "\r", "\n"]) {
+        const result = complete(`probe --first "" --second${whitespace}`);
+        deepStrictEqual(result.args, [
+          "complete",
+          "--first",
+          "",
+          "--second",
+          "",
+        ]);
+      }
+    },
+  );
 
-  it("keeps word boundaries around incomplete raw string prefixes", {
-    skip: !nuAvailable,
-  }, () => {
-    if (!nuAvailable) return;
-    const cases: readonly (readonly [string, readonly string[]])[] = [
-      ["probe --first r#", ["--first", "r#"]],
-      ["probe --first r##", ["--first", "r##"]],
-      ["probe --first r# ", ["--first", "r#", ""]],
-      ["probe --first r## --second a", ["--first", "r##", "--second", "a"]],
-      ["probe --first r#x --second a", ["--first", "r#x", "--second", "a"]],
-      ["probe --first r#'a\nb", ["--first", "a\nb"]],
-    ];
-    for (const [context, expected] of cases) {
-      const result = complete(context);
-      deepStrictEqual(result.args, ["complete", ...expected], context);
-    }
-  });
+  it(
+    "completes the quoted word itself while a quote is still open",
+    {
+      skip: !nuAvailable,
+    },
+    () => {
+      if (!nuAvailable) return;
+      const cases: readonly (readonly [string, string])[] = [
+        ['probe --first "a ', "a "],
+        ["probe --first 'a ", "a "],
+        ["probe --first `a ", "a "],
+        ['probe --first "a\\" ', 'a" '],
+        ["probe --first r#'a b", "a b"],
+        ["probe --first r##'a'# ", "a'# "],
+        ['probe --first "a\\', "a\\"],
+      ];
+      for (const [context, word] of cases) {
+        const result = complete(context);
+        deepStrictEqual(result.args, ["complete", "--first", word], context);
+      }
+    },
+  );
 
-  it("keeps the text of an escape Nushell does not know", {
-    skip: !nuAvailable,
-  }, () => {
-    if (!nuAvailable) return;
-    const result = complete('probe --first "a\\qb" --second a');
-    deepStrictEqual(result.args, [
-      "complete",
-      "--first",
-      "a\\qb",
-      "--second",
-      "a",
-    ]);
-    deepStrictEqual(result.values, ["alpha", "beta"]);
-  });
+  it(
+    "keeps word boundaries around incomplete raw string prefixes",
+    {
+      skip: !nuAvailable,
+    },
+    () => {
+      if (!nuAvailable) return;
+      const cases: readonly (readonly [string, readonly string[]])[] = [
+        ["probe --first r#", ["--first", "r#"]],
+        ["probe --first r##", ["--first", "r##"]],
+        ["probe --first r# ", ["--first", "r#", ""]],
+        ["probe --first r## --second a", ["--first", "r##", "--second", "a"]],
+        ["probe --first r#x --second a", ["--first", "r#x", "--second", "a"]],
+        ["probe --first r#'a\nb", ["--first", "a\nb"]],
+      ];
+      for (const [context, expected] of cases) {
+        const result = complete(context);
+        deepStrictEqual(result.args, ["complete", ...expected], context);
+      }
+    },
+  );
 
-  it("still passes an empty word for a bare program name", {
-    skip: !nuAvailable,
-  }, () => {
-    if (!nuAvailable) return;
-    for (const context of ["probe", "probe "]) {
-      const result = complete(context);
-      deepStrictEqual(result.args, ["complete", ""]);
-      ok(result.values.includes("alpha"));
-    }
-  });
+  it(
+    "keeps the text of an escape Nushell does not know",
+    {
+      skip: !nuAvailable,
+    },
+    () => {
+      if (!nuAvailable) return;
+      const result = complete('probe --first "a\\qb" --second a');
+      deepStrictEqual(result.args, [
+        "complete",
+        "--first",
+        "a\\qb",
+        "--second",
+        "a",
+      ]);
+      deepStrictEqual(result.values, ["alpha", "beta"]);
+    },
+  );
 
-  it("uses the open quoted word as the file completion prefix", {
-    skip: !nuAvailable,
-  }, () => {
-    if (!nuAvailable) return;
-    const env = { PROBE_OUTPUT: "__FILE__:file:::0\t\n" };
-    const files = ["my file.txt", "other.txt"];
-    const open = complete('probe --first "my ', env, files);
-    // File names with spaces are inserted quoted:
-    deepStrictEqual(open.values, ["'my file.txt'"]);
-    const next = complete('probe --first "a b" ', env, files);
-    deepStrictEqual([...next.values].sort(), ["'my file.txt'", "other.txt"]);
-    deepStrictEqual(next.args, ["complete", "--first", "a b", ""]);
-  });
+  it(
+    "still passes an empty word for a bare program name",
+    {
+      skip: !nuAvailable,
+    },
+    () => {
+      if (!nuAvailable) return;
+      for (const context of ["probe", "probe "]) {
+        const result = complete(context);
+        deepStrictEqual(result.args, ["complete", ""]);
+        ok(result.values.includes("alpha"));
+      }
+    },
+  );
+
+  it(
+    "uses the open quoted word as the file completion prefix",
+    {
+      skip: !nuAvailable,
+    },
+    () => {
+      if (!nuAvailable) return;
+      const env = { PROBE_OUTPUT: "__FILE__:file:::0\t\n" };
+      const files = ["my file.txt", "other.txt"];
+      const open = complete('probe --first "my ', env, files);
+      // File names with spaces are inserted quoted:
+      deepStrictEqual(open.values, ["'my file.txt'"]);
+      const next = complete('probe --first "a b" ', env, files);
+      deepStrictEqual([...next.values].sort(), ["'my file.txt'", "other.txt"]);
+      deepStrictEqual(next.args, ["complete", "--first", "a b", ""]);
+    },
+  );
 });

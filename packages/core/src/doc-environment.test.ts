@@ -28,9 +28,11 @@ describe("environment documentation", () => {
 
   it("drops the prefix's leading space when the names wrap", () => {
     const wide: DocPage = {
-      sections: [{
-        entries: [{ ...entry, description: message`Verbosity level.` }],
-      }],
+      sections: [
+        {
+          entries: [{ ...entry, description: message`Verbosity level.` }],
+        },
+      ],
     };
     assert.equal(
       formatDocPage("app", wide, {
@@ -54,9 +56,13 @@ describe("environment documentation", () => {
       default: message`${"warn"}`,
       choices: message`${"warn"}, ${"debug"}`,
     };
-    const output = formatDocPage("app", {
-      sections: [{ entries: [entryWithDefault] }],
-    }, options);
+    const output = formatDocPage(
+      "app",
+      {
+        sections: [{ entries: [entryWithDefault] }],
+      },
+      options,
+    );
     assert.match(
       output,
       /Verbosity\. \["warn"\] \(choices: warn, debug\) \[env: APP_LEVEL\]/,
@@ -134,10 +140,16 @@ describe("environment documentation", () => {
     const input = { sections: [{ entries }] };
     const section = deriveEnvironmentSection(input);
     assert.ok(section);
-    assert.deepEqual(section.entries.map((e) => e.term), [{
-      type: "literal",
-      value: "B",
-    }, { type: "literal", value: "A" }]);
+    assert.deepEqual(
+      section.entries.map((e) => e.term),
+      [
+        {
+          type: "literal",
+          value: "B",
+        },
+        { type: "literal", value: "A" },
+      ],
+    );
     assert.deepEqual(section.entries[1].description, [
       { type: "optionNames", optionNames: ["--level"] },
       { type: "text", text: " " },
@@ -158,10 +170,12 @@ describe("environment documentation", () => {
         { title: "Z options", entries: [entry] },
         {
           title: "A options",
-          entries: [{
-            term: { type: "option", names: ["--other"] },
-            description: message`Other option.`,
-          }],
+          entries: [
+            {
+              term: { type: "option", names: ["--other"] },
+              description: message`Other option.`,
+            },
+          ],
         },
       ],
       examples: message`app --level debug`,
@@ -185,7 +199,7 @@ describe("environment documentation", () => {
 
   it("validates only a used section heading", () => {
     assert.doesNotThrow(() =>
-      render({ showEnvironment: { sectionTitle: "" } })
+      render({ showEnvironment: { sectionTitle: "" } }),
     );
     assert.throws(
       () =>
@@ -230,21 +244,29 @@ describe("environment documentation", () => {
   });
 
   it("supports semantic themes and opaque formatters without adding terminal kinds", () => {
-    const themed = formatDocPage("app", {
-      sections: [{
-        entries: [{
-          ...entry,
-          term: { type: "option", names: ["--level"] },
-        }],
-      }],
-    }, {
-      showEnvironment: true,
-      colors: true,
-      theme: {
-        envVar: (term) => ({ type: "text", text: `<${term.envVar}>` }),
-        annotationStyles: { environment: { italic: true } },
+    const themed = formatDocPage(
+      "app",
+      {
+        sections: [
+          {
+            entries: [
+              {
+                ...entry,
+                term: { type: "option", names: ["--level"] },
+              },
+            ],
+          },
+        ],
       },
-    });
+      {
+        showEnvironment: true,
+        colors: true,
+        theme: {
+          envVar: (term) => ({ type: "text", text: `<${term.envVar}>` }),
+          annotationStyles: { environment: { italic: true } },
+        },
+      },
+    );
     assert.match(themed, /<APP_LEVEL>/);
     assert.ok(themed.includes("\x1b[3m [env:"));
     const opaque = render({
@@ -273,12 +295,15 @@ describe("independent environment documentation", () => {
   it("orders CLI names first without deduplicating distinct entry metadata", () => {
     const section = deriveEnvironmentSection(independent);
     assert.ok(section);
-    assert.deepEqual(section.entries.map((entry) => entry.term), [
-      { type: "literal", value: "APP_LEVEL" },
-      { type: "literal", value: "SECOND" },
-      { type: "literal", value: "ONLY" },
-      { type: "literal", value: "NAME_ONLY" },
-    ]);
+    assert.deepEqual(
+      section.entries.map((entry) => entry.term),
+      [
+        { type: "literal", value: "APP_LEVEL" },
+        { type: "literal", value: "SECOND" },
+        { type: "literal", value: "ONLY" },
+        { type: "literal", value: "NAME_ONLY" },
+      ],
+    );
     assert.deepEqual(section.entries[0].description, [
       ...message`Level purpose.`,
       { type: "lineBreak" },
@@ -298,13 +323,18 @@ describe("independent environment documentation", () => {
     const section = deriveEnvironmentSection(independent, {
       onlyUnreferenced: true,
     });
-    assert.deepEqual(section?.entries.map((entry) => entry.term), [
-      { type: "literal", value: "ONLY" },
-      { type: "literal", value: "NAME_ONLY" },
-    ]);
-    for (
-      const showEnvironment of [true, {}, { placement: "inline" as const }]
-    ) {
+    assert.deepEqual(
+      section?.entries.map((entry) => entry.term),
+      [
+        { type: "literal", value: "ONLY" },
+        { type: "literal", value: "NAME_ONLY" },
+      ],
+    );
+    for (const showEnvironment of [
+      true,
+      {},
+      { placement: "inline" as const },
+    ]) {
       const help = formatDocPage("app", independent, { showEnvironment });
       assert.ok(help.includes("ONLY"));
       assert.ok(help.includes("NAME_ONLY"));
@@ -313,14 +343,18 @@ describe("independent environment documentation", () => {
     }
   });
   it("normalizes structural message equality including URLs and ordered arrays", () => {
-    const purpose = [{
-      type: "url" as const,
-      url: new URL("https://example.com/"),
-    }];
-    const names = [{
-      type: "optionNames" as const,
-      optionNames: ["--a", "--b"],
-    }];
+    const purpose = [
+      {
+        type: "url" as const,
+        url: new URL("https://example.com/"),
+      },
+    ];
+    const names = [
+      {
+        type: "optionNames" as const,
+        optionNames: ["--a", "--b"],
+      },
+    ];
     const section = deriveEnvironmentSection({
       sections: [],
       environmentBindings: [
@@ -336,9 +370,13 @@ describe("independent environment documentation", () => {
         },
       ],
     });
-    assert.deepEqual(section?.entries[0].description, [...purpose, {
-      type: "lineBreak",
-    }, ...names]);
+    assert.deepEqual(section?.entries[0].description, [
+      ...purpose,
+      {
+        type: "lineBreak",
+      },
+      ...names,
+    ]);
   });
   it("validates an inline title only when the fallback is present", () => {
     const options = { showEnvironment: { sectionTitle: "" } };
@@ -346,21 +384,31 @@ describe("independent environment documentation", () => {
     assert.throws(() => formatDocPage("app", independent, options), TypeError);
     assert.throws(
       () =>
-        formatDocPage("app", {
-          sections: [],
-          environmentBindings: [{ name: "LONG_VARIABLE" }],
-        }, { maxWidth: 2, showEnvironment: true }),
+        formatDocPage(
+          "app",
+          {
+            sections: [],
+            environmentBindings: [{ name: "LONG_VARIABLE" }],
+          },
+          { maxWidth: 2, showEnvironment: true },
+        ),
       RangeError,
     );
   });
   it("keeps purpose values unquoted in generated sections", () => {
-    const help = formatDocPage("app", {
-      sections: [],
-      environmentBindings: [{
-        name: "A",
-        description: message`Use ${"seconds"}.`,
-      }],
-    }, { showEnvironment: true });
+    const help = formatDocPage(
+      "app",
+      {
+        sections: [],
+        environmentBindings: [
+          {
+            name: "A",
+            description: message`Use ${"seconds"}.`,
+          },
+        ],
+      },
+      { showEnvironment: true },
+    );
     assert.ok(help.includes("Use seconds."));
     assert.ok(!help.includes('"seconds"'));
   });

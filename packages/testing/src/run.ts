@@ -19,13 +19,14 @@ import type { CapturedOutput } from "./index.ts";
  *
  * @since 1.3.0
  */
-export type CaptureRunOptions =
-  & Omit<RunOptions, "stdout" | "stderr" | "onExit">
-  & {
-    readonly stdout?: never;
-    readonly stderr?: never;
-    readonly onExit?: never;
-  };
+export type CaptureRunOptions = Omit<
+  RunOptions,
+  "stdout" | "stderr" | "onExit"
+> & {
+  readonly stdout?: never;
+  readonly stderr?: never;
+  readonly onExit?: never;
+};
 
 /**
  * The result of an in-process runner execution.
@@ -37,51 +38,62 @@ export type CaptureRunOptions =
  * @template T The inferred parser value type.
  * @since 1.3.0
  */
-export type CapturedRunResult<T> =
-  & CapturedOutput
-  & (
+export type CapturedRunResult<T> = CapturedOutput &
+  (
     | {
-      readonly kind: "returned";
-      readonly value: T;
-      readonly exitCode: 0;
-    }
+        readonly kind: "returned";
+        readonly value: T;
+        readonly exitCode: 0;
+      }
     | {
-      readonly kind: "exited";
-      readonly exitCode: number;
-    }
+        readonly kind: "exited";
+        readonly exitCode: number;
+      }
   );
 
 type RejectEmptyContexts<TContexts extends readonly SourceContext<unknown>[]> =
-  TContexts extends readonly [] ? never
-    : unknown;
+  TContexts extends readonly [] ? never : unknown;
 
-type ContextsFromOptions<TOptions> = [Exclude<TOptions, undefined>] extends
-  [never] ? undefined
+type ContextsFromOptions<TOptions> = [Exclude<TOptions, undefined>] extends [
+  never,
+]
+  ? undefined
   : Exclude<TOptions, undefined> extends {
-    readonly contexts?: infer TContexts extends
-      | readonly SourceContext<unknown>[]
-      | undefined;
-  } ? TContexts
-  : undefined;
+        readonly contexts?: infer TContexts extends
+          | readonly SourceContext<unknown>[]
+          | undefined;
+      }
+    ? TContexts
+    : undefined;
 
-type RejectContextfulOptions<TOptions> = [ContextsFromOptions<TOptions>] extends
-  [undefined | readonly []] ? unknown
+type RejectContextfulOptions<TOptions> = [
+  ContextsFromOptions<TOptions>,
+] extends [undefined | readonly []]
+  ? unknown
   : never;
 
-type RejectUnknownCaptureRunOptionKeys<TOptions> = [TOptions] extends
-  [undefined] ? unknown
-  : Exclude<keyof TOptions, keyof CaptureRunOptions> extends never ? unknown
+type RejectUnknownCaptureRunOptionKeys<TOptions> = [TOptions] extends [
+  undefined,
+]
+  ? unknown
+  : Exclude<keyof TOptions, keyof CaptureRunOptions> extends never
+    ? unknown
+    : never;
+
+type AcceptExactCaptureRunOptions<TOptions> = [TOptions] extends [
+  CaptureRunOptions,
+]
+  ? [CaptureRunOptions] extends [TOptions]
+    ? unknown
+    : never
   : never;
 
-type AcceptExactCaptureRunOptions<TOptions> = [TOptions] extends
-  [CaptureRunOptions] ? [CaptureRunOptions] extends [TOptions] ? unknown
-  : never
-  : never;
-
-type AcceptExactOptionalCaptureRunOptions<TOptions> = [TOptions] extends
-  [CaptureRunOptions | undefined]
-  ? [CaptureRunOptions | undefined] extends [TOptions] ? unknown
-  : never
+type AcceptExactOptionalCaptureRunOptions<TOptions> = [TOptions] extends [
+  CaptureRunOptions | undefined,
+]
+  ? [CaptureRunOptions | undefined] extends [TOptions]
+    ? unknown
+    : never
   : never;
 
 /**
@@ -108,10 +120,9 @@ export function captureRun<
   TContexts extends readonly SourceContext<unknown>[],
 >(
   parser: T,
-  options:
-    & CaptureRunOptions
-    & { readonly contexts: TContexts }
-    & ContextOptionsParam<TContexts, InferValue<T>>,
+  options: CaptureRunOptions & {
+    readonly contexts: TContexts;
+  } & ContextOptionsParam<TContexts, InferValue<T>>,
 ): Promise<CapturedRunResult<InferValue<T>>>;
 
 export function captureRun<
@@ -120,11 +131,10 @@ export function captureRun<
   const TContexts extends readonly SourceContext<unknown>[],
 >(
   program: Program<M, T>,
-  options:
-    & CaptureRunOptions
-    & { readonly contexts: TContexts }
-    & RejectEmptyContexts<TContexts>
-    & ContextOptionsParam<TContexts, T>,
+  options: CaptureRunOptions & {
+    readonly contexts: TContexts;
+  } & RejectEmptyContexts<TContexts> &
+    ContextOptionsParam<TContexts, T>,
 ): Promise<CapturedRunResult<T>>;
 
 export function captureRun<
@@ -132,10 +142,9 @@ export function captureRun<
   const TOptions extends CaptureRunOptions | undefined,
 >(
   program: Program<"sync", T>,
-  options?:
-    & TOptions
-    & RejectContextfulOptions<TOptions>
-    & RejectUnknownCaptureRunOptionKeys<TOptions>,
+  options?: TOptions &
+    RejectContextfulOptions<TOptions> &
+    RejectUnknownCaptureRunOptionKeys<TOptions>,
 ): Promise<CapturedRunResult<T>>;
 
 export function captureRun<
@@ -143,10 +152,9 @@ export function captureRun<
   const TOptions extends CaptureRunOptions | undefined,
 >(
   program: Program<"async", T>,
-  options?:
-    & TOptions
-    & RejectContextfulOptions<TOptions>
-    & RejectUnknownCaptureRunOptionKeys<TOptions>,
+  options?: TOptions &
+    RejectContextfulOptions<TOptions> &
+    RejectUnknownCaptureRunOptionKeys<TOptions>,
 ): Promise<CapturedRunResult<T>>;
 
 export function captureRun<T, TOptions extends CaptureRunOptions>(
@@ -154,10 +162,7 @@ export function captureRun<T, TOptions extends CaptureRunOptions>(
   options: TOptions & AcceptExactCaptureRunOptions<TOptions>,
 ): Promise<CapturedRunResult<T>>;
 
-export function captureRun<
-  T,
-  TOptions extends CaptureRunOptions | undefined,
->(
+export function captureRun<T, TOptions extends CaptureRunOptions | undefined>(
   program: Program<Mode, T>,
   options: TOptions & AcceptExactOptionalCaptureRunOptions<TOptions>,
 ): Promise<CapturedRunResult<T>>;
@@ -168,9 +173,7 @@ export function captureRun<T extends Parser<Mode, unknown, unknown>>(
 ): Promise<CapturedRunResult<InferValue<T>>>;
 
 export async function captureRun(
-  parserOrProgram:
-    | Parser<Mode, unknown, unknown>
-    | Program<Mode, unknown>,
+  parserOrProgram: Parser<Mode, unknown, unknown> | Program<Mode, unknown>,
   options: CaptureRunOptions = {},
 ): Promise<CapturedRunResult<unknown>> {
   // A disposal failure can expose an exit through SuppressedError.suppressed.
@@ -202,10 +205,10 @@ export async function captureRun(
   };
 
   try {
-    const value = "parser" in parserOrProgram &&
-        "metadata" in parserOrProgram
-      ? await runAsync(parserOrProgram, runOptions)
-      : await runAsync(parserOrProgram, runOptions);
+    const value =
+      "parser" in parserOrProgram && "metadata" in parserOrProgram
+        ? await runAsync(parserOrProgram, runOptions)
+        : await runAsync(parserOrProgram, runOptions);
     return {
       kind: "returned",
       value,
