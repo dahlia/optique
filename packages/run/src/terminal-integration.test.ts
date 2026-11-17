@@ -5,8 +5,10 @@ import process from "node:process";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
+/* oxlint-disable no-control-regex -- Match control characters. */
 // deno-lint-ignore no-control-regex -- Check the actual ANSI escape prefix.
 const ansiSequence = /\x1b\[/u;
+/* oxlint-enable no-control-regex */
 
 describe("runner terminal detection", () => {
   it("should force colored help on a pipe even with FORCE_COLOR=0", async () => {

@@ -3,8 +3,10 @@
 //   final byte range is 0x40–0x7E (@ through ~) per ECMA-48
 // OSC sequences: ESC ] ... (BEL | ESC \)
 //   covers OSC 8 hyperlinks, window title, and all other OSC types
+/* oxlint-disable no-control-regex -- Match control characters. */
 const ansiRegex = // deno-lint-ignore no-control-regex
   /\x1B(?:\[[0-9;:]*[@-~]|\][^\x1B\x07]*(?:\x1B\\|\x07))/g;
+/* oxlint-enable no-control-regex */
 
 /**
  * Removes ANSI CSI and OSC sequences before measuring visible text.

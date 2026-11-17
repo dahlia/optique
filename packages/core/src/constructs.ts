@@ -16614,6 +16614,7 @@ export interface ConditionalOptions {
  * @internal
  */
 type ConditionalResultWithoutDefault<
+  /* oxlint-disable-next-line no-unused-vars -- Preserve the discriminator type parameter. */
   TDiscriminator extends string,
   TBranches extends Record<string, Parser<Mode, unknown, unknown>>,
 > = {

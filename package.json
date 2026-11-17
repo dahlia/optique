@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test *.test.ts scripts/*.test.ts scripts/patterns.smoke.ts",
+    "test": "node --test *.test.ts scripts/*.test.ts scripts/patterns.smoke.ts scripts/tooling/*.test.mjs",
     "test:patterns": "node --test scripts/patterns.smoke.ts"
   },
   "devDependencies": {
@@ -39,6 +39,11 @@
     "typescript": "catalog:",
     "valibot": "catalog:",
     "yaml": "catalog:",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@types/deno": "catalog:",
+    "@js-temporal/polyfill": "catalog:",
+    "c8": "catalog:",
+    "oxlint": "catalog:",
+    "oxfmt": "catalog:"
   }
 }

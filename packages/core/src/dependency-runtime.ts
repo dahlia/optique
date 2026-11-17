@@ -1040,8 +1040,10 @@ export function createDependencyFingerprint(
 // String() collapses for identical source text).  Same reference → same
 // fingerprint; different reference → different fingerprint (conservative
 // but never stale).
+/* oxlint-disable ban-types -- Keep the callable contract. */
 // deno-lint-ignore ban-types
 const objectIds = new WeakMap<object | Function, number>();
+/* oxlint-enable ban-types */
 let objectIdCounter = 0;
 
 function fingerprintValue(v: unknown): string {
@@ -1076,13 +1078,17 @@ function fingerprintValue(v: unknown): string {
  * @internal
  * @since 1.0.0
  */
+/* oxlint-disable ban-types -- Keep the callable contract. */
 // deno-lint-ignore ban-types
 const parserIds = new WeakMap<Function, number>();
+/* oxlint-enable ban-types */
 let parserIdCounter = 0;
 
 /** Get a stable identity string for a replayParse function reference. */
+/* oxlint-disable ban-types -- Keep the callable contract. */
 // deno-lint-ignore ban-types
 function getParserFingerprint(replayParse: Function): string {
+  /* oxlint-enable ban-types */
   let id = parserIds.get(replayParse);
   if (id === undefined) {
     id = parserIdCounter++;
@@ -1095,8 +1101,10 @@ export function createReplayKey(
   path: readonly PropertyKey[],
   rawInput: string,
   dependencyValues: readonly unknown[],
+  /* oxlint-disable ban-types -- Keep the callable contract. */
   // deno-lint-ignore ban-types
   replayParse?: Function,
+  /* oxlint-enable ban-types */
 ): ReplayKey {
   return {
     path,

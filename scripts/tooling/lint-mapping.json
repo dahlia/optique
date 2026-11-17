@@ -1,0 +1,437 @@
+[
+  {
+    "deno": "adjacent-overload-signatures",
+    "oxlint": "typescript/adjacent-overload-signatures",
+    "retained": null
+  },
+  {
+    "deno": "ban-ts-comment",
+    "oxlint": "typescript/ban-ts-comment",
+    "retained": null
+  },
+  {
+    "deno": "ban-types",
+    "oxlint": "typescript/ban-types",
+    "retained": null
+  },
+  {
+    "deno": "ban-unknown-rule-code",
+    "oxlint": null,
+    "retained": "Deno compatibility lint"
+  },
+  {
+    "deno": "ban-untagged-ignore",
+    "oxlint": null,
+    "retained": "Deno compatibility lint"
+  },
+  {
+    "deno": "ban-unused-ignore",
+    "oxlint": null,
+    "retained": "Deno compatibility lint"
+  },
+  {
+    "deno": "constructor-super",
+    "oxlint": "eslint/constructor-super",
+    "retained": null
+  },
+  {
+    "deno": "for-direction",
+    "oxlint": "eslint/for-direction",
+    "retained": null
+  },
+  {
+    "deno": "getter-return",
+    "oxlint": "eslint/getter-return",
+    "retained": null
+  },
+  {
+    "deno": "jsx-boolean-value",
+    "oxlint": "react/jsx-boolean-value",
+    "retained": null
+  },
+  {
+    "deno": "jsx-button-has-type",
+    "oxlint": "react/button-has-type",
+    "retained": null
+  },
+  {
+    "deno": "jsx-curly-braces",
+    "oxlint": "react/jsx-curly-brace-presence",
+    "retained": null
+  },
+  {
+    "deno": "jsx-key",
+    "oxlint": "react/jsx-key",
+    "retained": null
+  },
+  {
+    "deno": "jsx-no-children-prop",
+    "oxlint": "react/no-children-prop",
+    "retained": null
+  },
+  {
+    "deno": "jsx-no-comment-text-nodes",
+    "oxlint": "react/jsx-no-comment-textnodes",
+    "retained": null
+  },
+  {
+    "deno": "jsx-no-duplicate-props",
+    "oxlint": "react/jsx-no-duplicate-props",
+    "retained": null
+  },
+  {
+    "deno": "jsx-no-unescaped-entities",
+    "oxlint": "react/no-unescaped-entities",
+    "retained": null
+  },
+  {
+    "deno": "jsx-no-useless-fragment",
+    "oxlint": "react/jsx-no-useless-fragment",
+    "retained": null
+  },
+  {
+    "deno": "jsx-props-no-spread-multi",
+    "oxlint": "react/jsx-props-no-spread-multi",
+    "retained": null
+  },
+  {
+    "deno": "jsx-void-dom-elements-no-children",
+    "oxlint": "react/void-dom-elements-no-children",
+    "retained": null
+  },
+  {
+    "deno": "no-array-constructor",
+    "oxlint": "eslint/no-array-constructor",
+    "retained": null
+  },
+  {
+    "deno": "no-async-promise-executor",
+    "oxlint": "eslint/no-async-promise-executor",
+    "retained": null
+  },
+  {
+    "deno": "no-await-in-sync-fn",
+    "oxlint": null,
+    "retained": "Deno compatibility lint"
+  },
+  {
+    "deno": "no-case-declarations",
+    "oxlint": "eslint/no-case-declarations",
+    "retained": null
+  },
+  {
+    "deno": "no-class-assign",
+    "oxlint": "eslint/no-class-assign",
+    "retained": null
+  },
+  {
+    "deno": "no-compare-neg-zero",
+    "oxlint": "eslint/no-compare-neg-zero",
+    "retained": null
+  },
+  {
+    "deno": "no-cond-assign",
+    "oxlint": "eslint/no-cond-assign",
+    "retained": null
+  },
+  {
+    "deno": "no-const-assign",
+    "oxlint": "eslint/no-const-assign",
+    "retained": null
+  },
+  {
+    "deno": "no-constant-condition",
+    "oxlint": "eslint/no-constant-condition",
+    "retained": null
+  },
+  {
+    "deno": "no-control-regex",
+    "oxlint": "eslint/no-control-regex",
+    "retained": null
+  },
+  {
+    "deno": "no-debugger",
+    "oxlint": "eslint/no-debugger",
+    "retained": null
+  },
+  {
+    "deno": "no-delete-var",
+    "oxlint": "eslint/no-delete-var",
+    "retained": null
+  },
+  {
+    "deno": "no-deprecated-deno-api",
+    "oxlint": null,
+    "retained": "Deno compatibility lint"
+  },
+  {
+    "deno": "no-dupe-args",
+    "oxlint": null,
+    "retained": "Deno compatibility lint"
+  },
+  {
+    "deno": "no-dupe-class-members",
+    "oxlint": "eslint/no-dupe-class-members",
+    "retained": null
+  },
+  {
+    "deno": "no-dupe-else-if",
+    "oxlint": "eslint/no-dupe-else-if",
+    "retained": null
+  },
+  {
+    "deno": "no-dupe-keys",
+    "oxlint": "eslint/no-dupe-keys",
+    "retained": null
+  },
+  {
+    "deno": "no-duplicate-case",
+    "oxlint": "eslint/no-duplicate-case",
+    "retained": null
+  },
+  {
+    "deno": "no-empty",
+    "oxlint": "eslint/no-empty",
+    "retained": null
+  },
+  {
+    "deno": "no-empty-character-class",
+    "oxlint": "eslint/no-empty-character-class",
+    "retained": null
+  },
+  {
+    "deno": "no-empty-enum",
+    "oxlint": null,
+    "retained": "Deno compatibility lint"
+  },
+  {
+    "deno": "no-empty-interface",
+    "oxlint": "typescript/no-empty-interface",
+    "retained": null
+  },
+  {
+    "deno": "no-empty-pattern",
+    "oxlint": "eslint/no-empty-pattern",
+    "retained": null
+  },
+  {
+    "deno": "no-ex-assign",
+    "oxlint": "eslint/no-ex-assign",
+    "retained": null
+  },
+  {
+    "deno": "no-explicit-any",
+    "oxlint": "typescript/no-explicit-any",
+    "retained": null
+  },
+  {
+    "deno": "no-extra-boolean-cast",
+    "oxlint": "eslint/no-extra-boolean-cast",
+    "retained": null
+  },
+  {
+    "deno": "no-extra-non-null-assertion",
+    "oxlint": "typescript/no-extra-non-null-assertion",
+    "retained": null
+  },
+  {
+    "deno": "no-fallthrough",
+    "oxlint": "eslint/no-fallthrough",
+    "retained": null
+  },
+  {
+    "deno": "no-func-assign",
+    "oxlint": "eslint/no-func-assign",
+    "retained": null
+  },
+  {
+    "deno": "no-global-assign",
+    "oxlint": "eslint/no-global-assign",
+    "retained": null
+  },
+  {
+    "deno": "no-import-assertions",
+    "oxlint": null,
+    "retained": "Deno compatibility lint"
+  },
+  {
+    "deno": "no-import-assign",
+    "oxlint": "eslint/no-import-assign",
+    "retained": null
+  },
+  {
+    "deno": "no-inner-declarations",
+    "oxlint": "eslint/no-inner-declarations",
+    "retained": null
+  },
+  {
+    "deno": "no-invalid-regexp",
+    "oxlint": "eslint/no-invalid-regexp",
+    "retained": null
+  },
+  {
+    "deno": "no-invalid-triple-slash-reference",
+    "oxlint": null,
+    "retained": "Deno compatibility lint"
+  },
+  {
+    "deno": "no-irregular-whitespace",
+    "oxlint": "eslint/no-irregular-whitespace",
+    "retained": null
+  },
+  {
+    "deno": "no-misused-new",
+    "oxlint": "typescript/no-misused-new",
+    "retained": null
+  },
+  {
+    "deno": "no-namespace",
+    "oxlint": "typescript/no-namespace",
+    "retained": null
+  },
+  {
+    "deno": "no-new-symbol",
+    "oxlint": null,
+    "retained": "Deno compatibility lint"
+  },
+  {
+    "deno": "no-obj-calls",
+    "oxlint": "eslint/no-obj-calls",
+    "retained": null
+  },
+  {
+    "deno": "no-octal",
+    "oxlint": null,
+    "retained": "Deno compatibility lint"
+  },
+  {
+    "deno": "no-prototype-builtins",
+    "oxlint": "eslint/no-prototype-builtins",
+    "retained": null
+  },
+  {
+    "deno": "no-redeclare",
+    "oxlint": "eslint/no-redeclare",
+    "retained": null
+  },
+  {
+    "deno": "no-regex-spaces",
+    "oxlint": "eslint/no-regex-spaces",
+    "retained": null
+  },
+  {
+    "deno": "no-self-assign",
+    "oxlint": "eslint/no-self-assign",
+    "retained": null
+  },
+  {
+    "deno": "no-setter-return",
+    "oxlint": "eslint/no-setter-return",
+    "retained": null
+  },
+  {
+    "deno": "no-shadow-restricted-names",
+    "oxlint": "eslint/no-shadow-restricted-names",
+    "retained": null
+  },
+  {
+    "deno": "no-sloppy-imports",
+    "oxlint": null,
+    "retained": "Deno compatibility lint"
+  },
+  {
+    "deno": "no-this-alias",
+    "oxlint": "typescript/no-this-alias",
+    "retained": null
+  },
+  {
+    "deno": "no-this-before-super",
+    "oxlint": "eslint/no-this-before-super",
+    "retained": null
+  },
+  {
+    "deno": "no-unreachable",
+    "oxlint": "eslint/no-unreachable",
+    "retained": null
+  },
+  {
+    "deno": "no-unsafe-finally",
+    "oxlint": "eslint/no-unsafe-finally",
+    "retained": null
+  },
+  {
+    "deno": "no-unsafe-negation",
+    "oxlint": "eslint/no-unsafe-negation",
+    "retained": null
+  },
+  {
+    "deno": "no-unused-labels",
+    "oxlint": "eslint/no-unused-labels",
+    "retained": null
+  },
+  {
+    "deno": "no-unused-vars",
+    "oxlint": "eslint/no-unused-vars",
+    "retained": null
+  },
+  {
+    "deno": "no-unversioned-import",
+    "oxlint": null,
+    "retained": "Deno compatibility lint"
+  },
+  {
+    "deno": "no-var",
+    "oxlint": "eslint/no-var",
+    "retained": null
+  },
+  {
+    "deno": "no-window",
+    "oxlint": null,
+    "retained": "Deno compatibility lint"
+  },
+  {
+    "deno": "no-window-prefix",
+    "oxlint": null,
+    "retained": "Deno compatibility lint"
+  },
+  {
+    "deno": "no-with",
+    "oxlint": "eslint/no-with",
+    "retained": null
+  },
+  {
+    "deno": "prefer-as-const",
+    "oxlint": "typescript/prefer-as-const",
+    "retained": null
+  },
+  {
+    "deno": "prefer-const",
+    "oxlint": "eslint/prefer-const",
+    "retained": null
+  },
+  {
+    "deno": "prefer-namespace-keyword",
+    "oxlint": "typescript/prefer-namespace-keyword",
+    "retained": null
+  },
+  {
+    "deno": "require-await",
+    "oxlint": "eslint/require-await",
+    "retained": null
+  },
+  {
+    "deno": "require-yield",
+    "oxlint": "eslint/require-yield",
+    "retained": null
+  },
+  {
+    "deno": "use-isnan",
+    "oxlint": "eslint/use-isnan",
+    "retained": null
+  },
+  {
+    "deno": "valid-typeof",
+    "oxlint": "eslint/valid-typeof",
+    "retained": null
+  }
+]

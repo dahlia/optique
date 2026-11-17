@@ -7496,10 +7496,12 @@ describe("regExp()", () => {
       const parser: ValueParser<"async", RegExp> = {
         ...spreadable,
         mode: "async",
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await -- async promotes the parser mode
         async parse(input: string) {
           return syncParser.parse(input);
         },
+        /* oxlint-enable require-await */
       };
       assert.ok(typeof parser.validate === "function");
 

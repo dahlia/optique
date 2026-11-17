@@ -320,9 +320,11 @@ describe("bindConfig", () => {
       const context = createConfigContext({ schema });
       const parser = bindConfig(option("--name", string()), {
         context,
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         key: (async (config: { name: string }) =>
           config.name.toUpperCase()) as never,
+        /* oxlint-enable require-await */
       });
       const annotations = await context.getAnnotations(phase2({}), {
         load: () => ({ config: { name: "alice" }, meta: undefined }),

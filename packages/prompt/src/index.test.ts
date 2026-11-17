@@ -449,6 +449,7 @@ describe("createPromptAdapter()", () => {
     const validatorError = new TypeError("Validation failed.");
     let adapterCalls = 0;
     const throwingPrompt = createPromptAdapter<EmptyPromptConfig>({
+      /* oxlint-disable-next-line no-unused-vars -- Preserve the generic adapter method signature. */
       execute<TValue>(
         _config: EmptyPromptConfig,
         _context: PromptExecutionContext,
@@ -557,6 +558,7 @@ describe("createPromptAdapter()", () => {
     const attempt = deferred<never>();
     const contexts: PromptExecutionContext[] = [];
     const prompt = createPromptAdapter<EmptyPromptConfig>({
+      /* oxlint-disable-next-line no-unused-vars -- Preserve the generic adapter method signature. */
       execute<TValue>(
         _config: EmptyPromptConfig,
         context: PromptExecutionContext,
@@ -1854,6 +1856,7 @@ describe("prompted values as dependency sources", () => {
     const { mode, level } = createModeFixture();
     const expected = new TypeError("Prompt library failed.");
     const prompt = createPromptAdapter<EmptyPromptConfig>({
+      /* oxlint-disable-next-line no-unused-vars -- Preserve the generic adapter method signature. */
       execute<TValue>(
         _config: EmptyPromptConfig,
         _context: PromptExecutionContext,

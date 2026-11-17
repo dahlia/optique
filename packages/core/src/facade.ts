@@ -570,6 +570,7 @@ interface CompletionParsers {
 
 const metaResultBrand: unique symbol = Symbol("@optique/core/facade/meta");
 
+/* oxlint-disable-next-line no-unused-vars -- Keep the facade result-shape documentation. */
 interface MetaParseResult {
   readonly [metaResultBrand]: true;
   readonly help: boolean;
@@ -1644,8 +1645,10 @@ function handleCompletion<M extends Mode, THelp, TError>(
         }
         return result;
       },
+      /* oxlint-disable require-await -- Keep the async contract. */
       // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
       async () => callOnError(1, error),
+      /* oxlint-enable require-await */
     );
   }
 
@@ -1683,8 +1686,10 @@ function handleCompletion<M extends Mode, THelp, TError>(
         }
         return result;
       },
+      /* oxlint-disable require-await -- Keep the async contract. */
       // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
       async () => callOnError(1, error),
+      /* oxlint-enable require-await */
     );
   }
 
@@ -1708,8 +1713,10 @@ function handleCompletion<M extends Mode, THelp, TError>(
         }
         return result;
       },
+      /* oxlint-disable require-await -- Keep the async contract. */
       // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
       async () => callOnCompletion(0),
+      /* oxlint-enable require-await */
     );
   }
 
@@ -2126,8 +2133,10 @@ function validateVersionValue(value: unknown): string {
   if (value === "") {
     throw new TypeError("Version value must not be empty.");
   }
+  /* oxlint-disable no-control-regex -- Match control characters. */
   // deno-lint-ignore no-control-regex
   if (/[\x00-\x1f\x7f]/.test(value)) {
+    /* oxlint-enable no-control-regex */
     throw new TypeError(
       "Version value must not contain control characters.",
     );

@@ -4460,7 +4460,7 @@ describe("Error handling paths", () => {
         mode: "sync",
         factory: (mode: "a" | "b") => {
           if (mode === "b") {
-            throw "string error message"; // eslint-disable-line @typescript-eslint/only-throw-error
+            throw "string error message"; // Exercise a non-Error rejection.
           }
           return string({ metavar: "VALUE" });
         },
@@ -4503,7 +4503,7 @@ describe("Error handling paths", () => {
         mode: "sync",
         factory: (mode: "a" | "b") => {
           if (mode === "b") {
-            throw 42; // eslint-disable-line @typescript-eslint/only-throw-error
+            throw 42; // Exercise a non-Error rejection.
           }
           return string({ metavar: "VALUE" });
         },
@@ -4547,7 +4547,7 @@ describe("Error handling paths", () => {
         dependencies: [dep1, dep2] as const,
         factory: (v1: "x" | "y", v2: "1" | "2") => {
           if (v1 === "y" && v2 === "2") {
-            throw { custom: "error object" }; // eslint-disable-line @typescript-eslint/only-throw-error
+            throw { custom: "error object" }; // Exercise a non-Error rejection.
           }
           return string({ metavar: "VALUE" });
         },

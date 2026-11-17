@@ -1575,13 +1575,17 @@ describe("valueSet", () => {
   it("should throw TypeError when called without fallback", () => {
     // Runtime validation for JavaScript callers or old compiled code
     assert.throws(
+      /* oxlint-disable no-explicit-any -- Keep unchecked input. */
       // deno-lint-ignore no-explicit-any
       () => (valueSet as any)([]),
+      /* oxlint-enable no-explicit-any */
       { name: "TypeError", message: /fallback/ },
     );
     assert.throws(
+      /* oxlint-disable no-explicit-any -- Keep unchecked input. */
       // deno-lint-ignore no-explicit-any
       () => (valueSet as any)([], { locale: "en" }),
+      /* oxlint-enable no-explicit-any */
       { name: "TypeError", message: /fallback/ },
     );
   });

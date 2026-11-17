@@ -2,8 +2,10 @@
  * Matches Unicode control characters: C0 (U+0000–U+001F), DEL (U+007F),
  * C1 (U+0080–U+009F), and line separators (U+2028, U+2029).
  */
+/* oxlint-disable no-control-regex -- Match control characters. */
 // deno-lint-ignore no-control-regex
 const CONTROL_CHAR_RE = /[\x00-\x1f\x7f-\x9f\u2028\u2029]/;
+/* oxlint-enable no-control-regex */
 
 const CONTROL_CHAR_RE_GLOBAL = new RegExp(CONTROL_CHAR_RE.source, "g");
 

@@ -475,8 +475,10 @@ export function gitRemoteBranch(
       }.`,
     );
   }
+  /* oxlint-disable no-control-regex -- Match control characters. */
   // deno-lint-ignore no-control-regex
   if (remote === "" || /[\s\x00-\x1f]/.test(remote)) {
+    /* oxlint-enable no-control-regex */
     throw new TypeError(
       `${expectedMessage}, but got: ${JSON.stringify(remote)}.`,
     );

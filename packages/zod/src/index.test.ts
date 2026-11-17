@@ -1191,8 +1191,10 @@ describe("zod()", () => {
     });
 
     it("should detect async boolean schemas on valid input", () => {
+      /* oxlint-disable require-await -- Keep the async contract. */
       // deno-lint-ignore require-await
       const asyncSchema = z.coerce.boolean().refine(async (v) => v === true);
+      /* oxlint-enable require-await */
       const parser = zod(asyncSchema as never, {
         placeholder: false as never,
       });
@@ -1314,10 +1316,12 @@ describe("zod()", () => {
 
     it("should throw TypeError for async superRefine on valid input", () => {
       const asyncSchema = z.coerce.boolean().superRefine(
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         async (v, ctx) => {
           if (!v) ctx.addIssue({ code: "custom", message: "bad" });
         },
+        /* oxlint-enable require-await */
       );
       const parser = zod(asyncSchema as never, {
         placeholder: false as never,
@@ -1330,8 +1334,10 @@ describe("zod()", () => {
     });
 
     it("should throw TypeError for async boolean transforms on valid input", () => {
+      /* oxlint-disable require-await -- Keep the async contract. */
       // deno-lint-ignore require-await
       const asyncTransform = z.coerce.boolean().transform(async (v) => !v);
+      /* oxlint-enable require-await */
       const parser = zod(asyncTransform as never, {
         placeholder: false as never,
       });
@@ -1344,8 +1350,10 @@ describe("zod()", () => {
 
   describe("async schema rejection", () => {
     it("should throw TypeError for async refinements", () => {
+      /* oxlint-disable require-await -- Keep the async contract. */
       // deno-lint-ignore require-await
       const asyncSchema = z.string().refine(async (value) => value === "ok");
+      /* oxlint-enable require-await */
       const parser = zod(asyncSchema as never, { placeholder: "" as never });
       assert.throws(
         () => parser.parse("ok"),
@@ -1551,8 +1559,10 @@ describe("analyzeBooleanInner()—cycle detection via z.lazy()", () => {
   it("should not infinite-loop on a self-referential lazy schema", () => {
     // Create a lazy schema that refers to itself—the WeakSet in
     // analyzeBooleanInner must break the cycle and return isBoolean=false.
+    /* oxlint-disable prefer-const -- Test recursive inference. */
     // deno-lint-ignore prefer-const
     let lazySchema: z.ZodType<unknown>;
+    /* oxlint-enable prefer-const */
     lazySchema = z.lazy(() => lazySchema);
     // If cycle detection is broken this would recurse infinitely.
     // Just constructing the parser is enough to exercise the guard.
@@ -1578,8 +1588,10 @@ describe("analyzeBooleanInner()—cycle detection via z.lazy()", () => {
   });
 
   it("should handle optional wrapping a self-referential lazy schema", () => {
+    /* oxlint-disable prefer-const -- Test recursive inference. */
     // deno-lint-ignore prefer-const
     let lazySchema: z.ZodType<unknown>;
+    /* oxlint-enable prefer-const */
     lazySchema = z.lazy(() => lazySchema);
     // optional unwraps to the lazy schema, which cycles back to itself
     const wrapped = lazySchema.optional();

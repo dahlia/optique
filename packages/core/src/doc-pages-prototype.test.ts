@@ -66,12 +66,14 @@ it("records the frozen documentation-only registry prototype outcome", () => {
     mode: "async" as const,
     placeholder: "",
     metavar: "VALUE" as const,
+    /* oxlint-disable require-await -- Keep the async contract. */
     // deno-lint-ignore require-await -- Any execution must reject immediately.
     async parse(
       _input: string,
     ): Promise<{ readonly success: true; readonly value: string }> {
       throw new Error("Runtime resolver.");
     },
+    /* oxlint-enable require-await */
     format(_value: string): string {
       throw new Error("Custom formatting.");
     },
@@ -81,10 +83,12 @@ it("records the frozen documentation-only registry prototype outcome", () => {
     validate(_value: string): never {
       throw new Error("Custom validation.");
     },
+    /* oxlint-disable require-yield -- Test an empty generator. */
     // deno-lint-ignore require-yield -- Any iteration must throw immediately.
     async *suggest(_prefix: string): AsyncGenerator<never> {
       throw new Error("Custom suggestions.");
     },
+    /* oxlint-enable require-yield */
   });
   const verbose = watch(
     optional(

@@ -403,8 +403,10 @@ describe("formatDocPage", () => {
         termWidth: "auto",
         colors: true,
       });
+      /* oxlint-disable no-control-regex -- Match control characters. */
       // deno-lint-ignore no-control-regex
       const withoutAnsi = colored.replace(/\x1B\[[0-9;:]*[@-~]/g, "");
+      /* oxlint-enable no-control-regex */
 
       assert.ok(colored.includes("\x1b["));
       assert.equal(withoutAnsi, plain);

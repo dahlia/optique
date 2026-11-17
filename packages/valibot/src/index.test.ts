@@ -980,8 +980,10 @@ describe("valibot()", () => {
     it("should throw TypeError for async validations", () => {
       const asyncSchema = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       assert.throws(
         () => valibot(asyncSchema as never, { placeholder: "" as never }),
@@ -992,8 +994,10 @@ describe("valibot()", () => {
     it("should throw TypeError for async schema inside optional()", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncSchema = v.optional(asyncInner as never);
       assert.throws(
@@ -1005,8 +1009,10 @@ describe("valibot()", () => {
     it("should throw TypeError for async schema inside nullable()", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncSchema = v.nullable(asyncInner as never);
       assert.throws(
@@ -1018,8 +1024,10 @@ describe("valibot()", () => {
     it("should not reject unions with a catch-all sync string arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // Union with a bare v.string() arm is safe because CLI input is
       // always a string, so the sync arm matches first.
@@ -1034,8 +1042,10 @@ describe("valibot()", () => {
     it("should throw TypeError for union without catch-all sync arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.literal("a") only matches "a", so non-"a" inputs reach the
       // async arm—this must be rejected.
@@ -1049,8 +1059,10 @@ describe("valibot()", () => {
     it("should not reject unions with wrapped catch-all string arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.optional(v.string()) is still a catch-all for string input
       const asyncSchema = v.union([
@@ -1067,8 +1079,10 @@ describe("valibot()", () => {
     it("should not reject union with piped non-rejecting string arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.pipe(v.string(), v.trim()) normalizes but never rejects
       const asyncSchema = v.union([
@@ -1085,8 +1099,10 @@ describe("valibot()", () => {
     it("should not reject union with v.unknown() arm after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.unknown() accepts every value, so async arm is unreachable
       // even after a type-changing transform.
@@ -1105,8 +1121,10 @@ describe("valibot()", () => {
     it("should reject union with string arm after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // After a transform, string catch-all is no longer trusted since
       // we cannot determine the output type statically.
@@ -1124,8 +1142,10 @@ describe("valibot()", () => {
     it("should throw TypeError for async schema inside intersect()", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncSchema = v.intersect([v.string(), asyncInner] as never);
       assert.throws(
@@ -1137,8 +1157,10 @@ describe("valibot()", () => {
     it("should not reject async entries in direct containers", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // Direct containers are unreachable from string input—the outer
       // type check (object/array/tuple) rejects the string first.
@@ -1159,8 +1181,10 @@ describe("valibot()", () => {
     it("should not reject async rest/promise in direct containers", () => {
       const asyncRest = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // Direct containers are unreachable from string input.
       const owrParser = valibot(
@@ -1181,8 +1205,10 @@ describe("valibot()", () => {
     it("should reject async entries after transform in pipe", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // After JSON.parse, the object schema's entries become reachable.
       const asyncSchema = v.pipe(
@@ -1199,8 +1225,10 @@ describe("valibot()", () => {
     it("should reject async union arm after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // After JSON.parse, v.string() is no longer a catch-all since
       // the value may not be a string.
@@ -1218,8 +1246,10 @@ describe("valibot()", () => {
     it("should not reject union with v.unknown() after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.unknown() is type-agnostic, so it's still catch-all after
       // transforms.
@@ -1238,8 +1268,10 @@ describe("valibot()", () => {
     it("should detect async in shared schema reused after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // Shared schema node used in both a direct (unreachable) position
       // and a post-transform (reachable) position.  The second visit
@@ -1258,8 +1290,10 @@ describe("valibot()", () => {
     it("should throw TypeError for async schema inside v.lazy()", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.lazy() wrapping async schema cannot be detected at construction
       // time because the getter depends on actual parse input.  The
@@ -1287,8 +1321,10 @@ describe("valibot()", () => {
     it("should not reject union with v.any() catch-all arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.any() accepts every value of any type—async arm is unreachable
       const asyncSchema = v.union([v.any(), asyncInner] as never);
@@ -1302,8 +1338,10 @@ describe("valibot()", () => {
     it("should not reject union with v.fallback() catch-all arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.fallback() always succeeds (returns fallback value on failure).
       // Use a rejecting inner schema so the fallback branch actually fires.
@@ -1324,8 +1362,10 @@ describe("valibot()", () => {
     it("should not reject union with v.pipe(v.unknown(), safe-transform) arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.pipe(v.unknown(), trim) is still a catch-all: unknown accepts
       // every value and the safe transformation never rejects.
@@ -1344,8 +1384,10 @@ describe("valibot()", () => {
     it("should not reject union with v.pipe(v.any(), safe-transform) arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncSchema = v.union([
         v.pipe(v.any(), v.toLowerCase() as never),
@@ -1364,8 +1406,10 @@ describe("valibot()", () => {
     it("should not reject union with v.pipe(v.string(), safe-transform) arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncSchema = v.union([
         v.pipe(v.string(), v.toUpperCase()),
@@ -1384,8 +1428,10 @@ describe("valibot()", () => {
     it("should not reject union with nested schema in string pipe catch-all", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // A string pipe whose second element is itself a catch-all schema —
       // the string pipe is still catch-all because every action accepts.
@@ -1404,8 +1450,10 @@ describe("valibot()", () => {
     it("should reject union whose string pipe arm has a validation action", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.email() is a validation—it can reject input, so the string pipe
       // is NOT a catch-all and the async arm may be reached.
@@ -1422,8 +1470,10 @@ describe("valibot()", () => {
     it("should reject async map members after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncKeySchema = v.pipe(
         v.string(),
@@ -1449,8 +1499,10 @@ describe("valibot()", () => {
     it("should reject async rest schemas after transform", () => {
       const asyncRest = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const objectSchema = v.pipe(
         v.string(),
@@ -1476,8 +1528,10 @@ describe("valibot()", () => {
     it("should propagate type-changing nested pipe schemas to later containers", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncSchema = v.pipe(
         v.string(),
@@ -1493,8 +1547,10 @@ describe("valibot()", () => {
     it("should reject async items inside containers after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // After JSON.parse, array schema's item schema becomes reachable.
       const asyncSchema = v.pipe(
@@ -1511,8 +1567,10 @@ describe("valibot()", () => {
     it("should reject async tuple items after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncSchema = v.pipe(
         v.string(),
@@ -1528,8 +1586,10 @@ describe("valibot()", () => {
     it("should reject async promise inner after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       const asyncSchema = v.pipe(
         v.string(),
@@ -1545,8 +1605,10 @@ describe("valibot()", () => {
     it("should not reject direct containers with async items (string never reaches them)", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // Without a preceding transform, CLI input is always a string.
       // v.array(), v.tuple() and v.record() reject strings before visiting
@@ -1566,8 +1628,10 @@ describe("valibot()", () => {
     it("should reject variant with async arms after transform", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // After transform the input is no longer a string, so variant arms
       // become reachable.
@@ -1587,8 +1651,10 @@ describe("valibot()", () => {
     it("should throw TypeError for union with v.pipe(v.unknown(), validation) arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.pipe(v.unknown(), v.minLength(1)) has a validation action so it is
       // NOT a catch-all: the async arm is reachable and must be rejected.
@@ -1607,8 +1673,10 @@ describe("valibot()", () => {
     it("should not throw for union with v.pipe(v.unknown(), nested-string-schema) arm", () => {
       const asyncInner = v.pipeAsync(
         v.string(),
+        /* oxlint-disable require-await -- Keep the async contract. */
         // deno-lint-ignore require-await
         v.checkAsync(async (val) => val === "ok", "not ok"),
+        /* oxlint-enable require-await */
       );
       // v.pipe(v.unknown(), v.string()) has a nested schema (kind="schema")
       // that is itself a catch-all, so the whole pipe is catch-all.  The

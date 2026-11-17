@@ -32,7 +32,11 @@
     "docs",
     "tmp/startup-baseline",
     "tmp/startup-tests",
-    "tmp/parse-scope"
+    "tmp/parse-scope",
+    "scripts/types/",
+    "scripts/check-types.ts",
+    "scripts/check-types.test.ts",
+    "scripts/tooling/"
   ],
   "fmt": {
     "exclude": [

@@ -64,8 +64,10 @@ export interface MarkdownReferenceOptions extends ProgramMetadata {
 function validateToken(token: string): void {
   if (
     typeof token !== "string" || token.length === 0 ||
+    /* oxlint-disable no-control-regex -- Match control characters. */
     // deno-lint-ignore no-control-regex -- Reject control characters in tokens.
     /[\s\x00-\x1f\x7f-\x9f]/u.test(token) || !token.isWellFormed()
+    /* oxlint-enable no-control-regex */
   ) {
     throw new TypeError(
       "Command paths and aliases must contain nonempty tokens without whitespace or control characters.",
@@ -95,8 +97,10 @@ export function getCommandReferenceAnchor(path: readonly string[]): string {
 
 function singleLine(input: string): string {
   return input.replace(/[\r\n\t]/g, " ").replace(
+    /* oxlint-disable no-control-regex -- Match control characters. */
     // deno-lint-ignore no-control-regex -- Show embedded controls as text.
     /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/g,
+    /* oxlint-enable no-control-regex */
     (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`,
   );
 }

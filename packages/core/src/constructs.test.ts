@@ -179,14 +179,18 @@ function toAsyncParser<TValue, TState>(
   const asyncParser: Parser<"async", TValue, TState> = {
     ...rest,
     mode: "async",
+    /* oxlint-disable require-await -- Keep the async contract. */
     // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
     async parse(context: ParserContext<TState>) {
       return parser.parse(context);
     },
+    /* oxlint-enable require-await */
+    /* oxlint-disable require-await -- Keep the async contract. */
     // deno-lint-ignore require-await -- async wraps synchronous throws as rejections
     async complete(state: TState, exec?: ExecutionContext) {
       return parser.complete(state, exec);
     },
+    /* oxlint-enable require-await */
     async *suggest(context: ParserContext<TState>, prefix: string) {
       for (const suggestion of parser.suggest(context, prefix)) {
         yield suggestion;
@@ -199,8 +203,10 @@ function toAsyncParser<TValue, TState>(
       // of validateValue relies on it.  Other forwarding sites in the
       // codebase use `.bind(parser)`; here we use `.call(parser, v)`
       // since we already hold a destructured reference.
+      /* oxlint-disable require-await -- Keep the async contract. */
       // deno-lint-ignore require-await -- async wraps sync result
       value: async (v: TValue) => validateValue.call(parser, v),
+      /* oxlint-enable require-await */
       configurable: true,
       enumerable: false,
     });
@@ -11219,6 +11225,7 @@ describe("conditional", () => {
         object({}),
       );
 
+      /* oxlint-disable-next-line no-unused-vars -- Keep the compile-time inference assertion. */
       type ParsedType = InferValue<typeof parser>;
 
       const result = parseSync(parser, ["--format", "json", "--pretty"]);

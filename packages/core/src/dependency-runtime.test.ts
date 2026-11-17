@@ -1321,8 +1321,10 @@ describe("extractRawInputFromState", () => {
         success: true as const,
         value: undefined,
       }),
+      /* oxlint-disable no-explicit-any -- Keep unchecked input. */
       // deno-lint-ignore no-explicit-any
     } as any;
+    /* oxlint-enable no-explicit-any */
   }
 
   test("extracts rawInput from DeferredParseState", () => {

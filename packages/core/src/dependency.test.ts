@@ -5269,8 +5269,10 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
             metavar: "VALUE",
             factory: () => choice(["x"] as const),
             defaultValue: () => "a" as const,
+            /* oxlint-disable no-explicit-any -- Keep unchecked input. */
             // deno-lint-ignore no-explicit-any
           } as any,
+          /* oxlint-enable no-explicit-any */
         );
       },
       (err: unknown) =>
@@ -5290,8 +5292,10 @@ describe("deriveSync/deriveFromSync/deriveFromAsync: factory default branch not 
             dependencies: [] as const,
             factory: () => choice(["x"] as const),
             defaultValues: () => [] as const,
+            /* oxlint-disable no-explicit-any -- Keep unchecked input. */
             // deno-lint-ignore no-explicit-any
           } as any,
+          /* oxlint-enable no-explicit-any */
         );
       },
       (err: unknown) =>

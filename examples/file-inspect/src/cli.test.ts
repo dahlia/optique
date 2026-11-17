@@ -99,8 +99,10 @@ it("escapes terminal controls in filesystem error messages", () =>
     assert.match(result.stderr, /^file-inspect: .*missing/);
     assert.ok(result.stderr.endsWith("\n"));
     // Only the final diagnostic newline may contain a control character.
+    /* oxlint-disable no-control-regex -- Match control characters. */
     // deno-lint-ignore no-control-regex
     assert.doesNotMatch(result.stderr.slice(0, -1), /[\x00-\x1f\x7f-\x9f]/);
+    /* oxlint-enable no-control-regex */
   }));
 
 it("escapes Unicode format characters in filesystem errors", () =>

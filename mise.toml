@@ -33,7 +33,7 @@ run = "node scripts/setup_deno.smoke.ts"
 
 [tasks.check]
 description = "Check code formatting, linting, and type checking"
-depends = ["check:*"]
+depends = ["check:versions", "check:type", "check:lint", "check:fmt", "check:fmt-md"]
 run = "sacho check"
 
 [tasks."check:versions"]
@@ -51,18 +51,21 @@ if $env.usage_fix? == "true" {
 '''
 
 [tasks."check:type"]
-tools = { deno = "2.9" }
-description = "Check TypeScript code"
-run = "deno check"
+description = "Check owned source and inference contracts without building"
+run = "node --max-old-space-size=2048 scripts/check-types.ts"
 
 [tasks."check:lint"]
+description = "Check mapped source lint rules using Oxlint"
+run = "node scripts/tooling/check-lint.mjs"
+
+[tasks."check:deno"]
 tools = { deno = "2.9" }
-description = "Check lint"
-run = "deno lint"
+description = "Check Deno types and all recommended compatibility lint rules"
+run = ["deno check", "deno lint"]
 
 [tasks."check:fmt"]
 tools = { deno = "2.9" }
-description = "Check source format (except for Markdown docs)"
+description = "Check transitional Deno source format (until Oxfmt adoption)"
 run = "deno fmt --check"
 
 [tasks."check:fmt-md"]
@@ -107,7 +110,28 @@ run = "pnpm run -r test:bun"
 
 [tasks.test]
 description = "Run the test suite across all environments"
-depends = ["check", "test:*"]
+depends = ["dev", "check:deno", "check:publish", "test:deno", "test:bun"]
+
+[tasks.dev]
+description = "Run Node checks/tests (transitional formatter still uses Deno)"
+depends = ["check", "test:node"]
+
+[tasks."test:tooling"]
+description = "Test Node-only compiler and repository tooling"
+depends = ["build"]
+run = ["node --test scripts/check-types.test.ts", "node --test scripts/tooling/*.test.mjs"]
+
+[tasks."oxfmt:inventory"]
+description = "List preparatory Oxfmt ownership; not the active format gate"
+run = "node scripts/tooling/format.mjs --list"
+
+[tasks."oxfmt:check"]
+description = "Check preparatory Oxfmt format (not yet a required gate)"
+run = "node scripts/tooling/format.mjs --check"
+
+[tasks."oxfmt:write"]
+description = "Explicitly apply preparatory Oxfmt format"
+run = "node scripts/tooling/format.mjs --write"
 
 [tasks.build]
 description = "Build all packages for npm publishing"
@@ -141,13 +165,13 @@ description = "Test the CLI boundary across all runtimes"
 depends = ["testing:cli:deno", "testing:cli:node", "testing:cli:bun"]
 
 [tasks.coverage]
-tools = { deno = "2.9" }
-description = "Measure test coverage"
-run = [
-  "deno test --allow-read --allow-write --allow-run --allow-env --allow-net --allow-sys --allow-ffi --env-file=.env.test --coverage=coverage/raw",
-  'deno coverage coverage/raw --lcov --include="packages/" --output=coverage/lcov.info',
-  'deno coverage coverage/raw --include="packages/"',
-]
+description = "Measure Node source coverage and validate LCOV/JUnit"
+depends = ["build"]
+run = "node scripts/tooling/run-coverage.mjs"
+
+[tasks."coverage:smoke"]
+description = "Verify bounded Temporal source coverage and reports"
+run = "node scripts/tooling/run-coverage.mjs --smoke"
 
 [tasks."file-inspect:deps"]
 description = "Install the file inspection workspace dependencies"

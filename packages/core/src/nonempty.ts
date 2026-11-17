@@ -7,8 +7,10 @@
  *
  * @since 0.9.0
  */
+/* oxlint-disable no-explicit-any -- Keep unchecked input. */
 // deno-lint-ignore no-explicit-any
 export type NonEmptyString = `${any}${string}`;
+/* oxlint-enable no-explicit-any */
 
 /**
  * Checks if a string is non-empty.

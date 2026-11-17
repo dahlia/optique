@@ -211,6 +211,7 @@ describe("usage of empty-input behavior", () => {
 });
 
 /** Formats a usage to plain notation, as the formatters see it. */
+/* oxlint-disable-next-line no-unused-vars -- Keep the recursive usage normalization fixture. */
 function stripRecords(term: UsageTerm): UsageTerm {
   switch (term.type) {
     case "optional":

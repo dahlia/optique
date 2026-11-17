@@ -5349,10 +5349,12 @@ describe("Async exception handling", () => {
         parse(input: string): Promise<ValueParserResult<string>> {
           return Promise.resolve({ success: true, value: input });
         },
+        /* oxlint-disable require-yield -- Test an empty generator. */
         // deno-lint-ignore require-yield
         async *suggest(_prefix: string): AsyncIterable<Suggestion> {
           throw new Error("Suggest threw an error");
         },
+        /* oxlint-enable require-yield */
         format(value: string): string {
           return value;
         },
