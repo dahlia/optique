@@ -528,18 +528,18 @@ export function defineCommand<M extends Mode, T, R = unknown>(
   if (command == null || typeof command !== "object") {
     throw new TypeError("Expected object.");
   }
-  if (!isParser(command.parser)) {
+  const { default: isDefault, ...definition } = command;
+  if (!isParser(definition.parser)) {
     throw new TypeError("Command parser must be an Optique parser.");
   }
-  if (command.path != null) validateCommandPath(command.path);
-  const { default: isDefault, ...definition } = command;
+  if (definition.path != null) validateCommandPath(definition.path);
   if (isDefault !== undefined && typeof isDefault !== "boolean") {
     throw new TypeError("Command default must be a boolean.");
   }
-  if (typeof command.handler !== "function") {
+  if (typeof definition.handler !== "function") {
     throw new TypeError("Command handler must be a function.");
   }
-  if (command.hooks != null) validateHooks(command.hooks, "Command");
+  if (definition.hooks != null) validateHooks(definition.hooks, "Command");
   return {
     ...definition,
     ...(isDefault === undefined ? {} : { default: isDefault }),

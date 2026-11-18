@@ -45,6 +45,21 @@ import {
 } from "#src/index.ts";
 
 describe("defineCommand()", () => {
+  it("validates the same handler value it returns", () => {
+    let reads = 0;
+    const handler = () => {};
+    const definition = defineCommand({
+      parser: object({}),
+      get handler() {
+        reads++;
+        if (reads !== 1) throw new Error("Handler was read twice.");
+        return handler;
+      },
+    });
+    assert.equal(definition.handler, handler);
+    assert.equal(reads, 1);
+  });
+
   it("keeps a validated inherited default marker", () => {
     let reads = 0;
     const input = {
