@@ -161,6 +161,12 @@ For large command trees, pass `commandList: "top-level"` to keep root help
 focused on first-level command groups while subcommand help remains available
 through `<command> --help`.
 
+Pass `defaultCommand` to `runProgram()` or set `default: true` in
+`defineCommand()` to use a command when the first token matches neither a
+registered command nor an enabled runner meta entry point. The same command
+can also be registered by name. Root help and shell completion include the
+default command's arguments.
+
 *The `help.bareGroup` option is available since Optique 1.4.0.*
 
 Set `help: { bareGroup: "always" }` to show help when the

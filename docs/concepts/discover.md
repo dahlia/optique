@@ -222,6 +222,55 @@ command's options and positional arguments. Use `admin ./help` or
 `runProgram()`; `createProgramParser()` retains the ordinary parser combinator
 rules.
 
+### Default command
+
+*Available since Optique 1.4.0.*
+
+Set `defaultCommand` on `runProgram()` to run a command when the first token
+does not match a registered command or an enabled help, version, or completion
+entry point. The default need not be registered. To let users invoke it by
+name as well, pass the same definition in `commands`.
+
+~~~~ typescript twoslash
+import { argument } from "@optique/core/primitives";
+import { string } from "@optique/core/valueparser";
+import { defineCommand, runProgram } from "@optique/discover";
+
+const run = defineCommand({
+  path: ["run"],
+  parser: argument(string({ metavar: "SOURCE" })),
+  handler(source) {
+    console.log(source);
+  },
+});
+
+await runProgram({
+  commands: [run],
+  defaultCommand: run,
+  metadata: { name: "app" },
+});
+~~~~
+
+For file-based discovery, set `default: true` in `defineCommand()`. This
+works for both named commands and the root command in *commands/index.ts*.
+If you use both forms, they must refer to the same definition. A default
+cannot coexist with a separate root command.
+
+You can also pass an explicit `defaultCommand` with an empty discovery
+directory. Without an explicit default, an empty directory is still an error.
+
+With a registered `build` command, `app build` selects that command even
+when its arguments are invalid. `app ./build` and `app -- build` pass the
+value to the default. An ordinary option in the first position also selects
+the default; `app --module build` never searches ahead for a command name.
+Later meta options still follow the runner's parser-aware rules.
+
+Root help includes the default command's arguments and options. Root shell
+completion can suggest its positional values alongside command names.
+Lifecycle hooks receive the registered path for both forms of a named default,
+or `[]` if the default has no registration. Neither default declaration
+changes the behavior of `createProgramParser()`.
+
 You can disable or customize these runner features with the same option shapes
 accepted by `run()`:
 

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { object } from "@optique/core/constructs";
+import { object, or } from "@optique/core/constructs";
 import type { SourceContext } from "@optique/core/context";
 import { dependency } from "@optique/core/dependency";
 import { multiple, withDefault } from "@optique/core/modifiers";
-import { argument, option } from "@optique/core/primitives";
+import { argument, command, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { runProgram, type RunProgramOptions } from "#src/index.ts";
 import { defineCommand } from "#src/command.ts";
@@ -389,6 +389,437 @@ describe("runProgram() root command precedence", () => {
     assert.match(result.stderr, /--verbose/);
     assert.match(result.stderr, /Error:/);
     assert.deepEqual(calls, []);
+  });
+});
+
+describe("explicit default commands", () => {
+  it("reuses a named definition without retrying a selected command", async () => {
+    const calls: string[] = [];
+    const run = defineCommand({
+      path: ["run"],
+      parser: argument(string()),
+      handler(value) {
+        calls.push(value);
+      },
+    });
+    const build = defineCommand({
+      path: ["build"],
+      parser: argument(string()),
+      handler() {
+        calls.push("build");
+      },
+    });
+    const options = {
+      ...presentation,
+      commands: [run, build],
+      defaultCommand: run,
+      hooks: {
+        beforeEach({ path }: { readonly path: readonly string[] }) {
+          assert.deepEqual(path, ["run"]);
+        },
+      },
+    };
+    for (const args of [["file.ts"], ["run", "file.ts"], ["--", "build"]]) {
+      assert.equal((await captureProgramRun({ ...options, args })).exitCode, 0);
+    }
+    assert.equal(
+      (await captureProgramRun({ ...options, args: ["build"] })).exitCode,
+      1,
+    );
+    assert.deepEqual(calls, ["file.ts", "file.ts", "build"]);
+  });
+
+  it("reserves enabled meta entry points without parsing the default", async () => {
+    let handled = 0;
+    let parsed = 0;
+    const parser = object({
+      help: option("--help"),
+      source: multiple(argument(string({ metavar: "SOURCE" }))),
+    });
+    const run = defineCommand({
+      path: ["run"],
+      default: true,
+      parser: {
+        ...parser,
+        parse(context: Parameters<typeof parser.parse>[0]) {
+          parsed++;
+          return parser.parse(context);
+        },
+      },
+      handler() {
+        handled++;
+      },
+    });
+    const { build } = fixture();
+    const options = {
+      ...presentation,
+      commands: [run, build],
+      version: { value: "1.2.3", command: true, option: true } as const,
+      aboveError: "help" as const,
+    };
+    assert.match(
+      (await captureProgramRun({ ...options, args: ["--help"] })).stdout,
+      /SOURCE/,
+    );
+    const selfHelp = await captureProgramRun({
+      ...options,
+      help: {
+        command: { names: ["help", "assist"] },
+        option: { names: ["--help", "-?"] },
+      },
+      args: ["assist", "-?"],
+    });
+    assert.equal(selfHelp.exitCode, 0, selfHelp.stderr);
+    assert.match(selfHelp.stdout, /help \[COMMAND/);
+    assert.match(
+      (await captureProgramRun({ ...options, args: ["help", "b"] })).stdout,
+      /--output/,
+    );
+    assert.match(
+      (await captureProgramRun({ ...options, args: ["help", "file.ts"] }))
+        .stderr,
+      /Unknown command/,
+    );
+    assert.match(
+      (await captureProgramRun({ ...options, args: ["--version", "--help"] }))
+        .stdout,
+      /^1\.2\.3\n$/,
+    );
+    assert.equal(
+      (
+        await captureProgramRun({
+          ...options,
+          args: ["help", "build", "--version"],
+        })
+      ).exitCode,
+      1,
+    );
+    assert.match(
+      (await captureProgramRun({ ...options, args: ["version", "extra"] }))
+        .stderr,
+      /SOURCE/,
+    );
+    assert.equal(handled, 0);
+    assert.equal(parsed, 0);
+  });
+
+  it("documents commands matched within the implicit default", async () => {
+    const parser = command(
+      "sub",
+      command("nested", object({ flag: option("--sub-flag") }), {
+        usageLine: [{ type: "literal", value: "custom-nested-usage" }],
+      }),
+    );
+    const run = defineCommand({
+      path: ["run"],
+      parser: {
+        ...parser,
+        parse(context: Parameters<typeof parser.parse>[0]) {
+          const outer = parser.parse(context);
+          if (!outer.success || outer.consumed[0] !== "sub") return outer;
+          const inner = parser.parse(outer.next);
+          return inner.success
+            ? { ...inner, consumed: [...outer.consumed, ...inner.consumed] }
+            : outer;
+        },
+      },
+      handler() {
+        assert.fail("Help must not dispatch a handler.");
+      },
+    });
+    for (const args of [
+      ["sub", "nested", "--help"],
+      ["run", "sub", "nested", "--help"],
+      ["sub", "nested", "--sub-flag", "--help"],
+    ]) {
+      const result = await captureProgramRun({
+        ...presentation,
+        commands: [run],
+        defaultCommand: run,
+        args,
+      });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.match(result.stdout, /--sub-flag/);
+      assert.match(result.stdout, /custom-nested-usage/);
+    }
+  });
+
+  it("does not complete unregistered commands from the root default after help", async () => {
+    const root = defineCommand({
+      path: [],
+      default: true,
+      parser: command("inspect", object({})),
+      handler() {},
+    });
+    const { build } = fixture();
+    const options = { ...presentation, commands: [root, build] };
+    const suggestions = await captureProgramRun({
+      ...options,
+      args: ["completion", "bash", "help", ""],
+    });
+    assert.match(suggestions.stdout, /^build$/m);
+    assert.doesNotMatch(suggestions.stdout, /^inspect$/m);
+    assert.equal(
+      (await captureProgramRun({ ...options, args: ["help", "inspect"] }))
+        .exitCode,
+      1,
+    );
+  });
+
+  it("keeps the separator ahead of a registered name or alias", async () => {
+    const { root, calls } = fixture();
+    const named = defineCommand({
+      path: ["build"],
+      metadata: { aliases: ["--"] },
+      parser: object({}),
+      handler() {
+        calls.push("named");
+      },
+    });
+    const options = {
+      ...presentation,
+      commands: [named],
+      defaultCommand: root,
+    };
+    await runProgram({ ...options, args: ["--", "build"] });
+    await runProgram({ ...options, args: ["build"] });
+    assert.deepEqual(calls, [["root", ["build"]], "named"]);
+  });
+
+  it("uses the matched completion entry point in generated scripts", async () => {
+    const named = defineCommand({
+      path: ["completion"],
+      parser: object({}),
+      handler() {},
+    });
+    const { root } = fixture();
+    const options = {
+      ...presentation,
+      commands: [named],
+      defaultCommand: root,
+      completion: {
+        command: { names: ["completion", "completions"] },
+      } as const,
+    };
+    const script = await captureProgramRun({
+      ...options,
+      args: ["completions", "bash"],
+    });
+    assert.equal(script.exitCode, 0, script.stderr);
+    assert.match(script.stdout, /admin 'completions' 'bash'/);
+    const suggestions = await captureProgramRun({
+      ...options,
+      help: {
+        command: { names: ["help", "assist"] },
+        option: { names: ["--help", "--assist"] },
+      },
+      args: ["completions", "bash", ""],
+    });
+    assert.doesNotMatch(suggestions.stdout, /^assist$/m);
+    assert.match(suggestions.stdout, /^--assist$/m);
+  });
+
+  it("keeps attached completion options in the script callback", async () => {
+    const named = defineCommand({
+      path: ["--completion"],
+      parser: object({}),
+      handler() {},
+    });
+    const { root } = fixture();
+    const script = await captureProgramRun({
+      ...presentation,
+      commands: [named],
+      defaultCommand: root,
+      args: ["--completion=bash"],
+    });
+    assert.equal(script.exitCode, 0, script.stderr);
+    assert.match(script.stdout, /admin '--completion=bash'/);
+  });
+
+  it("allows a registered name to shadow a command inside the default", async () => {
+    const calls: string[] = [];
+    const run = defineCommand({
+      parser: or(command("build", object({})), command("inspect", object({}))),
+      handler() {
+        calls.push("default");
+      },
+    });
+    const build = defineCommand({
+      path: ["build"],
+      parser: object({}),
+      handler() {
+        calls.push("registered");
+      },
+    });
+    const options = { ...presentation, commands: [build], defaultCommand: run };
+    await runProgram({ ...options, args: ["inspect"] });
+    await runProgram({ ...options, args: ["build"] });
+    assert.deepEqual(calls, ["default", "registered"]);
+    const duplicate = defineCommand({
+      ...build,
+      path: ["other"],
+      metadata: { aliases: ["build"] },
+    });
+    await assert.rejects(
+      runProgram({
+        ...options,
+        commands: [build, duplicate],
+        args: ["inspect"],
+      }),
+      TypeError,
+    );
+  });
+
+  it("suggests default positionals only before committing to another branch", async () => {
+    const run = defineCommand({
+      parser: multiple(argument(choice(["alpha", "build", "help"]))),
+      handler() {
+        assert.fail("Completion must not dispatch a handler.");
+      },
+    });
+    const { build } = fixture();
+    const add = defineCommand({
+      path: ["remote", "add"],
+      parser: object({}),
+      handler() {},
+    });
+    for (const head of [["completion", "bash"], ["--completion=bash"]]) {
+      const suggest = (words: string[]) =>
+        captureProgramRun({
+          ...presentation,
+          commands: [build, add],
+          defaultCommand: run,
+          args: [...head, ...words],
+        });
+      const root = await suggest([""]);
+      assert.match(root.stdout, /alpha/);
+      assert.match(root.stdout, /build/);
+      assert.match(root.stdout, /completion/);
+      assert.match((await suggest(["he"])).stdout, /help/);
+      assert.doesNotMatch((await suggest(["help", ""])).stdout, /alpha/);
+      assert.match((await suggest(["help", "b"])).stdout, /^build$/m);
+      assert.match((await suggest(["help", "remote", ""])).stdout, /^add$/m);
+      assert.doesNotMatch((await suggest(["b", "bad", ""])).stdout, /alpha/);
+      assert.match((await suggest(["alpha", "--h"])).stdout, /--help/);
+      assert.match((await suggest(["b", "1", "--h"])).stdout, /--help/);
+    }
+  });
+
+  it("does not suggest meta names shadowed by hidden commands or aliases", async () => {
+    const hidden = defineCommand({
+      path: ["help"],
+      metadata: { hidden: true, aliases: ["version"] },
+      parser: object({}),
+      handler() {},
+    });
+    const { root } = fixture();
+    const result = await captureProgramRun({
+      ...presentation,
+      commands: [hidden],
+      defaultCommand: root,
+      version: { value: "1.2.3", command: true },
+      args: ["completion", "bash", ""],
+    });
+    assert.equal(result.exitCode, 0);
+    assert.doesNotMatch(result.stdout, /^(help|version)(?=[\t\n])/m);
+  });
+
+  it("resolves help for subcommands defined inside a named parser", async () => {
+    const tool = defineCommand({
+      path: ["tool"],
+      parser: command("sub", object({ flag: option("--sub-flag") })),
+      handler() {
+        assert.fail("Help must not dispatch a handler.");
+      },
+    });
+    const { root } = fixture();
+    for (const args of [
+      ["help", "tool", "sub"],
+      ["tool", "sub", "--help"],
+    ]) {
+      const result = await captureProgramRun({
+        ...presentation,
+        commands: [tool],
+        defaultCommand: root,
+        args,
+      });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.match(result.stdout, /--sub-flag/);
+    }
+    const suggestions = await captureProgramRun({
+      ...presentation,
+      commands: [tool],
+      defaultCommand: root,
+      args: ["completion", "bash", "help", "tool", ""],
+    });
+    assert.match(suggestions.stdout, /^sub$/m);
+  });
+
+  it("completes a help path after command-free usage branches", async () => {
+    const flags = Object.fromEntries(
+      Array.from({ length: 24 }, (_, i) => [`flag${i}`, option(`--flag-${i}`)]),
+    );
+    const tool = defineCommand({
+      path: ["tool"],
+      parser: object({
+        ...flags,
+        branch: or(
+          command("inspect", object({})),
+          option("--first"),
+          option("--second"),
+        ),
+        sub: command("sub", object({})),
+      }),
+      handler() {},
+    });
+    const { root } = fixture();
+    const suggestions = await captureProgramRun({
+      ...presentation,
+      commands: [tool],
+      defaultCommand: root,
+      args: ["completion", "bash", "help", "tool", ""],
+    });
+    assert.equal(suggestions.exitCode, 0, suggestions.stderr);
+    assert.match(suggestions.stdout, /^inspect$/m);
+    assert.match(suggestions.stdout, /^sub$/m);
+  });
+
+  it("validates competing declarations and permits a standalone default", async () => {
+    const calls: string[] = [];
+    const first = defineCommand({
+      path: ["first"],
+      default: true,
+      parser: argument(string()),
+      handler(value) {
+        calls.push(value);
+      },
+    });
+    const second = defineCommand({
+      path: ["second"],
+      parser: argument(string()),
+      handler() {},
+    });
+    await assert.rejects(
+      runProgram({
+        ...presentation,
+        commands: [first],
+        defaultCommand: second,
+      }),
+      /Only one default command/,
+    );
+    await runProgram({
+      ...presentation,
+      commands: [first],
+      defaultCommand: first,
+      args: ["value"],
+    });
+    await runProgram({
+      ...presentation,
+      commands: [],
+      defaultCommand: first,
+      args: ["first"],
+    });
+    assert.deepEqual(calls, ["value", "first"]);
   });
 });
 

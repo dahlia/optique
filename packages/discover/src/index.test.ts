@@ -44,7 +44,70 @@ import {
   runProgram,
 } from "#src/index.ts";
 
+it("runs an explicit default from an empty discovery directory", async () => {
+  const dir = await makeTempDir();
+  try {
+    const values: string[] = [];
+    const defaultCommand = defineCommand({
+      parser: argument(string()),
+      handler(value) {
+        values.push(value);
+      },
+    });
+    const options = { dir, metadata: { name: "app" }, args: ["file.ts"] };
+    await assert.rejects(discoverCommands({ dir }), /No command modules/);
+    await assert.rejects(runProgram(options), /No command modules/);
+    await runProgram({ ...options, defaultCommand });
+    assert.deepEqual(values, ["file.ts"]);
+    await assert.rejects(
+      runProgram({ ...options, dir: join(dir, "missing"), defaultCommand }),
+      { code: "ENOENT" },
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 describe("defineCommand()", () => {
+  it("validates the same handler value it returns", () => {
+    let reads = 0;
+    const handler = () => {};
+    const definition = defineCommand({
+      parser: object({}),
+      get handler() {
+        reads++;
+        if (reads !== 1) throw new Error("Handler was read twice.");
+        return handler;
+      },
+    });
+    assert.equal(definition.handler, handler);
+    assert.equal(reads, 1);
+  });
+
+  it("keeps a validated inherited default marker", () => {
+    let reads = 0;
+    const input = {
+      __proto__: {
+        get default() {
+          reads++;
+          return true;
+        },
+      },
+      parser: object({}),
+      handler() {},
+    };
+    const definition = defineCommand(input);
+    assert.ok(definition.default);
+    assert.equal(reads, 1);
+    assert.ok(
+      !Object.hasOwn(
+        defineCommand({ parser: input.parser, handler() {} }),
+        "default",
+      ),
+    );
+    assert.ok(defineCommand({ ...input, default: false }).default === false);
+  });
+
   it("preserves handler value inference", () => {
     defineCommand({
       parser: object({

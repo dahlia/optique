@@ -113,7 +113,7 @@ function inspect(node: ts.Node): void {
       assert.ok(
         parent != null &&
           ts.isFunctionDeclaration(parent) &&
-          parent.name?.text === "discoverCommands",
+          parent.name?.text === "discoverCommandEntries",
       );
       assert.match(
         argument.getText(source),

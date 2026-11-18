@@ -1,4 +1,4 @@
-import { getHelpRequest } from "./internal/help-request.ts";
+import { getDefaultDispatch, getHelpRequest } from "./internal/help-request.ts";
 import {
   collectActiveOptionNames,
   collectRootOptionNames,
@@ -71,6 +71,7 @@ import {
   attemptParseAsync,
   attemptParseSync,
   createEffectfulCompletionSession,
+  getDocPageForConsumedPrefix,
   type ParseAttempt,
 } from "./internal/parser.ts";
 import { dispatchByMode } from "./internal/mode-dispatch.ts";
@@ -417,6 +418,12 @@ function extractPhase2SeedSync(
   do {
     const result = parser.parse(context);
     if (!result.success) {
+      if (
+        context.buffer === args &&
+        getDefaultDispatch(parser)?.isNamed(args[0])
+      ) {
+        return undefined;
+      }
       return completeOrExtractPhase2Seed(
         parser,
         context.state,
@@ -449,6 +456,12 @@ async function extractPhase2SeedAsync(
   do {
     const result = await parser.parse(context);
     if (!result.success) {
+      if (
+        context.buffer === args &&
+        getDefaultDispatch(parser)?.isNamed(args[0])
+      ) {
+        return undefined;
+      }
       return await completeOrExtractPhase2Seed(
         parser,
         context.state,
@@ -790,11 +803,13 @@ type ParsedResult =
       readonly type: "help";
       readonly commands: readonly string[];
       readonly preferUserCommandDocs?: boolean;
+      readonly parsedDefaultPrefix?: readonly string[];
     }
   | { readonly type: "version" }
   | {
       readonly type: "completion";
       readonly source: "command" | "option";
+      readonly scriptArgs?: readonly string[];
       readonly shell: string;
       readonly commandPath?: readonly string[];
       readonly args: readonly string[];
@@ -803,7 +818,94 @@ type ParsedResult =
       readonly type: "error";
       readonly error: Message;
       readonly commandPath: readonly string[];
+      readonly rootDocs?: boolean;
     };
+
+type MetaFeatures = Pick<
+  RunOptions<unknown, unknown>,
+  "help" | "version" | "completion"
+>;
+
+function getFirstMetaEntries(options: MetaFeatures) {
+  return [
+    ["help", "command", options.help?.command, "help"],
+    ["version", "command", options.version?.command, "version"],
+    ["completion", "command", options.completion?.command, "completion"],
+    ["help", "option", options.help?.option, "--help"],
+    ["version", "option", options.version?.option, "--version"],
+    ["completion", "option", options.completion?.option, "--completion"],
+  ] as const;
+}
+
+function matchFirstMeta(
+  parser: object,
+  options: MetaFeatures,
+  args: readonly string[],
+) {
+  const first = args[0];
+  const dispatch = getDefaultDispatch(parser);
+  if (
+    dispatch == null ||
+    first == null ||
+    first === "--" ||
+    dispatch.isNamed(first)
+  ) {
+    return undefined;
+  }
+  for (const [feature, form, config, fallback] of getFirstMetaEntries(
+    options,
+  )) {
+    if (!config) continue;
+    for (const name of (config === true ? undefined : config.names) ?? [
+      fallback,
+    ]) {
+      if (first === name) return { feature, form, name, attached: undefined };
+      if (
+        feature === "completion" &&
+        form === "option" &&
+        first.startsWith(`${name}=`)
+      ) {
+        return { feature, form, name, attached: first.slice(name.length + 1) };
+      }
+    }
+  }
+  return undefined;
+}
+
+function classifyFirstMeta(
+  entry: NonNullable<ReturnType<typeof matchFirstMeta>>,
+  args: readonly string[],
+  helpOptionNames: readonly string[],
+): ParsedResult {
+  const next = args[1];
+  if (entry.form === "command" && helpOptionNames.includes(next)) {
+    return { type: "help", commands: [entry.name] };
+  }
+  switch (entry.feature) {
+    case "help":
+      return {
+        type: "help",
+        commands: entry.form === "command" ? args.slice(1) : [],
+      };
+    case "version":
+      return entry.form === "option" || next == null
+        ? { type: "version" }
+        : {
+            type: "error",
+            error: message`Unexpected option or argument: ${next}.`,
+            commandPath: [],
+            rootDocs: true,
+          };
+    case "completion":
+      return {
+        type: "completion",
+        source: entry.form,
+        scriptArgs: args.slice(0, entry.attached == null ? 2 : 1),
+        shell: entry.attached ?? next ?? "",
+        args: args.slice(entry.attached == null ? 2 : 1),
+      };
+  }
+}
 
 /**
  * Systematically combines the original parser with help, version, and completion parsers.
@@ -1069,6 +1171,8 @@ function classifyParseFailure(
   versionCommandNames: readonly string[],
   completionOptionNames: readonly string[],
   completionCommandNames: readonly string[],
+  implicitDefault = false,
+  args: readonly string[] = [],
 ): Exclude<ParsedResult, { readonly type: "success" }> {
   if (failure.remainingArgs.length < 1) {
     return {
@@ -1151,12 +1255,17 @@ function classifyParseFailure(
     }
     return {
       type: "help",
-      commands: getHelpCommandContext(
-        failure.commandPath,
-        failure.remainingArgs,
-        winner.index,
-      ),
+      commands: implicitDefault
+        ? failure.commandPath
+        : getHelpCommandContext(
+            failure.commandPath,
+            failure.remainingArgs,
+            winner.index,
+          ),
       preferUserCommandDocs: failure.commandPath.length > 0,
+      ...(implicitDefault && failure.commandPath.length > 0
+        ? { parsedDefaultPrefix: args.slice(0, failure.consumedCount) }
+        : {}),
     };
   }
 
@@ -1566,6 +1675,8 @@ function handleCompletion<M extends Mode, THelp, TError>(
   theme?: TerminalTheme,
   automaticWidth = false,
   errors?: NonNullable<RunOptions<THelp, TError>["completion"]>["errors"],
+  includeCommandSuggestions = false,
+  scriptArgs?: readonly string[],
 ): ModeValue<M, THelp | TError> {
   const errorOptions = <T extends object>(format: T): T =>
     automaticWidth
@@ -1700,10 +1811,10 @@ function handleCompletion<M extends Mode, THelp, TError>(
     const completionArg = isOptionMode
       ? (completionOptionDisplayName ?? "--completion")
       : (completionCommandDisplayName ?? "completion");
-    const script = shell.generateScript(programName, [
-      completionArg,
-      shellName,
-    ]);
+    const script = shell.generateScript(
+      programName,
+      scriptArgs ?? [completionArg, shellName],
+    );
     stdout(script);
 
     return dispatchByMode(
@@ -1737,6 +1848,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
         args,
         rootOptionSuggestions,
         completionSuggestions.argumentContext,
+        includeCommandSuggestions,
       );
       for (const chunk of shell.encodeSuggestions(suggestions)) {
         stdout(chunk);
@@ -1760,6 +1872,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
           args,
           rootOptionSuggestions,
           completionSuggestions.argumentContext,
+          includeCommandSuggestions,
         ),
       )) {
         stdout(chunk);
@@ -1774,6 +1887,7 @@ function withRootOptionSuggestions(
   args: readonly string[],
   extraSuggestions: readonly LiteralSuggestion[],
   argumentContext: CompletionArgumentContext,
+  includeCommandSuggestions = false,
 ): readonly Suggestion[] {
   if (extraSuggestions.length === 0) return suggestions;
 
@@ -1790,6 +1904,7 @@ function withRootOptionSuggestions(
     return suggestions;
   }
   if (
+    !includeCommandSuggestions &&
     !(
       prefix === "" ||
       prefix.startsWith("--") ||
@@ -2430,6 +2545,11 @@ export function runParser<
     versionOptionConfig,
     versionOptionNames,
   );
+  const defaultDispatch = getDefaultDispatch(parser);
+  const firstMeta = matchFirstMeta(parser, options, args);
+  const implicitDefault =
+    defaultDispatch != null &&
+    (args[0] == null || !defaultDispatch.isNamed(args[0]));
 
   // Validate only meta/meta collisions. Parser-defined names may now overlap
   // with meta names; the runner resolves those cases parser-first at runtime.
@@ -2627,19 +2747,61 @@ export function runParser<
         stdout(versionValue!);
         return onVersion(0);
 
-      case "completion":
+      case "completion": {
+        const completionInput = [
+          ...(classified.commandPath ?? []),
+          ...classified.args,
+        ];
+        const completed = completionInput.slice(0, -1);
+        const meta = matchFirstMeta(parser, options, completed);
+        const completionView =
+          meta?.feature === "help"
+            ? meta.form === "command"
+              ? helpParsers.helpCommand
+              : helpParsers.helpOption
+            : meta?.feature === "version"
+              ? meta.form === "command"
+                ? versionParsers.versionCommand
+                : versionParsers.versionOption
+              : meta?.feature === "completion"
+                ? meta.form === "command"
+                  ? completionParsers.completionCommand
+                  : completionParsers.completionOption
+                : null;
+        const entryPointSuggestions: readonly LiteralSuggestion[] =
+          defaultDispatch != null &&
+          meta?.feature === "help" &&
+          meta.form === "command"
+            ? defaultDispatch.helpNames(completed.slice(1)).map((text) => ({
+                kind: "literal",
+                text,
+              }))
+            : defaultDispatch == null || completed.length !== 0
+              ? []
+              : getFirstMetaEntries(options).flatMap(([, form, config, name]) =>
+                  config &&
+                  (config === true || !isSuggestionHidden(config.hidden))
+                    ? (config === true ? [name] : (config.names ?? [name]))
+                        .slice(0, form === "command" ? 1 : undefined)
+                        .filter((text) => !defaultDispatch.isNamed(text))
+                        .map((text): LiteralSuggestion => ({
+                          kind: "literal",
+                          text,
+                        }))
+                    : [],
+                );
         return handleCompletion<
           InferMode<TParser>,
           InferValue<TParser>,
           InferValue<TParser>
         >(
-          [
-            classified.shell,
-            ...(classified.commandPath ?? []),
-            ...classified.args,
-          ],
+          [classified.shell, ...completionInput],
           programName,
-          parser,
+          (completionView ?? parser) as Parser<
+            InferMode<TParser>,
+            unknown,
+            unknown
+          >,
           classified.source === "command"
             ? completionParsers.completionCommand
             : completionParsers.completionOption,
@@ -2656,12 +2818,17 @@ export function runParser<
           classified.source === "option",
           sectionOrder,
           showUsage,
-          rootOptionSuggestions,
+          defaultDispatch == null || (completed.length > 0 && meta == null)
+            ? rootOptionSuggestions
+            : entryPointSuggestions,
           messageFormatter,
           theme,
           automaticWidth,
           options.completion?.errors,
+          defaultDispatch != null,
+          classified.scriptArgs,
         ) as InferValue<TParser>;
+      }
 
       case "help": {
         // Handle help request - determine which parser to use for help
@@ -2675,6 +2842,7 @@ export function runParser<
         if (
           requestedCommand != null &&
           !classified.preferUserCommandDocs &&
+          !defaultDispatch?.isNamed(requestedCommand) &&
           completionCommandNames.includes(requestedCommand) &&
           completionAsCommand &&
           completionParsers.completionCommand
@@ -2685,6 +2853,7 @@ export function runParser<
         } else if (
           requestedCommand != null &&
           !classified.preferUserCommandDocs &&
+          !defaultDispatch?.isNamed(requestedCommand) &&
           helpCommandNames.includes(requestedCommand) &&
           helpAsCommand &&
           helpParsers.helpCommand
@@ -2695,6 +2864,7 @@ export function runParser<
         } else if (
           requestedCommand != null &&
           !classified.preferUserCommandDocs &&
+          !defaultDispatch?.isNamed(requestedCommand) &&
           versionCommandNames.includes(requestedCommand) &&
           versionAsCommand &&
           versionParsers.versionCommand
@@ -2827,7 +2997,13 @@ export function runParser<
 
         // Validate that the commands before --help are actually valid
         // by attempting to parse them step by step against the parser
-        if (classified.commands.length > 0) {
+        if (
+          classified.commands.length > 0 &&
+          classified.parsedDefaultPrefix == null
+        ) {
+          const validateNamed =
+            defaultDispatch != null && docGeneratorParser === parser;
+          const validationParser = validateNamed ? parser : helpGeneratorParser;
           let validationContext: {
             buffer: readonly string[];
             optionsTerminated: boolean;
@@ -2836,8 +3012,8 @@ export function runParser<
           } = {
             buffer: [...classified.commands],
             optionsTerminated: false,
-            state: helpGeneratorParser.initialState as unknown,
-            usage: helpGeneratorParser.usage,
+            state: validationParser.initialState,
+            usage: validationParser.usage,
           };
 
           const processStep = (
@@ -2863,10 +3039,18 @@ export function runParser<
             return validationContext.buffer.length > 0 ? "continue" : null;
           };
 
+          if (
+            validateNamed &&
+            !defaultDispatch.isNamed(classified.commands[0])
+          ) {
+            return reportInvalidHelpCommand(
+              message`Unknown command: ${classified.commands.join(" ")}.`,
+            );
+          }
           // Iteratively validate each command token
           let validationResult: Message | null | "continue" = "continue";
           while (validationResult === "continue") {
-            const stepResult = helpGeneratorParser.parse(validationContext);
+            const stepResult = validationParser.parse(validationContext);
             if (stepResult instanceof Promise) {
               // Async parser: chain remaining validation via Promise
               const asyncValidate = async (
@@ -2874,7 +3058,7 @@ export function runParser<
               ): Promise<InferValue<TParser>> => {
                 let res = processStep(result);
                 while (res === "continue") {
-                  const next = helpGeneratorParser.parse(validationContext);
+                  const next = validationParser.parse(validationContext);
                   const resolved = next instanceof Promise ? await next : next;
                   res = processStep(resolved);
                 }
@@ -2900,10 +3084,13 @@ export function runParser<
         }
 
         // Get doc page - may return Promise for async parsers
-        const docOrPromise = getDocPage(
-          docGeneratorParser,
-          classified.commands,
-        );
+        const docOrPromise =
+          classified.parsedDefaultPrefix == null
+            ? getDocPage(docGeneratorParser, classified.commands)
+            : getDocPageForConsumedPrefix(
+                docGeneratorParser,
+                classified.parsedDefaultPrefix,
+              );
         if (docOrPromise instanceof Promise) {
           return docOrPromise.then(displayHelp);
         }
@@ -3019,8 +3206,15 @@ export function runParser<
 
         // Error handling
         if (aboveError === "help") {
-          const parserForDoc = args.length < 1 ? augmentedParser : parser;
-          const docOrPromise = getDocPage(parserForDoc, args);
+          const parserForDoc = classified.rootDocs
+            ? getRootHelpGeneratorParser()
+            : args.length < 1
+              ? augmentedParser
+              : parser;
+          const docOrPromise = getDocPage(
+            parserForDoc,
+            classified.rootDocs ? [] : args,
+          );
           if (docOrPromise instanceof Promise) {
             return docOrPromise.then((doc) => displayError(doc, aboveError));
           }
@@ -3059,6 +3253,24 @@ export function runParser<
         }),
     );
   }
+  if (firstMeta != null) {
+    const classified = classifyFirstMeta(
+      firstMeta,
+      args,
+      helpAsOption ? helpOptionNames : [],
+    );
+    return dispatchByMode(
+      parserMode,
+      () => {
+        const handled = handleResult(classified);
+        if (handled instanceof Promise) {
+          throw new RunParserError("Synchronous parser returned async result.");
+        }
+        return handled;
+      },
+      async () => await handleResult(classified),
+    );
+  }
   return dispatchByMode(
     parserMode,
     () => {
@@ -3081,6 +3293,8 @@ export function runParser<
               versionCommandConfig ? [...versionCommandNames] : [],
               completionOptionConfig ? [...completionOptionNames] : [],
               completionCommandConfig ? [...completionCommandNames] : [],
+              implicitDefault,
+              args,
             );
       const handled = handleResult(classified);
       if (handled instanceof Promise) {
@@ -3104,6 +3318,8 @@ export function runParser<
               versionCommandConfig ? [...versionCommandNames] : [],
               completionOptionConfig ? [...completionOptionNames] : [],
               completionCommandConfig ? [...completionCommandNames] : [],
+              implicitDefault,
+              args,
             );
       const handled = handleResult(classified);
       return handled instanceof Promise ? await handled : handled;
@@ -3441,6 +3657,7 @@ function needsEarlyExitSync<THelp, TError>(
   options: RunWithOptions<THelp, TError>,
 ): boolean {
   if (getHelpRequest(options) != null) return true;
+  if (matchFirstMeta(parser, options, args) != null) return true;
   const attempted = attemptParseSync(parser, args, { mode: "parse-only" });
   if (attempted.kind === "success") return false;
   return isMetaEarlyExit(classifyEarlyExitFailure(attempted, options));
@@ -3455,6 +3672,7 @@ async function needsEarlyExitAsync<THelp, TError>(
   options: RunWithOptions<THelp, TError>,
 ): Promise<boolean> {
   if (getHelpRequest(options) != null) return true;
+  if (matchFirstMeta(parser, options, args) != null) return true;
   const attempted = await attemptParseAsync(parser, args, {
     mode: "parse-only",
   });
