@@ -431,13 +431,21 @@ describe("explicit default commands", () => {
 
   it("reserves enabled meta entry points without parsing the default", async () => {
     let handled = 0;
+    let parsed = 0;
+    const parser = object({
+      help: option("--help"),
+      source: multiple(argument(string({ metavar: "SOURCE" }))),
+    });
     const run = defineCommand({
       path: ["run"],
       default: true,
-      parser: object({
-        help: option("--help"),
-        source: multiple(argument(string({ metavar: "SOURCE" }))),
-      }),
+      parser: {
+        ...parser,
+        parse(context: Parameters<typeof parser.parse>[0]) {
+          parsed++;
+          return parser.parse(context);
+        },
+      },
       handler() {
         handled++;
       },
@@ -453,6 +461,16 @@ describe("explicit default commands", () => {
       (await captureProgramRun({ ...options, args: ["--help"] })).stdout,
       /SOURCE/,
     );
+    const selfHelp = await captureProgramRun({
+      ...options,
+      help: {
+        command: { names: ["help", "assist"] },
+        option: { names: ["--help", "-?"] },
+      },
+      args: ["assist", "-?"],
+    });
+    assert.equal(selfHelp.exitCode, 0, selfHelp.stderr);
+    assert.match(selfHelp.stdout, /help \[COMMAND/);
     assert.match(
       (await captureProgramRun({ ...options, args: ["help", "b"] })).stdout,
       /--output/,
@@ -482,6 +500,86 @@ describe("explicit default commands", () => {
       /SOURCE/,
     );
     assert.equal(handled, 0);
+    assert.equal(parsed, 0);
+  });
+
+  it("documents commands matched within the implicit default", async () => {
+    const run = defineCommand({
+      path: ["run"],
+      parser: command(
+        "sub",
+        command("nested", object({ flag: option("--sub-flag") })),
+      ),
+      handler() {
+        assert.fail("Help must not dispatch a handler.");
+      },
+    });
+    for (const args of [
+      ["sub", "nested", "--help"],
+      ["run", "sub", "nested", "--help"],
+    ]) {
+      const result = await captureProgramRun({
+        ...presentation,
+        commands: [run],
+        defaultCommand: run,
+        args,
+      });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.match(result.stdout, /--sub-flag/);
+    }
+  });
+
+  it("keeps the separator ahead of a registered name or alias", async () => {
+    const { root, calls } = fixture();
+    const named = defineCommand({
+      path: ["build"],
+      metadata: { aliases: ["--"] },
+      parser: object({}),
+      handler() {
+        calls.push("named");
+      },
+    });
+    const options = {
+      ...presentation,
+      commands: [named],
+      defaultCommand: root,
+    };
+    await runProgram({ ...options, args: ["--", "build"] });
+    await runProgram({ ...options, args: ["build"] });
+    assert.deepEqual(calls, [["root", ["build"]], "named"]);
+  });
+
+  it("uses the matched completion entry point in generated scripts", async () => {
+    const named = defineCommand({
+      path: ["completion"],
+      parser: object({}),
+      handler() {},
+    });
+    const { root } = fixture();
+    const options = {
+      ...presentation,
+      commands: [named],
+      defaultCommand: root,
+      completion: {
+        command: { names: ["completion", "completions"] },
+      } as const,
+    };
+    const script = await captureProgramRun({
+      ...options,
+      args: ["completions", "bash"],
+    });
+    assert.equal(script.exitCode, 0, script.stderr);
+    assert.match(script.stdout, /\bcompletions\b/);
+    const suggestions = await captureProgramRun({
+      ...options,
+      help: {
+        command: { names: ["help", "assist"] },
+        option: { names: ["--help", "--assist"] },
+      },
+      args: ["completions", "bash", ""],
+    });
+    assert.doesNotMatch(suggestions.stdout, /^assist$/m);
+    assert.match(suggestions.stdout, /^--assist$/m);
   });
 
   it("suggests default positionals only before committing to another branch", async () => {
@@ -560,6 +658,13 @@ describe("explicit default commands", () => {
       assert.equal(result.exitCode, 0, result.stderr);
       assert.match(result.stdout, /--sub-flag/);
     }
+    const suggestions = await captureProgramRun({
+      ...presentation,
+      commands: [tool],
+      defaultCommand: root,
+      args: ["completion", "bash", "help", "tool", ""],
+    });
+    assert.match(suggestions.stdout, /^sub$/m);
   });
 
   it("validates competing declarations and permits a standalone default", async () => {

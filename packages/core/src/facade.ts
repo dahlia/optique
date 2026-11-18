@@ -802,11 +802,13 @@ type ParsedResult =
       readonly type: "help";
       readonly commands: readonly string[];
       readonly preferUserCommandDocs?: boolean;
+      readonly parsedDefaultPrefix?: readonly string[];
     }
   | { readonly type: "version" }
   | {
       readonly type: "completion";
       readonly source: "command" | "option";
+      readonly entryPoint?: string;
       readonly shell: string;
       readonly commandPath?: readonly string[];
       readonly args: readonly string[];
@@ -875,11 +877,7 @@ function classifyFirstMeta(
   helpOptionNames: readonly string[],
 ): ParsedResult {
   const next = args[1];
-  if (
-    entry.form === "command" &&
-    entry.feature !== "help" &&
-    helpOptionNames.includes(next)
-  ) {
+  if (entry.form === "command" && helpOptionNames.includes(next)) {
     return { type: "help", commands: [entry.name] };
   }
   switch (entry.feature) {
@@ -901,6 +899,7 @@ function classifyFirstMeta(
       return {
         type: "completion",
         source: entry.form,
+        entryPoint: entry.name,
         shell: entry.attached ?? next ?? "",
         args: args.slice(entry.attached == null ? 2 : 1),
       };
@@ -1172,6 +1171,7 @@ function classifyParseFailure(
   completionOptionNames: readonly string[],
   completionCommandNames: readonly string[],
   implicitDefault = false,
+  args: readonly string[] = [],
 ): Exclude<ParsedResult, { readonly type: "success" }> {
   if (failure.remainingArgs.length < 1) {
     return {
@@ -1255,13 +1255,16 @@ function classifyParseFailure(
     return {
       type: "help",
       commands: implicitDefault
-        ? []
+        ? failure.commandPath
         : getHelpCommandContext(
             failure.commandPath,
             failure.remainingArgs,
             winner.index,
           ),
       preferUserCommandDocs: failure.commandPath.length > 0,
+      ...(implicitDefault && failure.commandPath.length > 0
+        ? { parsedDefaultPrefix: args.slice(0, failure.consumedCount) }
+        : {}),
     };
   }
 
@@ -1672,6 +1675,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
   automaticWidth = false,
   errors?: NonNullable<RunOptions<THelp, TError>["completion"]>["errors"],
   includeCommandSuggestions = false,
+  completionEntryPoint?: string,
 ): ModeValue<M, THelp | TError> {
   const errorOptions = <T extends object>(format: T): T =>
     automaticWidth
@@ -1803,9 +1807,11 @@ function handleCompletion<M extends Mode, THelp, TError>(
 
   if (args.length === 0) {
     // Generate completion script
-    const completionArg = isOptionMode
-      ? (completionOptionDisplayName ?? "--completion")
-      : (completionCommandDisplayName ?? "completion");
+    const completionArg =
+      completionEntryPoint ??
+      (isOptionMode
+        ? (completionOptionDisplayName ?? "--completion")
+        : (completionCommandDisplayName ?? "completion"));
     const script = shell.generateScript(programName, [
       completionArg,
       shellName,
@@ -2773,10 +2779,11 @@ export function runParser<
               }))
             : defaultDispatch == null || completed.length !== 0
               ? []
-              : getFirstMetaEntries(options).flatMap(([, , config, name]) =>
+              : getFirstMetaEntries(options).flatMap(([, form, config, name]) =>
                   config &&
                   (config === true || !isSuggestionHidden(config.hidden))
                     ? (config === true ? [name] : (config.names ?? [name]))
+                        .slice(0, form === "command" ? 1 : undefined)
                         .filter((text) => !defaultDispatch.isNamed(text))
                         .map((text): LiteralSuggestion => ({
                           kind: "literal",
@@ -2820,6 +2827,7 @@ export function runParser<
           automaticWidth,
           options.completion?.errors,
           defaultDispatch != null,
+          classified.entryPoint,
         ) as InferValue<TParser>;
       }
 
@@ -2990,7 +2998,10 @@ export function runParser<
 
         // Validate that the commands before --help are actually valid
         // by attempting to parse them step by step against the parser
-        if (classified.commands.length > 0) {
+        if (
+          classified.commands.length > 0 &&
+          classified.parsedDefaultPrefix == null
+        ) {
           const validateNamed =
             defaultDispatch != null && docGeneratorParser === parser;
           const validationParser = validateNamed ? parser : helpGeneratorParser;
@@ -3076,7 +3087,7 @@ export function runParser<
         // Get doc page - may return Promise for async parsers
         const docOrPromise = getDocPage(
           docGeneratorParser,
-          classified.commands,
+          classified.parsedDefaultPrefix ?? classified.commands,
         );
         if (docOrPromise instanceof Promise) {
           return docOrPromise.then(displayHelp);
@@ -3281,6 +3292,7 @@ export function runParser<
               completionOptionConfig ? [...completionOptionNames] : [],
               completionCommandConfig ? [...completionCommandNames] : [],
               implicitDefault,
+              args,
             );
       const handled = handleResult(classified);
       if (handled instanceof Promise) {
@@ -3305,6 +3317,7 @@ export function runParser<
               completionOptionConfig ? [...completionOptionNames] : [],
               completionCommandConfig ? [...completionCommandNames] : [],
               implicitDefault,
+              args,
             );
       const handled = handleResult(classified);
       return handled instanceof Promise ? await handled : handled;

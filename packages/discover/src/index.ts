@@ -36,6 +36,7 @@ import {
   isDocHidden,
   isSuggestionHidden,
   mergeHidden,
+  type Usage,
 } from "@optique/core/usage";
 import { runAsync } from "@optique/run";
 import type { RunOptions } from "@optique/run";
@@ -683,7 +684,8 @@ export async function runProgram<R = unknown>(
     defaultEntry == null
       ? withRootMetaCommands(parser, tree, runOptions, args)
       : withDefaultDispatch(parser, {
-          isNamed: (token) => findCommandChild(tree, token) != null,
+          isNamed: (token) =>
+            token !== "--" && findCommandChild(tree, token) != null,
           helpNames: (path) => helpCommandNames(tree, path),
         }),
     target != null &&
@@ -1287,6 +1289,7 @@ function createExecutableNodeParser(
         const branch =
           context.optionsTerminated ||
           firstArg == null ||
+          firstArg === "--" ||
           !childParser.leadingNames.has(firstArg)
             ? 1
             : 0;
@@ -1406,6 +1409,7 @@ function createExecutableNodeParser(
         // The completion loop retains the failing buffer and state.
         const branch =
           !context.optionsTerminated &&
+          context.buffer[0] !== "--" &&
           childParser.leadingNames.has(context.buffer[0])
             ? 0
             : 1;
@@ -2199,18 +2203,56 @@ function helpCommandNames(
   path: readonly string[],
 ): readonly string[] {
   let node = root;
-  for (const token of path) {
+  for (const [index, token] of path.entries()) {
     const child = findCommandChild(node, token)?.[1];
-    if (child == null || isSuggestionHidden(child.command?.metadata?.hidden)) {
-      return [];
-    }
+    if (child == null)
+      return parserHelpNames(
+        node.command?.parser.usage ?? [],
+        path.slice(index),
+      );
+    if (isSuggestionHidden(child.command?.metadata?.hidden)) return [];
     node = child;
   }
-  return [...node.children].flatMap(([name, child]) =>
-    isSuggestionHidden(child.command?.metadata?.hidden)
-      ? []
-      : [name, ...(child.command?.metadata?.aliases ?? [])],
-  );
+  return [...node.children]
+    .flatMap(([name, child]) =>
+      isSuggestionHidden(child.command?.metadata?.hidden)
+        ? []
+        : [name, ...(child.command?.metadata?.aliases ?? [])],
+    )
+    .concat(parserHelpNames(node.command?.parser.usage ?? [], []));
+}
+
+// A command's inner usage follows its name within the same usage branch.
+function parserHelpNames(
+  usage: Usage,
+  path: readonly string[],
+): readonly string[] {
+  for (const [index, term] of usage.entries()) {
+    const rest = usage.slice(index + 1);
+    switch (term.type) {
+      case "command": {
+        if (isSuggestionHidden(term.hidden)) return [];
+        const names = [term.name, ...(term.aliases ?? [])];
+        if (path.length === 0) return names;
+        return names.includes(path[0]) || term.hiddenAliases?.includes(path[0])
+          ? parserHelpNames(rest, path.slice(1))
+          : [];
+      }
+      case "exclusive":
+        return term.terms.flatMap((branch) =>
+          parserHelpNames([...branch, ...rest], path),
+        );
+      case "sequence":
+        return parserHelpNames([...term.terms, ...rest], path);
+      case "optional":
+      case "multiple":
+        return [
+          ...parserHelpNames([...term.terms, ...rest], path),
+          ...parserHelpNames(rest, path),
+        ];
+    }
+  }
+  return [];
 }
 
 function withRootMetaCommands(
