@@ -1,4 +1,7 @@
-import { withHelpRequest } from "@optique/core/internal/help-request";
+import {
+  withDefaultDispatch,
+  withHelpRequest,
+} from "@optique/core/internal/help-request";
 import { mergeCommandDocPolicy } from "@optique/core/internal/command-doc-policy";
 import { longestMatch, or } from "@optique/core/constructs";
 import type {
@@ -31,6 +34,7 @@ import { command } from "@optique/core/primitives";
 import {
   type HiddenVisibility,
   isDocHidden,
+  isSuggestionHidden,
   mergeHidden,
 } from "@optique/core/usage";
 import { runAsync } from "@optique/run";
@@ -271,6 +275,13 @@ interface RunProgramBaseOptions<R = unknown> extends Omit<
   RunOptions,
   "help" | "version" | "completion" | "programName"
 > {
+  /**
+   * Command to run when the first token matches neither a registered command
+   * nor an enabled runner meta entry point. This does not register a path.
+   * @since 1.4.0
+   */
+  readonly defaultCommand?: RunProgramCommand<NoInfer<R>>;
+
   /**
    * Root program metadata.
    */
@@ -584,11 +595,12 @@ function createProgram(
   commands: readonly CommandEntry[],
   options: CreateProgramParserOptions,
   preferRootChildren = false,
+  defaultEntry?: CommandEntry,
 ): {
   readonly parser: FluentParser<Mode, ProgramInvocation, unknown>;
   readonly tree: CommandTreeNode;
 } {
-  if (commands.length < 1) {
+  if (commands.length < 1 && defaultEntry == null) {
     throw new TypeError("createProgramParser() requires at least one command.");
   }
   const sortedCommands = sortCommands(commands);
@@ -599,9 +611,22 @@ function createProgram(
     })),
   );
   const rootNode = buildCommandTree(sortedCommands);
-  const parser = buildNodeParser(rootNode, undefined, preferRootChildren);
+  const children =
+    defaultEntry == null ? undefined : buildChildrenParser(rootNode);
+  const parser =
+    defaultEntry == null
+      ? buildNodeParser(rootNode, undefined, preferRootChildren)
+      : children == null
+        ? createLeafParser(defaultEntry.command, defaultEntry.path)
+        : createExecutableNodeParser(
+            children,
+            defaultEntry.command,
+            defaultEntry.path,
+            true,
+            true,
+          );
   return {
-    parser: fluent(withRootDocs(parser, sortedCommands, options)),
+    parser: fluent(withRootDocs(parser, sortedCommands, options, defaultEntry)),
     tree: rootNode,
   };
 }
@@ -644,21 +669,64 @@ export async function runProgram<R = unknown>(
       entryFileName: options.entryFileName,
     });
   }
+  const defaultEntry = resolveDefaultCommand(commands, options.defaultCommand);
   const { parser, tree } = createProgram(
     commands,
     { ...options.metadata, commandList: options.commandList },
     true,
+    defaultEntry,
   );
   const args = options.args ?? process.argv.slice(2);
   const target = policy === "never" ? undefined : resolveBareGroup(tree, args);
   const runOptions = { ...buildRunOptions(options, help), args };
   const invocation = await runAsync(
-    withRootMetaCommands(parser, tree, runOptions, args),
-    target != null && (policy === "always" || target.node.command == null)
+    defaultEntry == null
+      ? withRootMetaCommands(parser, tree, runOptions, args)
+      : withDefaultDispatch(parser, {
+          isNamed: (token) => findCommandChild(tree, token) != null,
+          helpNames: (path) => helpCommandNames(tree, path),
+        }),
+    target != null &&
+      (policy === "always" ||
+        (target.node.command == null &&
+          (target.path.length > 0 || defaultEntry == null)))
       ? withHelpRequest(runOptions, target.path)
       : runOptions,
   );
   await dispatchInvocation(invocation, options.hooks);
+}
+
+function resolveDefaultCommand(
+  commands: readonly CommandEntry[],
+  explicit: unknown,
+): CommandEntry | undefined {
+  if (explicit !== undefined && !isCommand(explicit)) {
+    throw new TypeError(
+      "The default command must be created with defineCommand().",
+    );
+  }
+  const marked = commands.filter((entry) => entry.command.default === true);
+  const definition = explicit ?? marked[0]?.command;
+  if (definition == null) return undefined;
+  if (marked.some((entry) => entry.command !== definition)) {
+    throw new TypeError("Only one default command can be configured.");
+  }
+  const registered = commands.filter((entry) => entry.command === definition);
+  if (registered.length > 1) {
+    throw new TypeError(
+      "A default command cannot be registered at multiple paths.",
+    );
+  }
+  if (
+    commands.some(
+      (entry) => entry.path.length === 0 && entry.command !== definition,
+    )
+  ) {
+    throw new TypeError(
+      "A default command cannot coexist with a separate root command.",
+    );
+  }
+  return registered[0] ?? { path: [], command: definition };
 }
 
 /**
@@ -1193,8 +1261,9 @@ function createExecutableNodeParser(
   commandDefinition: AnyCommand,
   path: CommandPath,
   preferChildren = false,
+  exclusiveRoot = false,
 ): Parser<Mode, ProgramInvocation, ExecutableNodeParserState> {
-  const leafParser = createLeafParser(commandDefinition, path, true);
+  const leafParser = createLeafParser(commandDefinition, path, !exclusiveRoot);
   const branchParsers = [childParser, leafParser] as const;
   const parser = longestMatch(childParser, leafParser) as Parser<
     Mode,
@@ -1214,6 +1283,33 @@ function createExecutableNodeParser(
     parse(context) {
       const activeState = normalizeExecutableNodeState(context.state);
       const firstArg = context.buffer[0];
+      if (exclusiveRoot && activeState == null) {
+        const branch =
+          context.optionsTerminated ||
+          firstArg == null ||
+          !childParser.leadingNames.has(firstArg)
+            ? 1
+            : 0;
+        const selected = branchParsers[branch];
+        const result = selected.parse(
+          withExecutableNodeChildContext(
+            context,
+            branch,
+            inheritAnnotations(context.state, selected.initialState),
+            selected,
+          ),
+        );
+        return mapModeValue(
+          parser.mode,
+          wrapForMode(parser.mode, result),
+          (resolved) =>
+            wrapBranchParseResult(
+              context,
+              { branch, committed: true },
+              resolved,
+            ),
+        );
+      }
       if (
         preferChildren &&
         activeState == null &&
@@ -1306,6 +1402,24 @@ function createExecutableNodeParser(
           prefix,
         );
       }
+      if (exclusiveRoot && context.buffer.length > 0) {
+        // The completion loop retains the failing buffer and state.
+        const branch =
+          !context.optionsTerminated &&
+          childParser.leadingNames.has(context.buffer[0])
+            ? 0
+            : 1;
+        const selected = branchParsers[branch];
+        return selected.suggest(
+          withExecutableNodeChildContext(
+            context,
+            branch,
+            inheritAnnotations(context.state, selected.initialState),
+            selected,
+          ),
+          prefix,
+        );
+      }
       return parser.suggest(
         {
           ...context,
@@ -1359,7 +1473,7 @@ function createExecutableNodeParser(
           : state,
         defaultValue,
       );
-      if (activeState == null) {
+      if (activeState == null && !exclusiveRoot) {
         return withCommandDocMetadata(fragments, commandDefinition.metadata);
       }
       return fragments;
@@ -1877,9 +1991,11 @@ function withRootDocs(
   parser: Parser<Mode, ProgramInvocation, unknown>,
   commands: readonly CommandEntry[],
   metadata: CreateProgramParserOptions,
+  defaultEntry?: CommandEntry,
 ): Parser<Mode, ProgramInvocation, unknown> {
   const rootState = parser.initialState;
-  const rootCommand = commands.find((entry) => entry.path.length < 1);
+  const rootCommand =
+    defaultEntry ?? commands.find((entry) => entry.path.length < 1);
   const commandsByPath = new Map(
     commands.map((entry) => [commandPathKey(entry.path), entry.command]),
   );
@@ -2060,15 +2176,41 @@ function resolveBareGroup(
   const path: string[] = [];
   for (const token of args) {
     if (token.startsWith("-")) return undefined;
-    const entry = [...node.children].find(
-      ([name, child]) =>
-        name === token || child.command?.metadata?.aliases?.includes(token),
-    );
+    const entry = findCommandChild(node, token);
     if (entry == null) return undefined;
     path.push(entry[0]);
     node = entry[1];
   }
   return node.children.size > 0 ? { node, path } : undefined;
+}
+
+function findCommandChild(
+  node: CommandTreeNode,
+  token: string,
+): [string, CommandTreeNode] | undefined {
+  return [...node.children].find(
+    ([name, child]) =>
+      name === token || child.command?.metadata?.aliases?.includes(token),
+  );
+}
+
+function helpCommandNames(
+  root: CommandTreeNode,
+  path: readonly string[],
+): readonly string[] {
+  let node = root;
+  for (const token of path) {
+    const child = findCommandChild(node, token)?.[1];
+    if (child == null || isSuggestionHidden(child.command?.metadata?.hidden)) {
+      return [];
+    }
+    node = child;
+  }
+  return [...node.children].flatMap(([name, child]) =>
+    isSuggestionHidden(child.command?.metadata?.hidden)
+      ? []
+      : [name, ...(child.command?.metadata?.aliases ?? [])],
+  );
 }
 
 function withRootMetaCommands(
@@ -2150,6 +2292,7 @@ function buildRunOptions<R>(
   const {
     dir: _dir,
     commands: _commands,
+    defaultCommand: _defaultCommand,
     extensions: _extensions,
     entryFileName: _entryFileName,
     metadata: _metadata,

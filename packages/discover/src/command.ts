@@ -201,6 +201,13 @@ export interface CommandDefinition<M extends Mode, T, R = unknown> {
   readonly path?: CommandPath;
 
   /**
+   * Uses this definition when no registered command or runner meta entry
+   * point matches the first token in `runProgram()`.
+   * @since 1.4.0
+   */
+  readonly default?: boolean;
+
+  /**
    * Parser for this command's command-specific arguments and options.
    */
   readonly parser: Parser<M, T, unknown>;
@@ -525,6 +532,9 @@ export function defineCommand<M extends Mode, T, R = unknown>(
     throw new TypeError("Command parser must be an Optique parser.");
   }
   if (command.path != null) validateCommandPath(command.path);
+  if (command.default !== undefined && typeof command.default !== "boolean") {
+    throw new TypeError("Command default must be a boolean.");
+  }
   if (typeof command.handler !== "function") {
     throw new TypeError("Command handler must be a function.");
   }

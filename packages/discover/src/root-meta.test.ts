@@ -4,7 +4,7 @@ import { object } from "@optique/core/constructs";
 import type { SourceContext } from "@optique/core/context";
 import { dependency } from "@optique/core/dependency";
 import { multiple, withDefault } from "@optique/core/modifiers";
-import { argument, option } from "@optique/core/primitives";
+import { argument, command, option } from "@optique/core/primitives";
 import { choice, integer, string } from "@optique/core/valueparser";
 import { runProgram, type RunProgramOptions } from "#src/index.ts";
 import { defineCommand } from "#src/command.ts";
@@ -389,6 +389,215 @@ describe("runProgram() root command precedence", () => {
     assert.match(result.stderr, /--verbose/);
     assert.match(result.stderr, /Error:/);
     assert.deepEqual(calls, []);
+  });
+});
+
+describe("explicit default commands", () => {
+  it("reuses a named definition without retrying a selected command", async () => {
+    const calls: string[] = [];
+    const run = defineCommand({
+      path: ["run"],
+      parser: argument(string()),
+      handler(value) {
+        calls.push(value);
+      },
+    });
+    const build = defineCommand({
+      path: ["build"],
+      parser: argument(string()),
+      handler() {
+        calls.push("build");
+      },
+    });
+    const options = {
+      ...presentation,
+      commands: [run, build],
+      defaultCommand: run,
+      hooks: {
+        beforeEach({ path }: { readonly path: readonly string[] }) {
+          assert.deepEqual(path, ["run"]);
+        },
+      },
+    };
+    for (const args of [["file.ts"], ["run", "file.ts"], ["--", "build"]]) {
+      assert.equal((await captureProgramRun({ ...options, args })).exitCode, 0);
+    }
+    assert.equal(
+      (await captureProgramRun({ ...options, args: ["build"] })).exitCode,
+      1,
+    );
+    assert.deepEqual(calls, ["file.ts", "file.ts", "build"]);
+  });
+
+  it("reserves enabled meta entry points without parsing the default", async () => {
+    let handled = 0;
+    const run = defineCommand({
+      path: ["run"],
+      default: true,
+      parser: object({
+        help: option("--help"),
+        source: multiple(argument(string({ metavar: "SOURCE" }))),
+      }),
+      handler() {
+        handled++;
+      },
+    });
+    const { build } = fixture();
+    const options = {
+      ...presentation,
+      commands: [run, build],
+      version: { value: "1.2.3", command: true, option: true } as const,
+      aboveError: "help" as const,
+    };
+    assert.match(
+      (await captureProgramRun({ ...options, args: ["--help"] })).stdout,
+      /SOURCE/,
+    );
+    assert.match(
+      (await captureProgramRun({ ...options, args: ["help", "b"] })).stdout,
+      /--output/,
+    );
+    assert.match(
+      (await captureProgramRun({ ...options, args: ["help", "file.ts"] }))
+        .stderr,
+      /Unknown command/,
+    );
+    assert.match(
+      (await captureProgramRun({ ...options, args: ["--version", "--help"] }))
+        .stdout,
+      /^1\.2\.3\n$/,
+    );
+    assert.equal(
+      (
+        await captureProgramRun({
+          ...options,
+          args: ["help", "build", "--version"],
+        })
+      ).exitCode,
+      1,
+    );
+    assert.match(
+      (await captureProgramRun({ ...options, args: ["version", "extra"] }))
+        .stderr,
+      /SOURCE/,
+    );
+    assert.equal(handled, 0);
+  });
+
+  it("suggests default positionals only before committing to another branch", async () => {
+    const run = defineCommand({
+      parser: multiple(argument(choice(["alpha", "build", "help"]))),
+      handler() {
+        assert.fail("Completion must not dispatch a handler.");
+      },
+    });
+    const { build } = fixture();
+    const add = defineCommand({
+      path: ["remote", "add"],
+      parser: object({}),
+      handler() {},
+    });
+    for (const head of [["completion", "bash"], ["--completion=bash"]]) {
+      const suggest = (words: string[]) =>
+        captureProgramRun({
+          ...presentation,
+          commands: [build, add],
+          defaultCommand: run,
+          args: [...head, ...words],
+        });
+      const root = await suggest([""]);
+      assert.match(root.stdout, /alpha/);
+      assert.match(root.stdout, /build/);
+      assert.match(root.stdout, /completion/);
+      assert.match((await suggest(["he"])).stdout, /help/);
+      assert.doesNotMatch((await suggest(["help", ""])).stdout, /alpha/);
+      assert.match((await suggest(["help", "b"])).stdout, /^build$/m);
+      assert.match((await suggest(["help", "remote", ""])).stdout, /^add$/m);
+      assert.doesNotMatch((await suggest(["b", "bad", ""])).stdout, /alpha/);
+      assert.match((await suggest(["alpha", "--h"])).stdout, /--help/);
+      assert.match((await suggest(["b", "1", "--h"])).stdout, /--help/);
+    }
+  });
+
+  it("does not suggest meta names shadowed by hidden commands or aliases", async () => {
+    const hidden = defineCommand({
+      path: ["help"],
+      metadata: { hidden: true, aliases: ["version"] },
+      parser: object({}),
+      handler() {},
+    });
+    const { root } = fixture();
+    const result = await captureProgramRun({
+      ...presentation,
+      commands: [hidden],
+      defaultCommand: root,
+      version: { value: "1.2.3", command: true },
+      args: ["completion", "bash", ""],
+    });
+    assert.equal(result.exitCode, 0);
+    assert.doesNotMatch(result.stdout, /^(help|version)(?=[\t\n])/m);
+  });
+
+  it("resolves help for subcommands defined inside a named parser", async () => {
+    const tool = defineCommand({
+      path: ["tool"],
+      parser: command("sub", object({ flag: option("--sub-flag") })),
+      handler() {
+        assert.fail("Help must not dispatch a handler.");
+      },
+    });
+    const { root } = fixture();
+    for (const args of [
+      ["help", "tool", "sub"],
+      ["tool", "sub", "--help"],
+    ]) {
+      const result = await captureProgramRun({
+        ...presentation,
+        commands: [tool],
+        defaultCommand: root,
+        args,
+      });
+      assert.equal(result.exitCode, 0, result.stderr);
+      assert.match(result.stdout, /--sub-flag/);
+    }
+  });
+
+  it("validates competing declarations and permits a standalone default", async () => {
+    const calls: string[] = [];
+    const first = defineCommand({
+      path: ["first"],
+      default: true,
+      parser: argument(string()),
+      handler(value) {
+        calls.push(value);
+      },
+    });
+    const second = defineCommand({
+      path: ["second"],
+      parser: argument(string()),
+      handler() {},
+    });
+    await assert.rejects(
+      runProgram({
+        ...presentation,
+        commands: [first],
+        defaultCommand: second,
+      }),
+      /Only one default command/,
+    );
+    await runProgram({
+      ...presentation,
+      commands: [first],
+      defaultCommand: first,
+      args: ["value"],
+    });
+    await runProgram({
+      ...presentation,
+      commands: [],
+      defaultCommand: first,
+      args: ["first"],
+    });
+    assert.deepEqual(calls, ["value", "first"]);
   });
 });
 
