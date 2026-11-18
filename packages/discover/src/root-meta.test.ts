@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { object } from "@optique/core/constructs";
+import { object, or } from "@optique/core/constructs";
 import type { SourceContext } from "@optique/core/context";
 import { dependency } from "@optique/core/dependency";
 import { multiple, withDefault } from "@optique/core/modifiers";
@@ -601,6 +601,40 @@ describe("explicit default commands", () => {
     });
     assert.equal(script.exitCode, 0, script.stderr);
     assert.match(script.stdout, /admin '--completion=bash'/);
+  });
+
+  it("allows a registered name to shadow a command inside the default", async () => {
+    const calls: string[] = [];
+    const run = defineCommand({
+      parser: or(command("build", object({})), command("inspect", object({}))),
+      handler() {
+        calls.push("default");
+      },
+    });
+    const build = defineCommand({
+      path: ["build"],
+      parser: object({}),
+      handler() {
+        calls.push("registered");
+      },
+    });
+    const options = { ...presentation, commands: [build], defaultCommand: run };
+    await runProgram({ ...options, args: ["inspect"] });
+    await runProgram({ ...options, args: ["build"] });
+    assert.deepEqual(calls, ["default", "registered"]);
+    const duplicate = defineCommand({
+      ...build,
+      path: ["other"],
+      metadata: { aliases: ["build"] },
+    });
+    await assert.rejects(
+      runProgram({
+        ...options,
+        commands: [build, duplicate],
+        args: ["inspect"],
+      }),
+      TypeError,
+    );
   });
 
   it("suggests default positionals only before committing to another branch", async () => {

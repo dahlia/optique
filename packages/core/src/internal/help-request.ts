@@ -1,4 +1,25 @@
 /** Internal help request bridge; not a stable extension API. @module */
+import { longestMatch, type LongestMatchOptions } from "../constructs.ts";
+import type { Mode, Parser } from "../parser.ts";
+import { allowDuplicateLeadingCommandNamesKey } from "./command-alias.ts";
+
+/**
+ * Composes registered and default branches whose dispatch is mutually exclusive.
+ * @param registered The already validated registered-command parser.
+ * @param fallback The implicit default parser.
+ * @returns A combined parser for usage and branch-state operations.
+ * @internal
+ */
+export function composeDefaultBranches<T>(
+  registered: Parser<Mode, T, unknown>,
+  fallback: Parser<Mode, T, unknown>,
+): Parser<Mode, T, unknown> {
+  const options: LongestMatchOptions & {
+    readonly [allowDuplicateLeadingCommandNamesKey]: true;
+  } = { [allowDuplicateLeadingCommandNamesKey]: true };
+  return longestMatch(registered, fallback, options);
+}
+
 const helpRequestKey = Symbol.for("@optique/core/internal/help-request");
 const defaultDispatchKey = Symbol.for(
   "@optique/core/internal/default-dispatch",

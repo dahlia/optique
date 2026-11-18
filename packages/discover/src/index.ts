@@ -1,4 +1,5 @@
 import {
+  composeDefaultBranches,
   withDefaultDispatch,
   withHelpRequest,
 } from "@optique/core/internal/help-request";
@@ -1268,11 +1269,11 @@ function createExecutableNodeParser(
 ): Parser<Mode, ProgramInvocation, ExecutableNodeParserState> {
   const leafParser = createLeafParser(commandDefinition, path, !exclusiveRoot);
   const branchParsers = [childParser, leafParser] as const;
-  const parser = longestMatch(childParser, leafParser) as Parser<
-    Mode,
-    ProgramInvocation,
-    unknown
-  >;
+  const parser = (
+    exclusiveRoot
+      ? composeDefaultBranches(childParser, leafParser)
+      : longestMatch(childParser, leafParser)
+  ) as Parser<Mode, ProgramInvocation, unknown>;
   const phase2SeedHook = findPhase2SeedHook(parser);
   const executableParser: Parser<
     Mode,
