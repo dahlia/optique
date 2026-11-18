@@ -44,6 +44,30 @@ import {
   runProgram,
 } from "#src/index.ts";
 
+it("runs an explicit default from an empty discovery directory", async () => {
+  const dir = await makeTempDir();
+  try {
+    const values: string[] = [];
+    const defaultCommand = defineCommand({
+      parser: argument(string()),
+      handler(value) {
+        values.push(value);
+      },
+    });
+    const options = { dir, metadata: { name: "app" }, args: ["file.ts"] };
+    await assert.rejects(discoverCommands({ dir }), /No command modules/);
+    await assert.rejects(runProgram(options), /No command modules/);
+    await runProgram({ ...options, defaultCommand });
+    assert.deepEqual(values, ["file.ts"]);
+    await assert.rejects(
+      runProgram({ ...options, dir: join(dir, "missing"), defaultCommand }),
+      { code: "ENOENT" },
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 describe("defineCommand()", () => {
   it("validates the same handler value it returns", () => {
     let reads = 0;

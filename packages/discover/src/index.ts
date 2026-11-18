@@ -456,13 +456,20 @@ export function getDefaultExtensions(
 export async function discoverCommands(
   options: DiscoverCommandsOptions,
 ): Promise<readonly DiscoveredCommand[]> {
+  return await discoverCommandEntries(options, false);
+}
+
+async function discoverCommandEntries(
+  options: DiscoverCommandsOptions,
+  allowEmpty: boolean,
+): Promise<readonly DiscoveredCommand[]> {
   const dir = pathFromDir(options.dir);
   const extensions = normalizeExtensions(
     options.extensions ?? getDefaultExtensions(),
   );
   const entryFileName = normalizeEntryFileName(options.entryFileName);
   const files = await collectCommandFiles(dir, extensions);
-  if (files.length < 1) {
+  if (files.length < 1 && !allowEmpty) {
     throw new TypeError(`No command modules found in ${dir}.`);
   }
 
@@ -666,11 +673,14 @@ export async function runProgram<R = unknown>(
   if (isStaticRunProgramOptions(options)) {
     commands = staticCommandsToEntries(options.commands);
   } else {
-    commands = await discoverCommands({
-      dir: options.dir,
-      extensions: options.extensions,
-      entryFileName: options.entryFileName,
-    });
+    commands = await discoverCommandEntries(
+      {
+        dir: options.dir,
+        extensions: options.extensions,
+        entryFileName: options.entryFileName,
+      },
+      options.defaultCommand !== undefined,
+    );
   }
   const defaultEntry = resolveDefaultCommand(commands, options.defaultCommand);
   const { parser, tree } = createProgram(

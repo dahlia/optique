@@ -256,6 +256,9 @@ works for both named commands and the root command in *commands/index.ts*.
 If you use both forms, they must refer to the same definition. A default
 cannot coexist with a separate root command.
 
+You can also pass an explicit `defaultCommand` with an empty discovery
+directory. Without an explicit default, an empty directory is still an error.
+
 With a registered `build` command, `app build` selects that command even
 when its arguments are invalid. `app ./build` and `app -- build` pass the
 value to the default. An ordinary option in the first position also selects
