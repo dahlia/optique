@@ -45,6 +45,30 @@ import {
 } from "#src/index.ts";
 
 describe("defineCommand()", () => {
+  it("keeps a validated inherited default marker", () => {
+    let reads = 0;
+    const input = {
+      __proto__: {
+        get default() {
+          reads++;
+          return true;
+        },
+      },
+      parser: object({}),
+      handler() {},
+    };
+    const definition = defineCommand(input);
+    assert.ok(definition.default);
+    assert.equal(reads, 1);
+    assert.ok(
+      !Object.hasOwn(
+        defineCommand({ parser: input.parser, handler() {} }),
+        "default",
+      ),
+    );
+    assert.ok(defineCommand({ ...input, default: false }).default === false);
+  });
+
   it("preserves handler value inference", () => {
     defineCommand({
       parser: object({

@@ -532,7 +532,8 @@ export function defineCommand<M extends Mode, T, R = unknown>(
     throw new TypeError("Command parser must be an Optique parser.");
   }
   if (command.path != null) validateCommandPath(command.path);
-  if (command.default !== undefined && typeof command.default !== "boolean") {
+  const { default: isDefault, ...definition } = command;
+  if (isDefault !== undefined && typeof isDefault !== "boolean") {
     throw new TypeError("Command default must be a boolean.");
   }
   if (typeof command.handler !== "function") {
@@ -540,7 +541,8 @@ export function defineCommand<M extends Mode, T, R = unknown>(
   }
   if (command.hooks != null) validateHooks(command.hooks, "Command");
   return {
-    ...command,
+    ...definition,
+    ...(isDefault === undefined ? {} : { default: isDefault }),
     [commandBrand]: true,
   };
 }
