@@ -71,6 +71,7 @@ import {
   attemptParseAsync,
   attemptParseSync,
   createEffectfulCompletionSession,
+  getDocPageForConsumedPrefix,
   type ParseAttempt,
 } from "./internal/parser.ts";
 import { dispatchByMode } from "./internal/mode-dispatch.ts";
@@ -3085,10 +3086,13 @@ export function runParser<
         }
 
         // Get doc page - may return Promise for async parsers
-        const docOrPromise = getDocPage(
-          docGeneratorParser,
-          classified.parsedDefaultPrefix ?? classified.commands,
-        );
+        const docOrPromise =
+          classified.parsedDefaultPrefix == null
+            ? getDocPage(docGeneratorParser, classified.commands)
+            : getDocPageForConsumedPrefix(
+                docGeneratorParser,
+                classified.parsedDefaultPrefix,
+              );
         if (docOrPromise instanceof Promise) {
           return docOrPromise.then(displayHelp);
         }

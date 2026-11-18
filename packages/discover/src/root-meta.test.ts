@@ -508,7 +508,9 @@ describe("explicit default commands", () => {
       path: ["run"],
       parser: command(
         "sub",
-        command("nested", object({ flag: option("--sub-flag") })),
+        command("nested", object({ flag: option("--sub-flag") }), {
+          usageLine: [{ type: "literal", value: "custom-nested-usage" }],
+        }),
       ),
       handler() {
         assert.fail("Help must not dispatch a handler.");
@@ -517,6 +519,7 @@ describe("explicit default commands", () => {
     for (const args of [
       ["sub", "nested", "--help"],
       ["run", "sub", "nested", "--help"],
+      ["sub", "nested", "--sub-flag", "--help"],
     ]) {
       const result = await captureProgramRun({
         ...presentation,
@@ -526,6 +529,7 @@ describe("explicit default commands", () => {
       });
       assert.equal(result.exitCode, 0, result.stderr);
       assert.match(result.stdout, /--sub-flag/);
+      assert.match(result.stdout, /custom-nested-usage/);
     }
   });
 

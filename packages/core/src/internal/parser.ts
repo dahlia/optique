@@ -2303,6 +2303,27 @@ export function getDocPageAsync(
 }
 
 /**
+ * Renders help after replaying the consumed prefix of an implicit invocation.
+ * @param parser The program parser.
+ * @param prefix The consumed input, including any options needed for replay.
+ * @returns The selected command's documentation.
+ * @internal
+ */
+export function getDocPageForConsumedPrefix(
+  parser: Parser<Mode, unknown, unknown>,
+  prefix: readonly string[],
+): DocPage | undefined | Promise<DocPage | undefined> {
+  return parser.mode === "sync"
+    ? getDocPageSyncImpl(
+        parser as Parser<"sync", unknown, unknown>,
+        prefix,
+        undefined,
+        true,
+      )
+    : getDocPageAsyncImpl(parser, prefix, undefined, true);
+}
+
+/**
  * Generates a documentation page for a parser based on its current state after
  * attempting to parse the provided arguments. This function is useful for
  * creating help documentation that reflects the current parsing context.
@@ -2390,6 +2411,7 @@ function getDocPageSyncImpl(
   parser: Parser<"sync", unknown, unknown>,
   args: readonly string[],
   options?: ParseOptions,
+  useLastMatchedCommand = false,
 ): DocPage | undefined {
   const initialState = injectAnnotationsIntoState(parser.initialState, options);
   const exec = trackCommandDocPolicy({
@@ -2420,7 +2442,13 @@ function getDocPageSyncImpl(
     );
     if (isBufferUnchanged(previousBuffer, context.buffer)) break;
   }
-  return buildDocPage(parser, context, args, matchedCommandArgIndices);
+  return buildDocPage(
+    parser,
+    context,
+    args,
+    matchedCommandArgIndices,
+    useLastMatchedCommand,
+  );
 }
 
 /**
@@ -2430,6 +2458,7 @@ async function getDocPageAsyncImpl(
   parser: Parser<Mode, unknown, unknown>,
   args: readonly string[],
   options?: ParseOptions,
+  useLastMatchedCommand = false,
 ): Promise<DocPage | undefined> {
   const initialState = injectAnnotationsIntoState(parser.initialState, options);
   const exec = trackCommandDocPolicy({
@@ -2460,7 +2489,13 @@ async function getDocPageAsyncImpl(
     );
     if (isBufferUnchanged(previousBuffer, context.buffer)) break;
   }
-  return buildDocPage(parser, context, args, matchedCommandArgIndices);
+  return buildDocPage(
+    parser,
+    context,
+    args,
+    matchedCommandArgIndices,
+    useLastMatchedCommand,
+  );
 }
 
 /**
@@ -2472,6 +2507,7 @@ function buildDocPage(
   context: ParserContext<unknown>,
   args: readonly string[],
   matchedCommandArgIndices?: ReadonlySet<number>,
+  useLastMatchedCommand = false,
 ): DocPage | undefined {
   let effectiveArgs: readonly string[] = args;
   let showUsage = getCommandDocPolicy(context.exec);
@@ -2603,6 +2639,10 @@ function buildDocPage(
     effectiveArgs.length - context.buffer.length,
   );
   const commandArgIndices = args.length > 0 ? matchedCommandArgIndices : null;
+  let usageOwnerIndex = effectiveArgs.length - 1;
+  if (useLastMatchedCommand && commandArgIndices != null) {
+    for (const index of commandArgIndices) usageOwnerIndex = index;
+  }
   for (let argIndex = 0; argIndex < effectiveArgs.length; argIndex++) {
     const arg = effectiveArgs[argIndex];
     if (i >= usage.length) break;
@@ -2628,12 +2668,7 @@ function buildDocPage(
       usage.splice(i, usage.length - i, ...found);
       term = usage[i];
     }
-    maybeApplyCommandUsageLine(
-      term,
-      arg,
-      argIndex === effectiveArgs.length - 1,
-      i,
-    );
+    maybeApplyCommandUsageLine(term, arg, argIndex === usageOwnerIndex, i);
     if (
       found != null ||
       term.type !== "sequence" ||
