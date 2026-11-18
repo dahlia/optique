@@ -573,7 +573,7 @@ describe("explicit default commands", () => {
       args: ["completions", "bash"],
     });
     assert.equal(script.exitCode, 0, script.stderr);
-    assert.match(script.stdout, /\bcompletions\b/);
+    assert.match(script.stdout, /admin 'completions' 'bash'/);
     const suggestions = await captureProgramRun({
       ...options,
       help: {
@@ -584,6 +584,23 @@ describe("explicit default commands", () => {
     });
     assert.doesNotMatch(suggestions.stdout, /^assist$/m);
     assert.match(suggestions.stdout, /^--assist$/m);
+  });
+
+  it("keeps attached completion options in the script callback", async () => {
+    const named = defineCommand({
+      path: ["--completion"],
+      parser: object({}),
+      handler() {},
+    });
+    const { root } = fixture();
+    const script = await captureProgramRun({
+      ...presentation,
+      commands: [named],
+      defaultCommand: root,
+      args: ["--completion=bash"],
+    });
+    assert.equal(script.exitCode, 0, script.stderr);
+    assert.match(script.stdout, /admin '--completion=bash'/);
   });
 
   it("suggests default positionals only before committing to another branch", async () => {
@@ -668,6 +685,26 @@ describe("explicit default commands", () => {
       defaultCommand: root,
       args: ["completion", "bash", "help", "tool", ""],
     });
+    assert.match(suggestions.stdout, /^sub$/m);
+  });
+
+  it("completes a help path after command-free usage groups", async () => {
+    const flags = Object.fromEntries(
+      Array.from({ length: 24 }, (_, i) => [`flag${i}`, option(`--flag-${i}`)]),
+    );
+    const tool = defineCommand({
+      path: ["tool"],
+      parser: object({ ...flags, sub: command("sub", object({})) }),
+      handler() {},
+    });
+    const { root } = fixture();
+    const suggestions = await captureProgramRun({
+      ...presentation,
+      commands: [tool],
+      defaultCommand: root,
+      args: ["completion", "bash", "help", "tool", ""],
+    });
+    assert.equal(suggestions.exitCode, 0, suggestions.stderr);
     assert.match(suggestions.stdout, /^sub$/m);
   });
 

@@ -33,6 +33,7 @@ import type { ProgramMetadata } from "@optique/core/program";
 import { command } from "@optique/core/primitives";
 import {
   type HiddenVisibility,
+  extractCommandNames,
   isDocHidden,
   isSuggestionHidden,
   mergeHidden,
@@ -2239,6 +2240,12 @@ function parserHelpNames(
           : [];
       }
       case "exclusive":
+        if (
+          !term.terms.some(
+            (branch) => extractCommandNames(branch, true).size > 0,
+          )
+        )
+          break;
         return term.terms.flatMap((branch) =>
           parserHelpNames([...branch, ...rest], path),
         );
@@ -2246,6 +2253,7 @@ function parserHelpNames(
         return parserHelpNames([...term.terms, ...rest], path);
       case "optional":
       case "multiple":
+        if (extractCommandNames(term.terms, true).size === 0) break;
         return [
           ...parserHelpNames([...term.terms, ...rest], path),
           ...parserHelpNames(rest, path),

@@ -809,7 +809,7 @@ type ParsedResult =
   | {
       readonly type: "completion";
       readonly source: "command" | "option";
-      readonly entryPoint?: string;
+      readonly scriptArgs?: readonly string[];
       readonly shell: string;
       readonly commandPath?: readonly string[];
       readonly args: readonly string[];
@@ -900,7 +900,7 @@ function classifyFirstMeta(
       return {
         type: "completion",
         source: entry.form,
-        entryPoint: entry.name,
+        scriptArgs: args.slice(0, entry.attached == null ? 2 : 1),
         shell: entry.attached ?? next ?? "",
         args: args.slice(entry.attached == null ? 2 : 1),
       };
@@ -1676,7 +1676,7 @@ function handleCompletion<M extends Mode, THelp, TError>(
   automaticWidth = false,
   errors?: NonNullable<RunOptions<THelp, TError>["completion"]>["errors"],
   includeCommandSuggestions = false,
-  completionEntryPoint?: string,
+  scriptArgs?: readonly string[],
 ): ModeValue<M, THelp | TError> {
   const errorOptions = <T extends object>(format: T): T =>
     automaticWidth
@@ -1808,15 +1808,13 @@ function handleCompletion<M extends Mode, THelp, TError>(
 
   if (args.length === 0) {
     // Generate completion script
-    const completionArg =
-      completionEntryPoint ??
-      (isOptionMode
-        ? (completionOptionDisplayName ?? "--completion")
-        : (completionCommandDisplayName ?? "completion"));
-    const script = shell.generateScript(programName, [
-      completionArg,
-      shellName,
-    ]);
+    const completionArg = isOptionMode
+      ? (completionOptionDisplayName ?? "--completion")
+      : (completionCommandDisplayName ?? "completion");
+    const script = shell.generateScript(
+      programName,
+      scriptArgs ?? [completionArg, shellName],
+    );
     stdout(script);
 
     return dispatchByMode(
@@ -2828,7 +2826,7 @@ export function runParser<
           automaticWidth,
           options.completion?.errors,
           defaultDispatch != null,
-          classified.entryPoint,
+          classified.scriptArgs,
         ) as InferValue<TParser>;
       }
 
