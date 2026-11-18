@@ -2218,10 +2218,9 @@ function helpCommandNames(
   for (const [index, token] of path.entries()) {
     const child = findCommandChild(node, token)?.[1];
     if (child == null)
-      return parserHelpNames(
-        node.command?.parser.usage ?? [],
-        path.slice(index),
-      );
+      return node === root
+        ? []
+        : parserHelpNames(node.command?.parser.usage ?? [], path.slice(index));
     if (isSuggestionHidden(child.command?.metadata?.hidden)) return [];
     node = child;
   }
@@ -2231,7 +2230,11 @@ function helpCommandNames(
         ? []
         : [name, ...(child.command?.metadata?.aliases ?? [])],
     )
-    .concat(parserHelpNames(node.command?.parser.usage ?? [], []));
+    .concat(
+      node === root
+        ? []
+        : parserHelpNames(node.command?.parser.usage ?? [], []),
+    );
 }
 
 // A command's inner usage follows its name within the same usage branch.
@@ -2250,16 +2253,18 @@ function parserHelpNames(
           ? parserHelpNames(rest, path.slice(1))
           : [];
       }
-      case "exclusive":
-        if (
-          !term.terms.some(
-            (branch) => extractCommandNames(branch, true).size > 0,
-          )
-        )
-          break;
-        return term.terms.flatMap((branch) =>
+      case "exclusive": {
+        const withCommands = term.terms.filter(
+          (branch) => extractCommandNames(branch, true).size > 0,
+        );
+        if (withCommands.length === 0) break;
+        const names = withCommands.flatMap((branch) =>
           parserHelpNames([...branch, ...rest], path),
         );
+        return withCommands.length === term.terms.length
+          ? names
+          : names.concat(parserHelpNames(rest, path));
+      }
       case "sequence":
         return parserHelpNames([...term.terms, ...rest], path);
       case "optional":

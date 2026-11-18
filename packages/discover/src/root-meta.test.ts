@@ -544,6 +544,28 @@ describe("explicit default commands", () => {
     }
   });
 
+  it("does not complete unregistered commands from the root default after help", async () => {
+    const root = defineCommand({
+      path: [],
+      default: true,
+      parser: command("inspect", object({})),
+      handler() {},
+    });
+    const { build } = fixture();
+    const options = { ...presentation, commands: [root, build] };
+    const suggestions = await captureProgramRun({
+      ...options,
+      args: ["completion", "bash", "help", ""],
+    });
+    assert.match(suggestions.stdout, /^build$/m);
+    assert.doesNotMatch(suggestions.stdout, /^inspect$/m);
+    assert.equal(
+      (await captureProgramRun({ ...options, args: ["help", "inspect"] }))
+        .exitCode,
+      1,
+    );
+  });
+
   it("keeps the separator ahead of a registered name or alias", async () => {
     const { root, calls } = fixture();
     const named = defineCommand({
@@ -733,13 +755,21 @@ describe("explicit default commands", () => {
     assert.match(suggestions.stdout, /^sub$/m);
   });
 
-  it("completes a help path after command-free usage groups", async () => {
+  it("completes a help path after command-free usage branches", async () => {
     const flags = Object.fromEntries(
       Array.from({ length: 24 }, (_, i) => [`flag${i}`, option(`--flag-${i}`)]),
     );
     const tool = defineCommand({
       path: ["tool"],
-      parser: object({ ...flags, sub: command("sub", object({})) }),
+      parser: object({
+        ...flags,
+        branch: or(
+          command("inspect", object({})),
+          option("--first"),
+          option("--second"),
+        ),
+        sub: command("sub", object({})),
+      }),
       handler() {},
     });
     const { root } = fixture();
@@ -750,6 +780,7 @@ describe("explicit default commands", () => {
       args: ["completion", "bash", "help", "tool", ""],
     });
     assert.equal(suggestions.exitCode, 0, suggestions.stderr);
+    assert.match(suggestions.stdout, /^inspect$/m);
     assert.match(suggestions.stdout, /^sub$/m);
   });
 
