@@ -2313,14 +2313,11 @@ export function getDocPageForConsumedPrefix(
   parser: Parser<Mode, unknown, unknown>,
   prefix: readonly string[],
 ): DocPage | undefined | Promise<DocPage | undefined> {
-  return parser.mode === "sync"
-    ? getDocPageSyncImpl(
-        parser as Parser<"sync", unknown, unknown>,
-        prefix,
-        undefined,
-        true,
-      )
-    : getDocPageAsyncImpl(parser, prefix, undefined, true);
+  return dispatchParserByMode(
+    parser,
+    (sync) => getDocPageSyncImpl(sync, prefix, undefined, true),
+    (async) => getDocPageAsyncImpl(async, prefix, undefined, true),
+  );
 }
 
 /**
@@ -2640,8 +2637,15 @@ function buildDocPage(
   );
   const commandArgIndices = args.length > 0 ? matchedCommandArgIndices : null;
   let usageOwnerIndex = effectiveArgs.length - 1;
-  if (useLastMatchedCommand && commandArgIndices != null) {
-    for (const index of commandArgIndices) usageOwnerIndex = index;
+  if (
+    useLastMatchedCommand &&
+    commandArgIndices != null &&
+    commandArgIndices.size > 0
+  ) {
+    usageOwnerIndex = -1;
+    for (const index of commandArgIndices) {
+      usageOwnerIndex = Math.max(usageOwnerIndex, index);
+    }
   }
   for (let argIndex = 0; argIndex < effectiveArgs.length; argIndex++) {
     const arg = effectiveArgs[argIndex];

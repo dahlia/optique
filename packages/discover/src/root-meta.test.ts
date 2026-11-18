@@ -504,14 +504,25 @@ describe("explicit default commands", () => {
   });
 
   it("documents commands matched within the implicit default", async () => {
+    const parser = command(
+      "sub",
+      command("nested", object({ flag: option("--sub-flag") }), {
+        usageLine: [{ type: "literal", value: "custom-nested-usage" }],
+      }),
+    );
     const run = defineCommand({
       path: ["run"],
-      parser: command(
-        "sub",
-        command("nested", object({ flag: option("--sub-flag") }), {
-          usageLine: [{ type: "literal", value: "custom-nested-usage" }],
-        }),
-      ),
+      parser: {
+        ...parser,
+        parse(context: Parameters<typeof parser.parse>[0]) {
+          const outer = parser.parse(context);
+          if (!outer.success || outer.consumed[0] !== "sub") return outer;
+          const inner = parser.parse(outer.next);
+          return inner.success
+            ? { ...inner, consumed: [...outer.consumed, ...inner.consumed] }
+            : outer;
+        },
+      },
       handler() {
         assert.fail("Help must not dispatch a handler.");
       },
