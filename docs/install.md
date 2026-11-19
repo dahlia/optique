@@ -98,9 +98,26 @@ bunx skills add dahlia/optique --skill optique
 
 ### Keep the skill aligned with the npm package
 
-If your project installs *@optique/core* from npm, [skills-npm] can use the
-skill bundled with that package.  This keeps the skill on the same version as
-the library:
+The npm package for *@optique/core* bundles the Optique skill. Linking the
+bundled copy keeps the skill on the same version as the library.
+
+#### pnpm 12.11.0 and later
+
+With [pnpm's built-in Agent Skills support], you don't need *skills-npm*.
+After adding *@optique/core* as a direct dependency, run:
+
+~~~~ bash
+pnpm approve
+~~~~
+
+Select *@optique/core* in the approval prompt. The first time you approve
+a skill in the project, pnpm also asks where to link it. pnpm records the
+approval in *pnpm-workspace.yaml*.
+
+#### npm, Bun, and older pnpm versions
+
+Use [skills-npm] if you install with npm, Bun, or a version of pnpm older than
+12.11.0:
 
 ::: code-group
 
@@ -121,6 +138,7 @@ bunx skills-npm setup
 
 :::
 
+[pnpm's built-in Agent Skills support]: https://pnpm.io/agent-skills
 [skills-npm]: https://github.com/antfu/skills-npm
 
 ### Install for Claude Code
