@@ -14,9 +14,10 @@ Optique: Type-safe combinatorial CLI parser for TypeScript
 Type-safe combinatorial CLI parser for TypeScript inspired by Haskell's
 [optparse-applicative] and TypeScript's [Zod]. Build composable parsers for
 command-line interfaces with full type safety, automatic type inference, and
-built-in shell completion support for Bash, zsh, fish, PowerShell, and Nushell,
-plus config file integration and man page generation from the same parser
-definitions.
+built-in shell completion support for Bash, zsh, fish, PowerShell, and Nushell.
+Optique also supports config files. Use *@optique/man* to generate man pages
+from parser definitions. The *@optique/man/markdown* renderer combines command
+pages into a [linked Markdown reference].
 
 > [!NOTE]
 > Optique is a parsing library that focuses on extracting and validating
@@ -36,6 +37,7 @@ definitions.
 [GitHub Sponsors]: https://github.com/sponsors/dahlia
 [optparse-applicative]: https://github.com/pcapriotti/optparse-applicative
 [Zod]: https://zod.dev/
+[linked Markdown reference]: ./docs/concepts/markdown-reference.md
 
 
 Why Optique
