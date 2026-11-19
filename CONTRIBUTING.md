@@ -86,8 +86,8 @@ Oxlint handles the mapped repository lint rules.  It is not a replacement for
 every recommended Deno lint rule.  For example, `ban-unknown-rule-code`,
 `ban-untagged-ignore`, and `ban-unused-ignore` still require Deno.  The
 [rule mapping] records each counterpart and compatibility-only check; the
-complete recommended Deno lint set remains in `check:deno`.  Run the
-compatibility checks before committing even when the Node.js-only checks pass.
+complete recommended Deno lint set remains in `check:deno`.  See
+[Before committing](#before-committing) for when to run compatibility checks.
 
 Oxfmt owns JavaScript/TypeScript-family and JSON/JSONC-family files selected by
 the formatting task.  Markdown stays with Hongdown (and Sacho for changelog
@@ -420,8 +420,13 @@ Read [Sacho's philosophy] for the reasoning behind these rules and the
 
 ### Before committing
 
- -  *Run all tests*: Before committing any changes, run `mise test` to
-    ensure all tests pass across Deno, Node.js, and Bun runtimes.
+ -  For documentation-only changes, check Markdown with
+    `mise run check:fmt-md`.  If you change a documented command, verify it
+    directly.  You can leave the full `mise test` suite to CI.
+ -  For changes under *docs/*, run `mise run docs:build` before committing,
+    even if you only changed prose.
+ -  For changes beyond documentation, run `mise test` before committing.
+    This includes compatibility checks and tests across Deno, Node.js, and Bun.
 
 
 Code style
@@ -828,6 +833,7 @@ pnpm add @optique/run
 mise run docs:build  # Build workspace packages and production docs with Twoslash
 ~~~~
 
-For the local documentation server, run `pnpm dev` from *docs/*.  Always run
-`mise run docs:build` before committing to catch Twoslash type errors.  Neither
-documentation command requires Deno.
+For the local documentation server, run `pnpm dev` from *docs/*.  The
+production build checks Twoslash examples for type errors.  Neither
+documentation command requires Deno.  See
+[Before committing](#before-committing) for the build requirement.
