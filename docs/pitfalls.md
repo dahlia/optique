@@ -356,11 +356,13 @@ Value parser surprises
     follows its option (`--offset -5`). But a *positional* token that begins
     with `-` looks like an option, so use the `--` separator to mark the end of
     options: `myapp -- -5`.
- -  *A value-taking option ends a short-option bundle.* Since 1.4.0,
+ -  *A value-taking option ends a short-option bundle.*
+    With
+    [attached short-option values](./concepts/primitives.md#attached-short-option-values),
     `-vp8080` means `-v -p 8080` when `-v` is a flag and `-p` takes a value.
-    `-pv` instead gives `-p` the value `"v"`; it does not enable `-v`.
-    The suffix is literal, so `-p=8080` supplies `"=8080"`. Declared
-    single-dash full names take precedence over short-prefix splitting.
+    `-pv` instead gives `-p` the value `"v"`; it does not enable `-v`. The
+    suffix is literal, so `-p=8080` supplies `"=8080"`. Declared single-dash
+    full names take precedence over short-prefix splitting.
  -  *Boolean options reject `=value`.* `--verbose=true` fails for a value-less
     `option("--verbose")`. The `=value` form is for options that take a value.
  -  *`choice()` matches exactly.* It is case-sensitive and whitespace-sensitive

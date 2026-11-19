@@ -266,7 +266,7 @@ const color = prompt(option("--color", string()), {
 
 ### `autocomplete`
 
-*Available since Optique 1.4.0.*
+*This prompt type is available since Optique 1.4.0.*
 
 Lets the user type to filter a list and choose one value:
 
@@ -325,7 +325,7 @@ string, parsing fails.
 
 ### `autocomplete-multiselect`
 
-*Available since Optique 1.4.0.*
+*This prompt type is available since Optique 1.4.0.*
 
 Filters a local list while allowing several selections. The type name uses
 kebab case; the Clack function it calls is `autocompleteMultiselect()`.
@@ -722,6 +722,10 @@ When you store the derived configuration in a variable before passing it to
 `prompt()`, add `satisfies SelectConfig` to the returned object so that
 `type: "select"` does not widen to `string`.
 
+### Showing a spinner while configuration loads
+
+*This option is available since Optique 1.4.0.*
+
 Set `pendingMessage` in `prompt()`'s third argument to show a Clack spinner
 while the resolver runs.  This is opt-in: omitting it keeps resolution silent.
 The final line keeps the message with a success, error, or cancellation symbol.
@@ -835,12 +839,13 @@ Re-exported from *@optique/prompt*.  It supplies the shared `validate`,
 
 ### `ClackPromptOptions<T>`
 
-*Available since Optique 1.4.0.*
+*This API is available since Optique 1.4.0.*
 
 Extends [`PromptOptions<T>`] with `pendingMessage?: string`.  Any string,
 including an empty one, enables the derived configuration spinner; omitting
 it keeps resolution silent.  Static configurations ignore this option.
-See [Options loaded at prompt time](#options-loaded-at-prompt-time).
+See
+[Showing a spinner while configuration loads](#showing-a-spinner-while-configuration-loads).
 
 [`PromptOptions<T>`]: #promptoptions-t
 

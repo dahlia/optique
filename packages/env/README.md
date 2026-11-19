@@ -76,10 +76,16 @@ Features
  -  *.env file loading* without mutating `process.env` or `Deno.env`
  -  *Custom env source* for Deno, tests, and custom runtimes
  -  *Composable contexts* with `run()`/`runAsync()`/`runWith()`
- -  *Direct fallback reads* through `bindEnv()`'s `readFallback()` method,
-    useful when a CLI parse fails before returning a value. It reads only the
-    environment variable or default and returns a result, not a partial CLI
-    parse.
+
+
+Reading a fallback directly
+---------------------------
+
+*This API is available since Optique 1.4.0.*
+
+Call `readFallback()` on the parser returned by `bindEnv()` to read the
+environment variable or default even when CLI parsing fails. The result
+contains only the fallback, not a partial CLI parse.
 
 
 Documentation

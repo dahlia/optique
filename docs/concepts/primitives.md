@@ -201,12 +201,16 @@ Java-style
 DOS-style
 :   `/port:8080`
 
-Attached short-option values
-:   `-p8080` (equivalent to `-p 8080`, available since Optique 1.4.0)
-
 Bundled short options
-:   `-abc` (equivalent to `-a -b -c` for boolean flags), or `-abp8080`
-    (equivalent to `-a -b -p 8080` when `-p` takes a value)
+:   `-abc` (equivalent to `-a -b -c` for Boolean flags)
+
+### Attached short-option values
+
+*This feature is available since Optique 1.4.0.*
+
+Write `-p8080` for `-p 8080` when `-p` takes a value. The option can also
+follow flags in a bundle: `-abp8080` is equivalent to `-a -b -p 8080`.
+These forms also work with Unicode short names such as `-é`.
 
 Short-option bundles are read from left to right. When an option takes a value,
 the entire remaining suffix is its value; if the suffix is empty, the next
@@ -377,7 +381,7 @@ consistent option handling.
 
 ### Custom errors
 
-*The `errors.unexpectedValue` option is available since Optique 1.4.0.*
+*This option is available since Optique 1.4.0.*
 
 `errors.unexpectedValue` customizes the error for a value
 attached to a flag as `--name=value`, `-name=value` (a single-dash long name),
@@ -401,10 +405,9 @@ See
 [customizing parser error messages](./messages.md#customizing-parser-error-messages)
 for the other error options.
 
-For `option()`, `flag()`, `negatableFlag()`, and `command()`, a mismatch
-callback can be deferred until its error is read.  Ordinary successful parsing
-may discard mismatches without calling it.  Keep these callbacks free of side
-effects; the returned message and suggestions remain available on real failures.
+Keep mismatch callbacks free of side effects. With
+[deferred mismatch diagnostics](./messages.md#deferred-mismatch-diagnostics),
+a successful parse can discard mismatches without calling them.
 
 
 `negatableFlag()` parser
@@ -698,7 +701,9 @@ shell completion, but by default usage and help output continue to show only
 the canonical name.  This keeps the public help text focused on the preferred
 command name without requiring a duplicate hidden command branch.
 
-*Showing aliases in command lists is available since Optique 1.4.0.*
+#### Showing aliases in help
+
+*This feature is available since Optique 1.4.0.*
 
 To let users discover aliases from help, set `showAliases` on the command.
 Its entry in command lists then gets an annotation after the description:

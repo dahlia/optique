@@ -777,12 +777,14 @@ const verboseFlag = flag("--verbose", {
   errors: {
     duplicate: (token: string) =>
       message`${optionName("--verbose")} was already specified: ${token}.`,
-    // Available since Optique 1.4.0
     unexpectedValue: (name, input) =>
       message`${optionName(name)} takes no value, got ${value(input)}.`
   }
 });
 ~~~~
+
+See [`flag()` custom errors](./primitives.md#custom-errors) for the
+`unexpectedValue` option and its availability.
 
 ### Function-based error messages
 
@@ -1070,18 +1072,6 @@ formatted or disable them entirely for specific parsers.
 The `option()` and `flag()` parsers support a `noMatch` error option that
 receives both the invalid input and an array of similar valid options.
 
-Optique builds a mismatch message when that failure is selected or its `error`
-property is read.  A successful parse can discard many mismatches without
-calling `noMatch` or searching for suggestions.  When called, the formatter
-receives the same suggestions as before.  Formatters may run zero or more times
-across a parse and should not be used for side effects.  Exceptions from a
-deferred formatter surface when the error is read.
-
-Custom parser wrappers can forward an unselected failure unchanged to preserve
-this deferral.  Reading `result.error`, spreading a failure object, or
-serializing it requests the message.  Top-level `parseSync()` and
-`parseAsync()` return a fully built error on failure.
-
 ~~~~ typescript twoslash
 import { option, flag } from "@optique/core/primitives";
 import { integer } from "@optique/core/valueparser";
@@ -1137,6 +1127,21 @@ const addCmd = command("add", object({}), {
   }
 });
 ~~~~
+
+#### Deferred mismatch diagnostics
+
+*This behavior is available since Optique 1.4.0.*
+
+For `option()`, `flag()`, `negatableFlag()`, and `command()`, Optique builds a
+mismatch message when the failure is selected or its `error` property is
+read. A successful parse can discard mismatches without calling their error
+callbacks or searching for suggestions. Keep these callbacks free of side
+effects. Exceptions from a deferred callback surface when the error is read.
+
+Custom parser wrappers can forward an unselected failure unchanged to
+preserve this behavior. Reading `result.error`, spreading a failure object,
+or serializing it requests the message. Top-level `parseSync()` and
+`parseAsync()` return a fully built error on failure.
 
 #### Combinator and object parsers
 
@@ -1391,13 +1396,9 @@ whitespace normalization; `text` and `lineBreak` are not theme callback roles.
 In addition to the message roles, themes cover `programName`, `label`,
 `syntaxPunctuation`, and `errorLabel`. Labels and punctuation include a `kind`
 field to distinguish headings, usage separators, optional brackets, and
-annotation affixes. Set `annotationStyles.default`, `annotationStyles.choices`,
-`annotationStyles.environment` (since 1.4.0), or `annotationStyles.aliases`
-(since 1.4.0) to customize the surrounding annotation style; `{}` removes the
-default dim styling while preserving child value styles. Environment names use
-the `envVar` callback, with quoting disabled in help annotations. See
-[environment display](./runners.md#environment-display) for the
-`showEnvironment` option.
+annotation affixes. Set `annotationStyles.default` or
+`annotationStyles.choices` to customize the surrounding annotation style;
+`{}` removes the default dim styling while preserving child value styles.
 
 A `TerminalFragment` is a tree of `text`, `concat`, `style`, and `link` nodes. A
 newline in a text leaf forces a line break; each line within a leaf is an
@@ -1416,6 +1417,18 @@ Themes should use pure callbacks. A layout pass may cache a leaf while measuring
 and rendering it. `createMessageFormatter()` and `createPrinter()` snapshot
 callback selection when created; changing the supplied theme object later does
 not replace those callbacks.
+
+### Environment and alias annotation styles
+
+*This API is available since Optique 1.4.0.*
+
+Set `annotationStyles.environment` or `annotationStyles.aliases` to customize
+the respective annotation. As with defaults and choices, `{}` removes the
+default dim styling. Environment names use the `envVar` callback, with
+quoting disabled in help annotations. See
+[environment display](./runners.md#environment-display) and
+[showing command aliases](./runners.md#alias-display) for how to enable the
+annotations.
 
 
 Injecting a message formatter

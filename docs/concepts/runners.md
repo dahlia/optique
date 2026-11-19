@@ -349,12 +349,8 @@ setting applies to full help pages, including help rendered above parse
 errors with `aboveError: "help"`.  It does not change the explicit
 usage-only preamble from `aboveError: "usage"`.
 
-*Command-level usage visibility is available since Optique 1.4.0.*
-
-[`command()`](./primitives.md#command-parser) can override the runner's
-`showUsage` default with its own `showUsage` option. Descendants inherit the
-nearest explicit command setting, so a command can restore the synopsis with
-`showUsage: true` even when the runner hides it.
+Individual commands can
+[override the runner's `showUsage` default](./primitives.md#command-usage-visibility).
 
 Pass `commandList: "top-level"` when a top-level command menu should show
 only first-level commands instead of recursively listing every nested leaf
@@ -374,7 +370,7 @@ their existing fallback behavior.
 
 ### Command-scoped error usage
 
-*Available since Optique 1.4.0.*
+*This option is available since Optique 1.4.0.*
 
 Set `errorUsage: "command"` to show the matched command's grammar above a
 parse error. The default, `errorUsage: "root"`, keeps the whole program's
@@ -450,18 +446,19 @@ runParser(argument(string()), "myapp", ["--help"], {
 Treat the page as read-only. It is the formatter's input: colors, widths,
 and section ordering still belong to `formatDocPage()`.
 
-*The resolved `page.showUsage` default is available since Optique 1.4.0.*
-
-`page.showUsage` includes the resolved command or runner default. Passing
-`showUsage` directly to `formatDocPage()` overrides that page default.
-Optional fields may be `undefined`.
-
 The callback works with `runParserSync()`, `runParserAsync()`, and the
 `runWith()` family. Existing handlers accepting only the exit code or no
 arguments still work. Wrappers that invoke the callback must forward both
 arguments. Help printed on an error path, including `aboveError: "help"`,
 does not invoke this callback. The higher-level *@optique/run* API continues
 to use `onExit(code)`.
+
+#### Usage visibility on the page
+
+*This API is available since Optique 1.4.0.*
+
+`page.showUsage` includes the resolved command or runner default when
+available. Passing `showUsage` directly to `formatDocPage()` overrides it.
 
 ### Structured error callbacks
 
@@ -477,8 +474,7 @@ your application without extracting a reason from rendered stderr text.
 For applications that manage parsing themselves, `parseDetailed()` also
 retains the canonical `commandPath` and `remainingArgs` on failure. These
 describe parse progress. Neither they nor the `Message` passed to `onError()`
-provide stable machine error codes. Use the structured values for integration
-rather than
+provide stable machine error codes. Use the structured values rather than
 parsing the English text printed by a runner. Changing `errorUsage` only
 changes the usage shown above the error.
 
@@ -878,7 +874,7 @@ const config = run(parser, {
 
 ### Completion error messages
 
-*Available since Optique 1.4.0.*
+*This API is available since Optique 1.4.0.*
 
 Use the object form of `completion` to customize errors for a missing or
 unsupported shell.  Both the option and subcommand forms use these messages:

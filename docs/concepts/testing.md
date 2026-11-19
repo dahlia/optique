@@ -145,6 +145,17 @@ on the test process's terminal and environment variables.  Set both explicitly
 when asserting rendered text so the result is stable between local terminals
 and CI.
 
+### Capturing command-scoped usage
+
+*This option is available since Optique 1.4.0.*
+
+Pass [`errorUsage: "command"`](./runners.md#command-scoped-error-usage) to
+`captureRun()` to test the usage shown above a parse error. The synopsis and
+error message are both in the exited result's `stderr`. If the runner cannot
+identify a visible command, it still shows root usage.
+
+### Output boundaries
+
 The capture helper supplies `stdout`, `stderr`, and `onExit`, so callers cannot
 override them.  Exceptions from parsers, contexts, option callbacks, or
 resource disposal still reject the returned promise.  Output written directly

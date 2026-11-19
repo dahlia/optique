@@ -226,6 +226,16 @@ suggest(parser, ["test", ""]);
 // Suggests completions for 'file' argument
 ~~~~
 
+### Completing attached short-option values
+
+*This feature is available since Optique 1.4.0.*
+
+Value completion recognizes
+[attached short-option values](./primitives.md#attached-short-option-values).
+For example, if `-f` takes a value and `-x` is a flag, `-fj` and `-xfj` both
+complete values starting with `j`. File suggestions still use the shell's
+native path completion.
+
 
 `ValueParser.suggest()` methods
 -------------------------------

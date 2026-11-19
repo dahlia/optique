@@ -101,15 +101,17 @@ const manPage = generateManPage(parser, {
 Markdown command references
 ---------------------------
 
-Import `formatCommandReference()` from `@optique/man/markdown` for one linked
-reference containing explicitly supplied command pages. Supported built-in
-definitions can supply pages through `collectDocPages()` from
-`@optique/core/doc-pages`, with strict reporting for unsupported scopes. Neither
-subpath is imported by ordinary parser or runner entry points.
+*This feature is available since Optique 1.4.0.*
 
-See the [Markdown reference guide] and the [runnable example]. Coverage is
-author-declared, including whether runner-added help/version/completion forms
-are documented.
+Import `formatCommandReference()` from `@optique/man/markdown` for one linked
+reference containing the command pages you supply. Use `collectDocPages()`
+from `@optique/core/doc-pages` to collect pages from supported built-in
+parsers and report unsupported scopes. Ordinary parser and runner imports
+do not load either subpath.
+
+You choose which commands to document and whether to include the runner's
+help, version, or completion entry points. See the [Markdown reference guide]
+and the [runnable example].
 
 [Markdown reference guide]: https://optique.dev/concepts/markdown-reference
 [runnable example]: https://github.com/dahlia/optique/tree/main/packages/man/test/fixtures/markdown-reference

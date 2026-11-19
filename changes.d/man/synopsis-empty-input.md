@@ -7,3 +7,6 @@ links:
  -  Changed the SYNOPSIS section to follow the same rule as `formatUsage()`
     when drawing `or()`, `longestMatch()`, and `multiple()` groups, so both
     show the same optional and required parts.  [[#1013], [#1015], [#1016]]
+ -  Fixed man page synopses to omit entire alternatives that start with
+    hidden commands. Arguments and options from those alternatives no
+    longer appear on their own.  [[#1013], [#1015]]

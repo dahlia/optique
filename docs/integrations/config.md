@@ -1016,7 +1016,6 @@ options:
 :   Whether to expand a leading `~` in the path returned by `getConfigPath`
     to the current user's home directory.  Defaults to `false`.  Has no
     effect with `load`.  See [*Home directory paths*](#home-directory-paths).
-    *Available since Optique 1.4.0.*
 
 At least one of `getConfigPath` or `load` must be provided.
 

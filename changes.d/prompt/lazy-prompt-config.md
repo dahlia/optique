@@ -10,7 +10,8 @@ links:
     bindings, help, and suggestions never trigger it.  The new
     `DerivePromptConfigNoDepsContext` and `DerivePromptConfigNoDepsOptions`
     types describe its context and options.  [[#964], [#979]]
- -  Derived prompt configuration resolvers now receive the prompt's abort
-    `signal` in their context, and aborting while a resolver is pending now
-    rejects parsing right away with the signal's reason.  Previously, the
-    abort was observed only after the resolver settled.  [[#964], [#979]]
+ -  Fixed cancellation while a prompt configuration resolver is pending:
+    parsing now rejects immediately with the abort reason instead of
+    waiting for the resolver to finish. Resolvers with or without dependency
+    sources receive the prompt's abort `signal` so they can also cancel
+    their own work.  [[#964], [#979]]

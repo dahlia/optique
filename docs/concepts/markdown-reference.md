@@ -5,7 +5,7 @@ description: Generate one Markdown reference from supplied command pages or safe
 Markdown command references
 ===========================
 
-*Available since Optique 1.4.0.*
+*This API is available since Optique 1.4.0.*
 
 Import `formatCommandReference()` from *@optique/man/markdown* to produce one
 file containing a linked contents list and a section for each command. It

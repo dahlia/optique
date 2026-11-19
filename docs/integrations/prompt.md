@@ -416,20 +416,26 @@ prompt configuration resolves only once, and every attempt receives that same
 resolved config.  Rejected values are not cached or published as dependency
 values; only the terminal result reaches the existing completion cache.
 
-An optional `AbortSignal` stops an active adapter execution, validator, or
-[derived configuration](#derived-prompt-configurations) resolver and
-propagates its reason.  CLI values, source-bound values, a false runtime
-condition, help, suggestions, and completion probes do not consult the signal.
-The signal does not add general cancellation to parsing or dependency
-scheduling.  If it aborts while a resolver is pending, parsing rejects with
-its reason right away instead of waiting for the resolver to settle.  The
-resolver receives the same signal in its context and should pass it on to
-cancellable work such as network requests; otherwise that work keeps running
-in the background after the prompt has been abandoned.
+An optional `AbortSignal` stops an active adapter execution or validator and
+propagates its reason. CLI values, source-bound values, a false runtime
+condition, help, suggestions, and completion probes do not consult the
+signal. It does not add general cancellation to parsing or dependency
+scheduling.
 
 > [!IMPORTANT]
 > Shared validation applies only to prompted values.  It does not re-run the
 > wrapped parser's value parser, modifiers, or mappings.
+
+### Cancelling a configuration resolver
+
+*This behavior is available since Optique 1.4.0.*
+
+If the signal aborts while a
+[derived configuration](#derived-prompt-configurations) resolver is pending,
+parsing rejects with the signal's reason without waiting for the resolver.
+The resolver receives the same signal in its context. Pass it to cancellable
+work such as network requests; otherwise that work may continue after parsing
+has stopped.
 
 ### Missing values run the adapter
 
@@ -967,32 +973,33 @@ Adapter object accepted by `createPromptAdapter()`.
 :   Optional function that returns a prompt-level default for documentation
     fragments.  Never called with a derived configuration.
 
-`whilePending(work, context)`
-:   Optional generic hook for presenting a pending state while a derived
-    configuration resolver runs, available since 1.4.0.  It receives
-    `work: () => Promise<T>` and a
-    [`PromptPendingContext`](#promptpendingcontext). Call `work()` and preserve
-    its result or rejection.  Repeated calls return the same promise and run
-    the resolver once; `work()` never throws synchronously.  Resolver failures
-    become parse failures after the hook sees the original rejection.  Errors
-    raised by the hook itself propagate unchanged; cancellation takes
-    precedence.
+#### `whilePending(work, context)`
 
-    Finish the indicator before returning.  Clean it up immediately on abort,
-    even if the resolver ignores the signal, and avoid terminal writes when
-    that resolver settles later.  The work promise rejects promptly with the
-    signal's exact reason.  A separate abort listener can release UI resources
-    synchronously; remove it after success, failure, or cancellation.
+*This API is available since Optique 1.4.0.*
 
-    The hook runs only after dependency and declared-default checks succeed.
-    Static configurations, CLI or source-bound values, false runtime
-    conditions, help, suggestions, and deferred completion probes skip it.
-    Validation retries reuse the resolved configuration without calling the
-    hook again.  Adapters that omit the hook retain silent resolution.
+The optional hook lets an adapter show a pending state while a derived
+configuration resolver runs. It receives `work: () => Promise<T>` and a
+[`PromptPendingContext`](#promptpendingcontext). Call `work()` and preserve
+its result or rejection. Repeated calls return the same promise and run
+the resolver once; `work()` never throws synchronously. Resolver failures
+become parse failures after the hook sees the original rejection. Errors
+raised by the hook itself propagate unchanged; cancellation takes precedence.
+
+Finish the indicator before returning. Clean it up immediately on abort,
+even if the resolver ignores the signal, and avoid terminal writes when
+that resolver settles later. The work promise rejects promptly with the
+signal's exact reason. A separate abort listener can release UI resources
+synchronously; remove it after success, failure, or cancellation.
+
+The hook runs only after dependency and declared-default checks succeed.
+Static configurations, CLI or source-bound values, false runtime conditions,
+help, suggestions, and deferred completion probes skip it. Validation
+retries reuse the resolved configuration without calling the hook again.
+Adapters that omit the hook retain silent resolution.
 
 ### `PromptPendingContext`
 
-*Available since Optique 1.4.0.*
+*This API is available since Optique 1.4.0.*
 
 Context for `PromptAdapter.whilePending()`.  Its optional `signal` is the same
 `AbortSignal` supplied through the prompt's shared options.
@@ -1020,8 +1027,8 @@ promise of either result is also accepted.
 `signal`
 :   Optional `AbortSignal` for the interactive fallback.  Its reason propagates
     when it stops an active adapter execution, validator, or derived
-    configuration resolver.  Resolvers also receive it in their context.
-    Stopping a pending resolver is available since Optique 1.4.0.
+    configuration resolver. See
+    [cancelling a configuration resolver](#cancelling-a-configuration-resolver).
 
 ### `PromptExecutionContext`
 
@@ -1054,8 +1061,8 @@ Parameters
     the tuple context has a positional `usedDefaults` tuple.  A flag is
     `true` only when the value came from this configuration's own declared
     default, not from source-level fallbacks such as `withDefault()`.
-    Both contexts also carry the optional `signal` from `PromptOptions`
-    (since Optique 1.4.0).
+    Both contexts also carry the optional `signal` from `PromptOptions`. See
+    [cancelling a configuration resolver](#cancelling-a-configuration-resolver).
 
 :   `options`: Optional `defaultValue` (or `defaultValues` for a tuple)
     thunk evaluated lazily for unpublished sources, plus the same
@@ -1071,18 +1078,19 @@ Throws
 
 ### `derivePromptConfig(resolver, options?)`
 
-*Available since Optique 1.4.0.*
+*This API is available since Optique 1.4.0.*
 
 Creates a `DerivedPromptConfig` that resolves the adapter configuration
 during the real completion phase without reading any dependency source.
 
 Parameters
-:   `resolver`: Receives a context object with the optional `signal` from
-    `PromptOptions`, and returns the adapter configuration synchronously or
-    as a promise.
+:   `resolver`: Receives a `DerivePromptConfigNoDepsContext` with the
+    optional `signal` from `PromptOptions`. It returns the adapter
+    configuration synchronously or as a promise.
 
-:   `options`: The same optional `when`/`otherwise` pair as static
-    configurations.
+:   `options`: A `DerivePromptConfigNoDepsOptions<TOtherwise>` object with the
+    same optional `when`/`otherwise` pair as static configurations. Both
+    types are also exported by *@optique/clack* and *@optique/inquirer*.
 
 Returns
 :   An opaque `DerivedPromptConfig` accepted by every `prompt()` wrapper

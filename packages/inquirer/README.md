@@ -61,6 +61,7 @@ Features
 
  -  *Ten prompt types*: `input`, `password`, `number`, `confirm`, `select`,
     `search`, `rawlist`, `expand`, `checkbox`, and `editor`
+ -  *Custom prompts* through `prompter`, also useful in tests
  -  *Transparent composition* with `bindEnv()` and `bindConfig()` — the
     prompt fires only when no higher-priority source supplies a value
  -  *Dependency-derived configurations* with `derivePromptConfig()` — later

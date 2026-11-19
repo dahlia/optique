@@ -282,7 +282,7 @@ const color = prompt(option("--color", string()), {
 
 ### `search`
 
-*Available since Optique 1.4.0.*
+*This prompt type is available since Optique 1.4.0.*
 
 Loads choices for each search term as the user types:
 

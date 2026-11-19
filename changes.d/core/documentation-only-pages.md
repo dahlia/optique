@@ -5,6 +5,7 @@ links:
 ---
  -  Added `collectDocPages()` in `@optique/core/doc-pages` to collect command
     documentation from supported built-in definitions without parsing or
-    evaluating runtime callbacks. Unsupported scopes are reported explicitly,
-    with strict failure and authored page/subtree replacements.
+    evaluating runtime callbacks. Collection fails by default if a visible
+    scope cannot be documented. Supply replacement pages or subtrees, or
+    pass `strict: false` to receive partial results with explicit gaps.
     [[#1025], [#1095]]

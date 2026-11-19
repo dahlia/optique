@@ -169,11 +169,14 @@ const result = await runAsync(parser, {
 Reading a fallback after a parse error
 --------------------------------------
 
+*This API is available since Optique 1.4.0.*
+
 Keep a reference to a parser returned by `bindEnv()` to read its environment
 fallback in an error handler. `readFallback()` reads the environment variable
 or configured default without using a CLI value from the failed parse. It
-returns a result that may itself be a failure, for example when the environment
-value is invalid. An async bound parser returns a promise.
+applies the wrapped parser's validation when available and returns a
+`ValueParserResult` (or a promise for an async bound parser). The result may
+itself be a failure, for example when the environment value is invalid.
 
 ~~~~ typescript twoslash
 import { object } from "@optique/core/constructs";
@@ -426,8 +429,12 @@ const timeout = bindEnv(fail<number>(), {
 });
 ~~~~
 
+### Documenting env-only values
+
+*This feature is available since Optique 1.4.0.*
+
 With `showEnvironment: true`, this binding appears in a separate Environment
-section without a fake option or argument:
+section without an option or argument:
 
 ~~~~ text
 Environment:
@@ -784,10 +791,9 @@ Parameters
         nor environment provides a value.
 
 Returns
-:   A new parser with environment fallback behavior and a
-    `readFallback()` method. The method reads only the environment variable
-    or default, applies the wrapped parser's validation when available, and
-    returns a `ValueParserResult` (or a promise for an async parser).
+:   A new parser with environment fallback behavior. See
+    [`readFallback()`](#reading-a-fallback-after-a-parse-error) for reading the
+    binding outside a parse.
 
 ### `bool(options?)`
 

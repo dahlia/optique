@@ -161,22 +161,28 @@ For large command trees, pass `commandList: "top-level"` to keep root help
 focused on first-level command groups while subcommand help remains available
 through `<command> --help`.
 
+### Default command
+
+*This feature is available since Optique 1.4.0.*
+
 Pass `defaultCommand` to `runProgram()` or set `default: true` in
 `defineCommand()` to use a command when the first token matches neither a
-registered command nor an enabled runner meta entry point. The same command
-can also be registered by name. Root help and shell completion include the
-default command's arguments.
+registered command nor an enabled help, version, or completion entry point.
+The same command can also be registered by name. Root help includes the
+default command's arguments, and shell completion can suggest values for them.
 
-*The `help.bareGroup` option is available since Optique 1.4.0.*
+### Help for bare command groups
 
-Set `help: { bareGroup: "always" }` to show help when the
-root or a group is invoked without further arguments. This also skips an
-executable parent's handler. Use `"namespace"` to limit automatic help to
-groups without their own command definition, or `"never"` (the default) to
-preserve normal dispatch. Leaves and inputs with extra arguments retain normal
-parsing. Help objects without `command` or `option` enable both help entry
-points; `help: { command: true, bareGroup: "always" }` enables only the help
-command.
+*This API is available since Optique 1.4.0.*
+
+Set `help: { bareGroup: "always" }` to show help when a command group is
+invoked without further arguments, instead of running its handler if it has
+one. The root counts as a group if it has child commands. Use `"namespace"` for
+groups without a command definition. At the root, it also requires that there
+be no default command. Use `"never"` (the default) to turn off automatic help.
+Leaf commands and invocations with additional arguments are parsed as usual. A
+help object without `command` or `option` enables both help entry points;
+`help: { command: true, bareGroup: "always" }` enables only the help command.
 
 For more resources, see the [docs] and the [*examples/*](/examples/)
 directory.

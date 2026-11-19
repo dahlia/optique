@@ -12,8 +12,8 @@ links:
     directions.  Aliases stay hidden by default, and usage lines keep showing
     only canonical names.  [[#1002], [#1005]]
 
- -  Added `ShowAliasesOptions` for customizing the alias annotation's prefix,
-    suffix, and label, `DocEntry.showAliases` for per-entry overrides, and
-    `annotationStyles.aliases` to `TerminalTheme` for styling the annotation.
-    Command list entries produced by `command()` now carry the command's
-    visible aliases in their term.  [[#1002], [#1005]]
+    Customize the annotation's prefix, suffix, and label with
+    `ShowAliasesOptions` and its style with
+    `TerminalTheme.annotationStyles.aliases`. Custom renderers can read visible
+    aliases from command entry terms and override display per entry with
+    `DocEntry.showAliases`.

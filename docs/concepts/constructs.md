@@ -688,6 +688,8 @@ bindEnv(option("--mode", string()), {
 
 ### Fallback branches in usage output
 
+*This behavior is available since Optique 1.4.0.*
+
 Usage output follows the same rule.  When Optique can tell from the parsers
 themselves whether `or()` picks a branch for an empty argument list, help text
 and man page synopses draw the whole group as optional or required to match:

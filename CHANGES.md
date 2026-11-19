@@ -13,6 +13,7 @@ To be released.
  -  Added a `key` option to `choice()` for matching string inputs and
     completion prefixes against declared choices under a custom rule while
     returning the declared spelling.  [[#998], [#1000]]
+
  -  Added a way to show command aliases in help output, so users can discover
     them without relying on shell completion.  Set `showAliases: true` on
     `command()` to list a command's aliases next to its description, as in
@@ -21,73 +22,92 @@ To be released.
     A command's own setting takes precedence over the runner option in both
     directions.  Aliases stay hidden by default, and usage lines keep showing
     only canonical names.  [[#1002], [#1005]]
- -  Added `ShowAliasesOptions` for customizing the alias annotation's prefix,
-    suffix, and label, `DocEntry.showAliases` for per-entry overrides, and
-    `annotationStyles.aliases` to `TerminalTheme` for styling the annotation.
-    Command list entries produced by `command()` now carry the command's
-    visible aliases in their term.  [[#1002], [#1005]]
+
+    Customize the annotation's prefix, suffix, and label with
+    `ShowAliasesOptions` and its style with
+    `TerminalTheme.annotationStyles.aliases`. Custom renderers can read visible
+    aliases from command entry terms and override display per entry with
+    `DocEntry.showAliases`.
+
  -  Added attached values for short options, so `-n5` and `-xn5` work like
-    `-n 5` and `-x -n 5`, with value completion for attached forms, including
-    native file path completion.  Declared single-dash full names now take
-    precedence over short-option splitting, independently of field order,
-    including reused parser occurrences and failed speculative parses and
-    source-backed wrappers.  Conditional parsers
-    release inactive option names as soon as they select a default branch.
-    Attached values and completion work in default branches too.  Sequence
-    parsers honor context-dependent skippable steps when recognizing full option
-    names, and dash-prefixed command names no longer block attached values.
-    Unicode short-option names work in attached forms and bundles too.
+    `-n 5` and `-x -n 5`. Shell completion also works for attached values,
+    including file paths. Unicode short names work in attached forms and
+    flag bundles. A declared single-dash option such as `-name` takes
+    precedence over splitting when it is reachable at that point in the parse,
+    regardless of field order. Options from inactive conditional branches
+    do not compete with options in the selected branch, including a default
+    branch.
     [[#965], [#981], [#1121]]
+
+    Attached values and their completions also work in default branches.
+    Sequences check for full option names beyond steps that can be skipped,
+    and command names starting with a dash do not block attached values.
+
  -  Added `collectDocPages()` in `@optique/core/doc-pages` to collect command
     documentation from supported built-in definitions without parsing or
-    evaluating runtime callbacks. Unsupported scopes are reported explicitly,
-    with strict failure and authored page/subtree replacements.
+    evaluating runtime callbacks. Collection fails by default if a visible
+    scope cannot be documented. Supply replacement pages or subtrees, or
+    pass `strict: false` to receive partial results with explicit gaps.
     [[#1025], [#1095]]
+
  -  Added `completion.errors` to the Core runners to customize messages for
     missing or unsupported completion shells.  `unsupportedShell` also accepts
     a callback receiving the requested shell name and available shell names.
     [[#967], [#982]]
+
  -  Fixed completion requests for inherited object names such as `toString`
     to report an unsupported shell instead of throwing, unless the name is
     explicitly registered as a custom shell.  [[#967], [#982]]
+
  -  Added `defineEmptyInputBehavior()`, `getEmptyInputBehavior()`, and
     `inheritEmptyInputBehavior()` to `@optique/core/extension` so custom parsers
     and transparent wrappers can contribute known empty-input behavior to
     usage groups. Undeclared and context-dependent outcomes stay unknown.
     [[#1014], [#1016]]
+
  -  Added `errorUsage: "command"` to show the matched command's usage above
     parse errors while preserving parent options and required argument order.
     Root usage remains the default and the fallback for hidden or uncertain
     command paths.  [[#1086], [#1093]]
+
  -  Added `errors.unexpectedValue` to `flag()` for customizing errors when a
     value is attached to a flag.  It accepts a static message or a callback
     receiving the matched option name and the supplied value.  [[#968], [#984]]
- -  Added independent environment documentation to help pages. Inline mode now
-    lists env-only names in a fallback section. The new optional
-    `DocFragments.sourceOnly` and `environmentBindings` fields preserve
-    source-only scopes through built-in combinators; exact raw documentation
-    snapshots and fixed maps of doc keys may need updating.  [[#985], [#987]]
+
  -  Added `normalizeInput()` for value parsers, allowing applications to clean
     up CLI and environment strings before validation.  It also normalizes
     completion prefixes.  [[#971], [#999]]
- -  Added opt-in environment binding annotations and sections to help output,
-    with `DocEntry.envVars` metadata and `deriveEnvironmentSection()` for
-    custom renderers.  Existing help output stays unchanged unless
-    `showEnvironment` is enabled.  [[#969], [#986]]
+
+ -  Added `showEnvironment` to list environment bindings in help, inline
+    next to their options, in a separate section, or both. Bindings with
+    no CLI option or argument appear in a separate section even in inline
+    mode. Help stays unchanged unless `showEnvironment` is enabled.
+    [[#969], [#986], [#985], [#987]]
+
+    Custom renderers can use `DocEntry.envVars` and
+    `deriveEnvironmentSection()`. The optional `DocFragments.sourceOnly` and
+    `DocFragments.environmentBindings` fields preserve bindings without
+    CLI entries through built-in combinators. Tests that snapshot raw
+    documentation objects or assert their exact keys may need updating.
+
  -  Added `showUsage` to `command()` options so subcommands can override the
     runner's usage visibility.  Descendants inherit the nearest explicit
     command setting.  `DocPage.showUsage` preserves the resolved default for
     custom help rendering, and explicit `formatDocPage()` options override it.
     [[#1020], [#1023]]
+
  -  Added the `helpSections` option to the Core runners to group untitled
     command and option entries on help pages with visible commands, leaving
     pages without commands free of automatic headings.  Existing titled groups
     are preserved, and help callbacks receive the grouped page.
     [[#972], [#983]]
+
  -  Added `withSuggestions()` for value parsers, allowing applications to
-    attach shell completion candidates, including ones fetched
-    asynchronously from a service, to an existing parser without changing
-    what it accepts or the type it produces.  [[#1111], [#1114]]
+    supply shell completion candidates, including ones fetched asynchronously,
+    without changing which values the parser accepts or its result type.
+    The new candidates replace the parser's own suggestions by default.
+    Set `includeExisting: true` to keep both.  [[#1111], [#1114]]
+
  -  Changed usage output to draw `or()`, `longestMatch()`, and `multiple()`
     groups as optional exactly when the parser accepts an empty argument list,
     if that is known from the parsers themselves.  For example,
@@ -95,18 +115,25 @@ To be released.
     `(FILE | DIR)`, because the choice between two empty alternatives is
     ambiguous and parsing fails, while `or(constant("x"), argument(FILE))`
     reads `[FILE]`.  Such groups record the outcome in the new `acceptsEmpty`
-    field of `exclusive` and `multiple` usage terms.  Custom parsers and
-    parsers bound to outside sources keep the notation they declare.
+    field of `exclusive` and `multiple` usage terms.
     [[#1013], [#1015], [#1016]]
+
+    The same rules apply to groups using `bindConfig()`, `bindDerivedDefault()`,
+    `bindEnv()`, `bindKeyring()`, or `prompt()` when their known parse behavior
+    is enough to determine the result. When the result depends on an external
+    value, prompt answer, or validation, usage keeps the declared notation.
+
  -  Deferred typo diagnostics for discarded parser failures, reducing parsing
     time for commands with many positional arguments.  Custom mismatch error
     callbacks now run when their diagnostic is requested, so callbacks used
     for side effects may run fewer times.  [[#989], [#997]]
+
  -  Fixed `formatDocPage()` to accept narrow widths when annotation headings
-    for defaults, choices, aliases, and environment variables fit after
-    removing their leading separator whitespace.  Headings that need trimming
-    now start in an empty description column without an extra line break.
+    such as defaults and choices fit after removing their leading separator
+    whitespace. A trimmed heading can start in an empty description column
+    without adding a blank line.
     [[#1009], [#1017]]
+
  -  Fixed known option errors being hidden by `passThrough()` when a
     zero-consuming `longestMatch()` fallback is nested inside containers,
     `or()`, optional or repeated parsers, or source bindings.  Missing values
@@ -171,13 +198,15 @@ To be released.
 
 ### @optique/discover
 
+ -  Added an opt-in fallback to `runProgram()` for invocations that do not
+    start with a registered command, alias, or enabled runner entry point.
+    Set `default: true` on a registered command to also run it by name, or
+    pass `defaultCommand` without registering a name for it, even if no
+    other commands are discovered. Root help includes the fallback's
+    arguments and options, and shell completion can suggest its positional
+    values.  [[#1103], [#1138]]
  -  Added `completion.errors` to `runProgram()` for customizing missing or
     unsupported completion shell messages.  [[#967], [#982]]
- -  Added `defaultCommand` to `runProgram()` and `default: true` to command
-    definitions. A command can serve as both a named subcommand and the
-    fallback when the first token matches no registered or enabled runner
-    entry point. Root help includes its arguments and options, and shell
-    completion can suggest its positional values.  [[#1103], [#1138]]
  -  Added `errorUsage: "command"` support to `runProgram()` to show the matched
     command's usage above parse errors.  Root usage remains the default and
     fallback.  [[#1086], [#1093]]
@@ -185,6 +214,11 @@ To be released.
     `help.bareGroup` setting.  Use `"namespace"` for groups without their own
     command definition or `"always"` to show help instead of executing bare
     parent commands.  Existing behavior remains the default.  [[#1026], [#1027]]
+ -  Added `showEnvironment` to `runProgram()`. Root help can list root
+    bindings, including those added by wrappers around a root-only parser
+    and those without a CLI option or argument. Subcommand bindings appear
+    on their own help pages.
+    [[#969], [#986], [#985], [#987]]
  -  Added support for `helpSections` in `runProgram()` to separate discovered
     commands from options in help while keeping pages without commands free of
     automatic headings.  [[#972], [#983]]
@@ -196,10 +230,6 @@ To be released.
     subcommand help can override `runProgram()`'s default.  Descendants inherit
     the nearest explicit ancestor setting, and synthetic namespaces do not
     inherit their descendants' settings.  [[#1020], [#1023]]
- -  Preserved independent root environment documentation in command discovery
-    help, while keeping descendant bindings scoped to their own command pages.
-    Root-only programs also show environment bindings added by outer wrappers.
-    [[#985], [#987]]
 
 [#1026]: https://github.com/dahlia/optique/issues/1026
 [#1027]: https://github.com/dahlia/optique/pull/1027
@@ -208,15 +238,13 @@ To be released.
 
 ### @optique/config
 
- -  Added the `expandHome` runtime option for config contexts.  When it is
-    `true`, a leading `~` in the path returned by `getConfigPath()` is
-    expanded to the current user's home directory, so a default config path
-    such as `"~/.myapp.json"` finds the file there.  It defaults to `false`,
-    since `~` is a valid file name character on most platforms.
+ -  Added `expandHome: true` for single-file config contexts, so a path
+    such as `"~/.myapp.json"` from `getConfigPath()` resolves under the
+    current user's home directory. Expansion applies only to a path that
+    is exactly `~` or starts with `~/` or, on Windows, `~\`. Paths such as
+    `~other/settings.json` are unchanged.
+    Expansion is off by default and requires `--allow-sys=homedir` on Deno.
     [[#973], [#977]]
- -  Recorded the known empty parse step of `bindConfig()` so alternative groups
-    with ambiguous empty fallbacks can be drawn as required. Completion that
-    depends on sources or validation remains unknown. [[#1014], [#1016]]
 
 [#973]: https://github.com/dahlia/optique/issues/973
 [#977]: https://github.com/dahlia/optique/pull/977
@@ -229,16 +257,13 @@ To be released.
     signal.  OS-delivered `SIGINT`/`SIGTERM` also stops waiting and rejects with
     an `AbortError`; interactive <kbd>^C</kbd> retains Clack's process-exit
     behavior.  Omit the option to keep resolution silent.  [[#980], [#1018]]
-
  -  Added `autocomplete` and `autocomplete-multiselect` prompt types for
     filtering a list of options while choosing one or several values.
-    Both support custom filters and initial selections.  [[#978], [#1019]]
-
-    An enabled option remains selectable when a disabled option shares its
-    value.
-
- -  `prompt()` now accepts a `derivePromptConfig()` result without
-    dependency sources, so a selection prompt can load its options
+    Both support custom filters and initial selections. When an enabled and
+    a disabled option share a value, the enabled option can still be selected.
+    [[#978], [#1019]]
+ -  Added support in `prompt()` for configurations from `derivePromptConfig()`
+    without dependency sources, so a selection prompt can load its options
     asynchronously right before it opens.  The resolver receives the abort
     `signal` from the shared options.  The new
     `DerivePromptConfigNoDepsContext` and `DerivePromptConfigNoDepsOptions`
@@ -251,53 +276,31 @@ To be released.
 [#1018]: https://github.com/dahlia/optique/pull/1018
 [#1019]: https://github.com/dahlia/optique/pull/1019
 
-### @optique/derived-defaults
-
- -  Recorded the known empty parse step of `bindDerivedDefault()` so
-    alternative groups with ambiguous empty fallbacks can be drawn as required.
-    Completion that depends on sources or validation remains unknown.
-    [[#1014], [#1016]]
-
 ### @optique/env
 
- -  Added automatic documentation for `bindEnv(fail(), ...)` and other
-    source-only scopes, with optional `documentation.description` purpose text
-    and `documentation.hidden` visibility. Hidden enclosing parsers stay
-    hidden, and creating documentation does not read environment values.
-    [[#985], [#987]]
- -  Added full environment variable names to the documentation entries produced
-    by `bindEnv()`, so help and man page renderers can display declared
-    fallback bindings without reading their values.  [[#969], [#986]]
+ -  Added full environment variable names to the documentation produced by
+    `bindEnv()`, including standalone entries for `bindEnv(fail(), ...)`
+    and other bindings without a CLI option or argument. Help and man page
+    renderers can list these names without reading their values.
+    [[#969], [#986], [#985], [#987]]
+
+    Use `documentation.description` or `documentation.hidden` to set the
+    binding's own description or visibility. Neither exposes an enclosing
+    hidden parser.
+
  -  Added `readFallback()` to parsers returned by `bindEnv()`, so error
     handlers can read and validate the environment value or configured
     default after CLI parsing fails.  [[#970], [#1001]]
- -  Recorded the known empty parse step of `bindEnv()` so alternative groups
-    with ambiguous empty fallbacks can be drawn as required. Completion that
-    depends on sources or validation remains unknown. [[#1014], [#1016]]
 
 [#970]: https://github.com/dahlia/optique/issues/970
 [#1001]: https://github.com/dahlia/optique/pull/1001
 
-### @optique/keyring
-
- -  Recorded the known empty parse step of `bindKeyring()` so alternative groups
-    with ambiguous empty fallbacks can be drawn as required. Completion that
-    depends on sources or validation remains unknown. [[#1014], [#1016]]
-
 ### @optique/man
 
- -  Added automatic ENVIRONMENT entries for env-only bindings, including a
-    fallback section in inline mode. Manual environment sections still take
-    precedence, including empty sections that suppress automatic output.
-    [[#985], [#987]]
  -  Added `formatCommandReference()` in `@optique/man/markdown` to produce one
     linked Markdown reference from canonical command pages, with explicit
     coverage, aliases, visibility, and escaped documentation text.
     [[#1025], [#1095]]
- -  Added opt-in environment binding annotations and generated `ENVIRONMENT`
-    sections to man pages, including `--show-environment` in the generator
-    CLI.  Explicit `environment` sections retain priority over generated
-    sections.  [[#969], [#986]]
  -  Added `showDefault` and `showChoices` options to `formatDocPageAsMan()`
     and the `generateManPage*()` functions to customize or hide default-value
     and choice annotations. Changed the default-value format from `[value]` to
@@ -306,6 +309,11 @@ To be released.
     `showChoices` keeps the full list; passing `true` or `{}` limits it to
     eight values, and `{ maxItems: Infinity }` shows all values.
     [[#1100], [#1129]]
+ -  Added `showEnvironment` and the `optique-man` flag `--show-environment`
+    to document environment bindings in man pages. Bindings without a CLI
+    option or argument appear in an `ENVIRONMENT` section even in inline
+    mode. An explicit `environment` section takes precedence; pass an empty
+    section to suppress the generated one.  [[#969], [#986], [#985], [#987]]
  -  Added the `showAliases` option to `generateManPage()`,
     `generateManPageSync()`, `generateManPageAsync()`, and
     `formatDocPageAsMan()`, and the `--show-aliases` flag to `optique-man`,
@@ -313,22 +321,25 @@ To be released.
  -  Changed the SYNOPSIS section to follow the same rule as `formatUsage()`
     when drawing `or()`, `longestMatch()`, and `multiple()` groups, so both
     show the same optional and required parts.  [[#1013], [#1015], [#1016]]
+ -  Fixed man page synopses to omit entire alternatives that start with
+    hidden commands. Arguments and options from those alternatives no
+    longer appear on their own.  [[#1013], [#1015]]
 
 [#1100]: https://github.com/dahlia/optique/issues/1100
 [#1129]: https://github.com/dahlia/optique/pull/1129
 
 ### @optique/inquirer
 
- -  Added the `search` prompt type for loading choices as the user types.
-    Its `source` callback accepts synchronous or asynchronous results and
-    receives a signal to cancel requests when the query changes.
-    [[#978], [#1019]]
- -  `prompt()` now accepts a `derivePromptConfig()` result without
-    dependency sources, so a selection prompt can load its choices
+ -  Added support in `prompt()` for configurations from `derivePromptConfig()`
+    without dependency sources, so a selection prompt can load its choices
     asynchronously right before it opens.  The resolver receives the abort
     `signal` from the shared options.  The new
     `DerivePromptConfigNoDepsContext` and `DerivePromptConfigNoDepsOptions`
     types are re-exported for convenience.  [[#964], [#979]]
+ -  Added the `search` prompt type for loading choices as the user types.
+    Its `source` callback accepts synchronous or asynchronous results and
+    receives a signal to cancel requests when the query changes.
+    [[#978], [#1019]]
 
 ### @optique/prompt
 
@@ -339,17 +350,15 @@ To be released.
     bindings, help, and suggestions never trigger it.  The new
     `DerivePromptConfigNoDepsContext` and `DerivePromptConfigNoDepsOptions`
     types describe its context and options.  [[#964], [#979]]
- -  Derived prompt configuration resolvers now receive the prompt's abort
-    `signal` in their context, and aborting while a resolver is pending now
-    rejects parsing right away with the signal's reason.  Previously, the
-    abort was observed only after the resolver settled.  [[#964], [#979]]
+ -  Fixed cancellation while a prompt configuration resolver is pending:
+    parsing now rejects immediately with the abort reason instead of
+    waiting for the resolver to finish. Resolvers with or without dependency
+    sources receive the prompt's abort `signal` so they can also cancel
+    their own work.  [[#964], [#979]]
  -  Added an optional `PromptAdapter.whilePending()` hook for displaying a
     pending state while a derived prompt configuration resolves.  The hook
     receives resolver failures and cancellation before prompt execution.
     [[#980], [#1018]]
- -  Recorded the known empty parse step of `prompt()` so alternative groups
-    with ambiguous empty fallbacks can be drawn as required. Completion that
-    depends on sources or validation remains unknown. [[#1014], [#1016]]
 
 ### @optique/testing
 

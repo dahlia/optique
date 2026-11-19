@@ -315,7 +315,7 @@ to distinguish between “matched without input” (like `constant()`) and
 Declaring empty-input behavior
 ------------------------------
 
-*Available since Optique 1.4.0.*
+*This API is available since Optique 1.4.0.*
 
 A custom parser can declare what happens when it receives no arguments with
 `defineEmptyInputBehavior()` from `@optique/core/extension`. Combinators use
@@ -1583,7 +1583,7 @@ For performance-critical applications:
 Source-only documentation
 -------------------------
 
-*Available since Optique 1.4.0.*
+*This feature is available since Optique 1.4.0.*
 
 A parser without a CLI surface can return `sourceOnly: true` from
 `getDocFragments()`. This explicitly allows `bindEnv()` to add independent

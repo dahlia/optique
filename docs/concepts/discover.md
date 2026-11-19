@@ -107,7 +107,7 @@ name collision rules.
 
 #### Showing aliases in help
 
-*Showing aliases in command lists is available since Optique 1.4.0.*
+*This feature is available since Optique 1.4.0.*
 
 Set `metadata.showAliases` to show a command's aliases in help command lists.
 For example, *commands/build.ts* can export:
@@ -222,9 +222,12 @@ command's options and positional arguments. Use `admin ./help` or
 `runProgram()`; `createProgramParser()` retains the ordinary parser combinator
 rules.
 
+Use a [default command](#default-command) if the root action should also have a
+name users can invoke as a subcommand.
+
 ### Default command
 
-*Available since Optique 1.4.0.*
+*This feature is available since Optique 1.4.0.*
 
 Set `defaultCommand` on `runProgram()` to run a command when the first token
 does not match a registered command or an enabled help, version, or completion
@@ -251,10 +254,11 @@ await runProgram({
 });
 ~~~~
 
-For file-based discovery, set `default: true` in `defineCommand()`. This
-works for both named commands and the root command in *commands/index.ts*.
-If you use both forms, they must refer to the same definition. A default
-cannot coexist with a separate root command.
+`app SOURCE` and `app run SOURCE` both invoke `run`. For file-based discovery,
+set `default: true` in `defineCommand()`. This works for named commands and
+for the root command in *commands/index.ts*. Configure at most one default.
+If you set both `defaultCommand` and `default: true`, they must refer to the
+same definition. A default cannot coexist with a separate root command.
 
 You can also pass an explicit `defaultCommand` with an empty discovery
 directory. Without an explicit default, an empty directory is still an error.
@@ -271,8 +275,10 @@ Lifecycle hooks receive the registered path for both forms of a named default,
 or `[]` if the default has no registration. Neither default declaration
 changes the behavior of `createProgramParser()`.
 
-You can disable or customize these runner features with the same option shapes
-accepted by `run()`:
+### Customizing runner options
+
+`runProgram()` accepts the same option shapes as `run()` for help, version,
+and shell completion:
 
 ~~~~ typescript twoslash
 import { runProgram } from "@optique/discover";
@@ -299,7 +305,9 @@ help should omit the synopsis entirely.  Both settings also apply when
 `commandList: "top-level"` when the root command menu should list only
 first-level command groups and let users drill down with `<command> --help`.
 
-*Subcommand `metadata.showUsage` is available since Optique 1.4.0.*
+### Usage visibility for subcommands
+
+*This feature is available since Optique 1.4.0.*
 
 A subcommand definition's `metadata.showUsage` overrides
 the runner default. Child commands inherit the nearest explicit ancestor
@@ -311,10 +319,9 @@ Root help uses `runProgram()`'s `showUsage` option.
 
 *This API is available since Optique 1.4.0.*
 
-`help.bareGroup` can show help when the input consists
-only of a command group path. A group has child commands; the root counts as a
-group when it has children. The default, `"never"`, preserves normal parsing
-and handler dispatch.
+`help.bareGroup` can show help when the input contains only a command group
+path. A group is any command path with children, including the root. The
+default, `"never"`, leaves parsing and handler dispatch unchanged.
 
 ~~~~ typescript twoslash
 import { runProgram } from "@optique/discover";
@@ -328,10 +335,10 @@ await runProgram({
 
 With `user add` and `user remove` commands, `admin` shows root help and
 `admin user` shows the group's help. `"namespace"` limits this behavior to
-root/group paths without their own command definition. `"always"` also shows
-help for executable parents, skipping their handlers even if their parsers
-would require an argument. Choose it only when bare parent invocations should
-serve as command menus.
+groups without their own command definition. At the root, `"namespace"` shows
+help only if there is neither a root command nor a default command. `"always"`
+also shows help for groups with handlers instead of running those handlers,
+even if their parsers would require an argument.
 
 Automatic help exits with code 0 and uses the same output settings as explicit
 help. It skips execution hooks and second-pass source resolution. Leaf

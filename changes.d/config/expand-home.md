@@ -3,9 +3,10 @@ links:
   '#973': https://github.com/dahlia/optique/issues/973
   '#977': https://github.com/dahlia/optique/pull/977
 ---
- -  Added the `expandHome` runtime option for config contexts.  When it is
-    `true`, a leading `~` in the path returned by `getConfigPath()` is
-    expanded to the current user's home directory, so a default config path
-    such as `"~/.myapp.json"` finds the file there.  It defaults to `false`,
-    since `~` is a valid file name character on most platforms.
+ -  Added `expandHome: true` for single-file config contexts, so a path
+    such as `"~/.myapp.json"` from `getConfigPath()` resolves under the
+    current user's home directory. Expansion applies only to a path that
+    is exactly `~` or starts with `~/` or, on Windows, `~\`. Paths such as
+    `~other/settings.json` are unchanged.
+    Expansion is off by default and requires `--allow-sys=homedir` on Deno.
     [[#973], [#977]]

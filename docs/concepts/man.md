@@ -731,7 +731,11 @@ optique-man ./src/cli.ts -s 1 -o myapp.1
 `--manual`
 :   Override the manual title in the header.
 
-`--show-environment` (since 1.4.0)
+#### Environment and alias flags
+
+*This feature is available since Optique 1.4.0.*
+
+`--show-environment`
 :   Display declared environment bindings using `inline`, `section`, or `both`.
     Omitted by default. For example:
 
@@ -739,7 +743,7 @@ optique-man ./src/cli.ts -s 1 -o myapp.1
     optique-man ./src/cli.ts -s 1 --show-environment section
     ~~~~
 
-`--show-aliases` (since 1.4.0)
+`--show-aliases`
 :   Document command aliases next to their commands, as in
     `(aliases: i, add)`.  Omitted by default.
 
