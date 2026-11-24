@@ -1,4 +1,4 @@
-import { group, longestMatch, object } from "@optique/core/constructs";
+import { group, longestMatch, object, tuple } from "@optique/core/constructs";
 import {
   defineTraits,
   getTraits,
@@ -1121,6 +1121,139 @@ describe("optional", () => {
 });
 
 describe("withDefault", () => {
+  describe("omitted repeatable options (#1140)", () => {
+    for (const args of [[], ["--"]]) {
+      for (const min of [undefined, 1]) {
+        const label = `${JSON.stringify(args)}, min: ${min ?? "default"}`;
+        const expected = min === undefined ? [] : ["latest"];
+        const options = min === undefined ? undefined : { min };
+
+        it(`completes sync repetitions consistently for ${label}`, () => {
+          let calls = 0;
+          const parser = withDefault(
+            multiple(option("--tag", string()), options),
+            () => {
+              calls++;
+              return ["latest"];
+            },
+          );
+          assert.deepEqual(parse(parser, args), {
+            success: true,
+            value: expected,
+          });
+          assert.deepEqual(parse(tuple([parser]), args), {
+            success: true,
+            value: [expected],
+          });
+          assert.deepEqual(parse(object({ tags: parser }), args), {
+            success: true,
+            value: { tags: expected },
+          });
+          if (min === undefined) assert.equal(calls, 0);
+        });
+
+        it(`completes async repetitions consistently for ${label}`, async () => {
+          let calls = 0;
+          const parser = withDefault(
+            multiple(
+              option("--tag", asyncChoice(["latest", "given"])),
+              options,
+            ),
+            () => {
+              calls++;
+              return ["latest"];
+            },
+          );
+          assert.deepEqual(await parseAsync(parser, args), {
+            success: true,
+            value: expected,
+          });
+          assert.deepEqual(await parseAsync(tuple([parser]), args), {
+            success: true,
+            value: [expected],
+          });
+          assert.deepEqual(await parseAsync(object({ tags: parser }), args), {
+            success: true,
+            value: { tags: expected },
+          });
+          if (min === undefined) assert.equal(calls, 0);
+        });
+      }
+    }
+
+    it("completes an annotated omission when a sibling consumes input", () => {
+      const parser = object({
+        tags: withDefault(multiple(option("--tag", string())), ["latest"]),
+        file: argument(string()),
+      });
+      for (
+        const [args, file] of [
+          [["file.txt"], "file.txt"],
+          [["--", "--tag"], "--tag"],
+        ] as const
+      ) {
+        assert.deepEqual(
+          parse(parser, args, { annotations: { [Symbol()]: true } }),
+          { success: true, value: { tags: [], file } },
+        );
+      }
+    });
+
+    it("keeps matched items and errors instead of using the fallback", () => {
+      const parser = withDefault(
+        multiple(option("--tag", string()), { min: 2 }),
+        () => {
+          assert.fail("A started repetition must not use the fallback.");
+        },
+      );
+      assert.deepEqual(parse(parser, ["--tag", "a", "--tag", "b", "--"]), {
+        success: true,
+        value: ["a", "b"],
+      });
+      const missingValue = parse(parser, ["--tag"]);
+      assert.ok(!missingValue.success);
+      assertErrorIncludes(missingValue.error, "requires");
+      const tooFew = parse(parser, ["--tag", "a"]);
+      assert.ok(!tooFew.success);
+      assertErrorIncludes(tooFew.error, "at least 2");
+    });
+
+    it("transforms the empty result through map()", () => {
+      const parser = withDefault(
+        map(multiple(option("--tag", string())), (tags) => tags.length),
+        99,
+      );
+      assert.deepEqual(parse(object({ count: parser }), []), {
+        success: true,
+        value: { count: 0 },
+      });
+      assert.deepEqual(completeOrExtractPhase2Seed(parser, undefined), {
+        value: 0,
+      });
+    });
+
+    it("keeps zero-token items recorded by the inner parser", () => {
+      const parser = withDefault(multiple(constant("item")), ["latest"]);
+      assert.deepEqual(parse(object({ tags: parser }), []), {
+        success: true,
+        value: { tags: ["item"] },
+      });
+    });
+
+    it("keeps fallbacks for ordinary options and nonEmpty() wrappers", () => {
+      const parser = object({
+        name: withDefault(option("--name", string()), "latest"),
+        tags: withDefault(nonEmpty(multiple(option("--tag", string()))), [
+          "latest",
+        ]),
+      });
+      assert.deepEqual(parse(parser, ["--"]), {
+        success: true,
+        value: { name: "latest", tags: ["latest"] },
+      });
+    });
+  });
+
   it("should create a parser with same priority as wrapped parser", () => {
     const baseParser = option("-v", "--verbose");
     const defaultParser = withDefault(baseParser, false);

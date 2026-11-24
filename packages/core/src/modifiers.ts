@@ -73,6 +73,10 @@ import type { DeferredMap, ValueParserResult } from "./valueparser.ts";
 // for larger states; spread first preserves custom iteration and dense arrays.
 const MULTIPLE_NATIVE_APPEND_THRESHOLD = 256;
 
+// These parsers can complete an omitted repetition without a recorded match.
+// Track them privately so only wrappers that preserve this behavior opt in.
+const completesOmittedRepetition = new WeakSet<object>();
+
 function isTerminalMultipleItemState(state: unknown): boolean {
   const unwrapped = unwrapMultipleItemState(state).value;
   return unwrapped != null && typeof unwrapped === "object" &&
@@ -1294,6 +1298,9 @@ export function withDefault<
         return raw;
       }
 
+      const omittedRepetition = completesOmittedRepetition.has(parser) &&
+        (isAnnotationWrappedInitialState(state) ||
+          isAnnotationOnlyObjectState(state));
       if (!Array.isArray(state)) {
         // Case: Inner parser has completion deferral hook (e.g.,
         // withDefault(bindConfig(...), val)). Delegate to inner parser so
@@ -1390,23 +1397,25 @@ export function withDefault<
             handleInnerResult,
           );
         }
-        try {
-          const value = evaluateDefault();
-          return { success: true, value };
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof WithDefaultError
-              ? error.errorMessage
-              : message`${text(String(error))}`,
-          };
+        if (!omittedRepetition) {
+          try {
+            const value = evaluateDefault();
+            return { success: true, value };
+          } catch (error) {
+            return {
+              success: false,
+              error: error instanceof WithDefaultError
+                ? error.errorMessage
+                : message`${text(String(error))}`,
+            };
+          }
         }
       }
-      const innerElement = normalizeOptionalLikeInnerState(
-        state,
-        parser.initialState,
-        parser,
-      );
+      // An omitted object field or a lone "--" can leave the wrapper
+      // unstarted even though the repetition can complete with zero items.
+      const innerElement = omittedRepetition
+        ? getDelegatedAnnotationState(state, parser.initialState)
+        : normalizeOptionalLikeInnerState(state, parser.initialState, parser);
       return dispatchByMode(
         parser.mode,
         () =>
@@ -1771,6 +1780,9 @@ export function map<M extends Mode, T, U, TState>(
     },
   } as Parser<M, U, TState>;
   defineParseLanes(mappedParser, getOwnParseLanes(parser));
+  if (completesOmittedRepetition.has(parser)) {
+    completesOmittedRepetition.add(mappedParser);
+  }
   // map() keeps the inner state unchanged, so preserve its annotation and
   // source traits even though output-dependent hooks are stripped below.
   defineTraits(mappedParser, getTraits(parser));
@@ -3106,6 +3118,7 @@ export function multiple<M extends Mode, TValue, TState>(
       ? undefined
       : getPassThroughPriority(parser, item.state, token);
   });
+  if (min === 0) completesOmittedRepetition.add(resultParser);
   return resultParser;
 }
 
